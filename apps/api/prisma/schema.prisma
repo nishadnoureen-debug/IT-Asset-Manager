@@ -1,0 +1,1152 @@
+// IT Asset Management — Prisma schema (spec §3).
+//
+// Conventions
+// - UUID primary keys; snake_case tables/columns via @@map/@map.
+// - timestamptz for instants, date for calendar dates, numeric(14,2) for money, char(3) ISO currency.
+// - Master data is soft-deleted (deleted_at). Assets are never hard-deleted: they move to RETIRED/DISPOSED.
+// - asset_assignments is the historical source of truth for who/where an asset is assigned —
+//   assets deliberately have NO current employee_id column.
+// - Constraints Prisma cannot express (partial unique indexes, CHECKs) live in the migration SQL.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────────────────────
+
+enum AssetStatus {
+  PURCHASED
+  REGISTERED
+  IN_STOCK
+  ASSIGNED
+  IN_REPAIR
+  AVAILABLE
+  LOST
+  RETIRED
+  DISPOSED
+
+  @@map("asset_status")
+}
+
+enum AssetCategory {
+  LAPTOP
+  DESKTOP
+  MONITOR
+  MOBILE
+  TABLET
+  PRINTER
+  SERVER
+  NETWORK_EQUIPMENT
+  PROJECTOR
+  ACCESSORY
+
+  @@map("asset_category")
+}
+
+enum AssetCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+
+  @@map("asset_condition")
+}
+
+enum AssignmentStatus {
+  ACTIVE
+  RETURNED
+  TRANSFERRED
+
+  @@map("assignment_status")
+}
+
+enum AssetHistoryAction {
+  CREATED
+  UPDATED
+  STATUS_CHANGED
+  LOCATION_CHANGED
+  ASSIGNED
+  RETURNED
+  TRANSFERRED
+  MAINTENANCE_STARTED
+  MAINTENANCE_COMPLETED
+  WARRANTY_UPDATED
+  QR_REGENERATED
+  DOCUMENT_ADDED
+  SOFTWARE_ASSIGNED
+  SOFTWARE_UNASSIGNED
+  AUDITED
+  REPORTED_LOST
+  RETIRED
+  DISPOSED
+
+  @@map("asset_history_action")
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  ON_LEAVE
+  TERMINATED
+
+  @@map("employee_status")
+}
+
+enum LocationType {
+  SITE
+  BUILDING
+  FLOOR
+  ROOM
+  WAREHOUSE
+  DATA_CENTER
+  REMOTE
+  OTHER
+
+  @@map("location_type")
+}
+
+enum VendorType {
+  SUPPLIER
+  MANUFACTURER
+  SERVICE_PROVIDER
+  WARRANTY_PROVIDER
+  SOFTWARE_PUBLISHER
+
+  @@map("vendor_type")
+}
+
+enum AccessoryCategory {
+  CHARGER
+  MOUSE
+  KEYBOARD
+  BAG
+  DOCKING_STATION
+  HEADSET
+  CABLE
+  ADAPTER
+  OTHER
+
+  @@map("accessory_category")
+}
+
+enum MaintenanceType {
+  REPAIR
+  PREVENTIVE
+  UPGRADE
+  INSPECTION
+
+  @@map("maintenance_type")
+}
+
+enum MaintenanceStatus {
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+
+  @@map("maintenance_status")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("priority")
+}
+
+enum LicenseType {
+  PERPETUAL
+  SUBSCRIPTION
+  VOLUME
+  OEM
+  OPEN_SOURCE
+  TRIAL
+
+  @@map("license_type")
+}
+
+enum TicketCategory {
+  HARDWARE
+  SOFTWARE
+  NETWORK
+  ACCESS
+  ASSET_REQUEST
+  LOSS_REPORT
+  OTHER
+
+  @@map("ticket_category")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  ON_HOLD
+  RESOLVED
+  CLOSED
+
+  @@map("ticket_status")
+}
+
+enum DocumentType {
+  INVOICE
+  WARRANTY
+  HANDOVER_FORM
+  RETURN_FORM
+  SIGNATURE
+  REPAIR_RECEIPT
+  DISPOSAL_CERTIFICATE
+  PHOTO
+  LICENSE_CERTIFICATE
+  AUDIT_REPORT
+  OTHER
+
+  @@map("document_type")
+}
+
+enum AuditSessionStatus {
+  DRAFT
+  IN_PROGRESS
+  IN_REVIEW
+  CLOSED
+  CANCELLED
+
+  @@map("audit_session_status")
+}
+
+enum AuditItemResult {
+  PENDING
+  FOUND
+  MISSING
+  UNEXPECTED
+  WRONG_LOCATION
+  DAMAGED
+
+  @@map("audit_item_result")
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  LOCKED
+
+  @@map("user_status")
+}
+
+enum NotificationType {
+  WARRANTY_EXPIRING
+  LICENSE_EXPIRING
+  OVERDUE_RETURN
+  MAINTENANCE_DUE
+  MAINTENANCE_UPDATE
+  TICKET_UPDATE
+  AUDIT_ASSIGNED
+  ASSIGNMENT_ACKNOWLEDGEMENT
+  SYSTEM
+
+  @@map("notification_type")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Organisation
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Department {
+  id          String    @id @default(uuid()) @db.Uuid
+  code        String    @unique @db.VarChar(32)
+  name        String    @db.VarChar(120)
+  description String?
+  managerId   String?   @map("manager_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  manager       Employee?      @relation("DepartmentManager", fields: [managerId], references: [id], onDelete: SetNull)
+  employees     Employee[]     @relation("EmployeeDepartment")
+  assets        Asset[]
+  auditSessions AuditSession[]
+
+  @@index([managerId])
+  @@index([name])
+  @@map("departments")
+}
+
+model Location {
+  id        String       @id @default(uuid()) @db.Uuid
+  code      String       @unique @db.VarChar(32)
+  name      String       @db.VarChar(120)
+  type      LocationType @default(OTHER)
+  parentId  String?      @map("parent_id") @db.Uuid
+  address   String?
+  city      String?      @db.VarChar(120)
+  country   String?      @db.VarChar(120)
+  notes     String?
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  parent                 Location?         @relation("LocationHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children               Location[]        @relation("LocationHierarchy")
+  employees              Employee[]
+  assets                 Asset[]
+  assignments            AssetAssignment[]
+  historyFrom            AssetHistory[]    @relation("HistoryFromLocation")
+  historyTo              AssetHistory[]    @relation("HistoryToLocation")
+  accessories            Accessory[]
+  auditSessions          AuditSession[]
+  auditItemsExpectedHere AuditItem[]       @relation("AuditItemExpectedLocation")
+  auditItemsObservedHere AuditItem[]       @relation("AuditItemObservedLocation")
+
+  @@index([parentId])
+  @@index([name])
+  @@map("locations")
+}
+
+model Employee {
+  id              String         @id @default(uuid()) @db.Uuid
+  employeeNumber  String         @unique @map("employee_number") @db.VarChar(32)
+  firstName       String         @map("first_name") @db.VarChar(80)
+  lastName        String         @map("last_name") @db.VarChar(80)
+  email           String         @unique @db.VarChar(254)
+  phone           String?        @db.VarChar(40)
+  jobTitle        String?        @map("job_title") @db.VarChar(120)
+  departmentId    String?        @map("department_id") @db.Uuid
+  locationId      String?        @map("location_id") @db.Uuid
+  managerId       String?        @map("manager_id") @db.Uuid
+  status          EmployeeStatus @default(ACTIVE)
+  hireDate        DateTime?      @map("hire_date") @db.Date
+  terminationDate DateTime?      @map("termination_date") @db.Date
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
+
+  department           Department?           @relation("EmployeeDepartment", fields: [departmentId], references: [id], onDelete: SetNull)
+  location             Location?             @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  manager              Employee?             @relation("EmployeeManager", fields: [managerId], references: [id], onDelete: SetNull)
+  directReports        Employee[]            @relation("EmployeeManager")
+  managedDepartments   Department[]          @relation("DepartmentManager")
+  user                 User?
+  assignments          AssetAssignment[]
+  accessoryAssignments AccessoryAssignment[]
+  softwareAssignments  SoftwareAssignment[]
+  tickets              Ticket[]              @relation("TicketRequester")
+  documents            Document[]
+
+  @@index([departmentId])
+  @@index([locationId])
+  @@index([managerId])
+  @@index([status])
+  @@index([lastName, firstName])
+  @@map("employees")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Procurement
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Vendor {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique @db.VarChar(160)
+  types       VendorType[]
+  contactName String?      @map("contact_name") @db.VarChar(120)
+  email       String?      @db.VarChar(254)
+  phone       String?      @db.VarChar(40)
+  website     String?      @db.VarChar(255)
+  address     String?
+  taxNumber   String?      @map("tax_number") @db.VarChar(64)
+  notes       String?
+  isActive    Boolean      @default(true) @map("is_active")
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  purchases        Purchase[]
+  assets           Asset[]           @relation("AssetVendor")
+  warrantyAssets   Asset[]           @relation("AssetWarrantyProvider")
+  maintenance      Maintenance[]
+  software         Software[]
+  softwareLicenses SoftwareLicense[]
+
+  @@map("vendors")
+}
+
+model Purchase {
+  id            String    @id @default(uuid()) @db.Uuid
+  orderNumber   String?   @unique @map("order_number") @db.VarChar(64)
+  invoiceNumber String?   @map("invoice_number") @db.VarChar(64)
+  vendorId      String    @map("vendor_id") @db.Uuid
+  purchaseDate  DateTime  @map("purchase_date") @db.Date
+  invoiceDate   DateTime? @map("invoice_date") @db.Date
+  currency      String    @default("USD") @db.Char(3)
+  subtotal      Decimal   @default(0) @db.Decimal(14, 2)
+  taxAmount     Decimal   @default(0) @map("tax_amount") @db.Decimal(14, 2)
+  totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(14, 2)
+  notes         String?
+  createdById   String?   @map("created_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  vendor           Vendor            @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  createdBy        User?             @relation("PurchaseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assets           Asset[]
+  accessories      Accessory[]
+  softwareLicenses SoftwareLicense[]
+  documents        Document[]
+
+  @@unique([vendorId, invoiceNumber])
+  @@index([purchaseDate])
+  @@map("purchases")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Assets
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AssetType {
+  id                 String        @id @default(uuid()) @db.Uuid
+  name               String        @unique @db.VarChar(80)
+  category           AssetCategory
+  description        String?
+  requiresSerial     Boolean       @default(true) @map("requires_serial")
+  depreciationMonths Int?          @map("depreciation_months")
+  isActive           Boolean       @default(true) @map("is_active")
+  createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  assets Asset[]
+
+  @@index([category])
+  @@map("asset_types")
+}
+
+model Asset {
+  id             String         @id @default(uuid()) @db.Uuid
+  assetTag       String         @unique @map("asset_tag") @db.VarChar(32)
+  serialNumber   String?        @unique @map("serial_number") @db.VarChar(128)
+  serviceTag     String?        @map("service_tag") @db.VarChar(128)
+  /// Opaque token encoded in the QR label; regenerating it invalidates printed labels.
+  qrToken        String         @unique @default(uuid()) @map("qr_token") @db.Uuid
+  name           String         @db.VarChar(160)
+  assetTypeId    String         @map("asset_type_id") @db.Uuid
+  brand          String?        @db.VarChar(80)
+  model          String?        @db.VarChar(120)
+  specifications Json?
+  status         AssetStatus    @default(REGISTERED)
+  condition      AssetCondition @default(NEW)
+  locationId     String?        @map("location_id") @db.Uuid
+  /// Owning/cost-centre department (not the assignee's department).
+  departmentId   String?        @map("department_id") @db.Uuid
+
+  // Purchase
+  purchaseId   String?   @map("purchase_id") @db.Uuid
+  vendorId     String?   @map("vendor_id") @db.Uuid
+  purchaseDate DateTime? @map("purchase_date") @db.Date
+  purchaseCost Decimal?  @map("purchase_cost") @db.Decimal(14, 2)
+  currency     String?   @db.Char(3)
+
+  // Warranty
+  warrantyProviderId String?   @map("warranty_provider_id") @db.Uuid
+  warrantyStartDate  DateTime? @map("warranty_start_date") @db.Date
+  warrantyEndDate    DateTime? @map("warranty_end_date") @db.Date
+  warrantyCoverage   String?   @map("warranty_coverage")
+  warrantyReference  String?   @map("warranty_reference") @db.VarChar(128)
+
+  // End of life
+  lostAt         DateTime? @map("lost_at") @db.Timestamptz(6)
+  retiredAt      DateTime? @map("retired_at") @db.Timestamptz(6)
+  disposedAt     DateTime? @map("disposed_at") @db.Timestamptz(6)
+  disposalMethod String?   @map("disposal_method") @db.VarChar(80)
+  disposalReason String?   @map("disposal_reason")
+
+  notes       String?
+  createdById String?   @map("created_by_id") @db.Uuid
+  updatedById String?   @map("updated_by_id") @db.Uuid
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  assetType           AssetType            @relation(fields: [assetTypeId], references: [id], onDelete: Restrict)
+  location            Location?            @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  department          Department?          @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  purchase            Purchase?            @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  vendor              Vendor?              @relation("AssetVendor", fields: [vendorId], references: [id], onDelete: SetNull)
+  warrantyProvider    Vendor?              @relation("AssetWarrantyProvider", fields: [warrantyProviderId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("AssetCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedBy           User?                @relation("AssetUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  assignments         AssetAssignment[]
+  history             AssetHistory[]
+  maintenance         Maintenance[]
+  softwareAssignments SoftwareAssignment[]
+  tickets             Ticket[]
+  documents           Document[]
+  auditItems          AuditItem[]
+
+  @@index([status])
+  @@index([assetTypeId])
+  @@index([locationId])
+  @@index([departmentId])
+  @@index([purchaseId])
+  @@index([vendorId])
+  @@index([warrantyEndDate])
+  @@index([status, locationId])
+  @@map("assets")
+}
+
+model AssetAssignment {
+  id                    String           @id @default(uuid()) @db.Uuid
+  assetId               String           @map("asset_id") @db.Uuid
+  /// Assignee — at least one of employee/location is required (CHECK constraint).
+  employeeId            String?          @map("employee_id") @db.Uuid
+  locationId            String?          @map("location_id") @db.Uuid
+  status                AssignmentStatus @default(ACTIVE)
+  assignedAt            DateTime         @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  expectedReturnAt      DateTime?        @map("expected_return_at") @db.Timestamptz(6)
+  returnedAt            DateTime?        @map("returned_at") @db.Timestamptz(6)
+  assignedById          String?          @map("assigned_by_id") @db.Uuid
+  returnedById          String?          @map("returned_by_id") @db.Uuid
+  conditionAtAssignment AssetCondition   @map("condition_at_assignment")
+  conditionAtReturn     AssetCondition?  @map("condition_at_return")
+  acknowledgedAt        DateTime?        @map("acknowledged_at") @db.Timestamptz(6)
+  /// The assignment this one replaced when created by a transfer.
+  previousAssignmentId  String?          @unique @map("previous_assignment_id") @db.Uuid
+  transferReason        String?          @map("transfer_reason")
+  notes                 String?
+  returnNotes           String?          @map("return_notes")
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  asset                Asset                 @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  employee             Employee?             @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  location             Location?             @relation(fields: [locationId], references: [id], onDelete: Restrict)
+  assignedBy           User?                 @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  returnedBy           User?                 @relation("AssignmentReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+  previousAssignment   AssetAssignment?      @relation("AssignmentTransferChain", fields: [previousAssignmentId], references: [id], onDelete: Restrict)
+  nextAssignment       AssetAssignment?      @relation("AssignmentTransferChain")
+  accessoryAssignments AccessoryAssignment[]
+  history              AssetHistory[]
+  documents            Document[]
+
+  @@index([assetId, assignedAt(sort: Desc)])
+  @@index([employeeId, status])
+  @@index([locationId])
+  @@index([status])
+  @@map("asset_assignments")
+}
+
+/// Append-only lifecycle trail per asset (who did what, status/location before → after).
+model AssetHistory {
+  id             String             @id @default(uuid()) @db.Uuid
+  assetId        String             @map("asset_id") @db.Uuid
+  action         AssetHistoryAction
+  fromStatus     AssetStatus?       @map("from_status")
+  toStatus       AssetStatus?       @map("to_status")
+  fromLocationId String?            @map("from_location_id") @db.Uuid
+  toLocationId   String?            @map("to_location_id") @db.Uuid
+  assignmentId   String?            @map("assignment_id") @db.Uuid
+  maintenanceId  String?            @map("maintenance_id") @db.Uuid
+  performedById  String?            @map("performed_by_id") @db.Uuid
+  description    String?
+  metadata       Json?
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  asset        Asset            @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  fromLocation Location?        @relation("HistoryFromLocation", fields: [fromLocationId], references: [id], onDelete: Restrict)
+  toLocation   Location?        @relation("HistoryToLocation", fields: [toLocationId], references: [id], onDelete: Restrict)
+  assignment   AssetAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  maintenance  Maintenance?     @relation(fields: [maintenanceId], references: [id], onDelete: Restrict)
+  performedBy  User?            @relation("AssetHistoryPerformedBy", fields: [performedById], references: [id], onDelete: Restrict)
+
+  @@index([assetId, createdAt(sort: Desc)])
+  @@index([action])
+  @@index([performedById])
+  @@map("asset_history")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Accessories (quantity-tracked stock)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Accessory {
+  id                String            @id @default(uuid()) @db.Uuid
+  name              String            @db.VarChar(160)
+  category          AccessoryCategory
+  sku               String?           @unique @db.VarChar(64)
+  brand             String?           @db.VarChar(80)
+  model             String?           @db.VarChar(120)
+  quantityTotal     Int               @default(0) @map("quantity_total")
+  quantityAvailable Int               @default(0) @map("quantity_available")
+  minStockLevel     Int               @default(0) @map("min_stock_level")
+  locationId        String?           @map("location_id") @db.Uuid
+  purchaseId        String?           @map("purchase_id") @db.Uuid
+  unitCost          Decimal?          @map("unit_cost") @db.Decimal(14, 2)
+  currency          String?           @db.Char(3)
+  notes             String?
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?         @map("deleted_at") @db.Timestamptz(6)
+
+  location    Location?             @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  purchase    Purchase?             @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  assignments AccessoryAssignment[]
+
+  @@index([category])
+  @@index([locationId])
+  @@map("accessories")
+}
+
+model AccessoryAssignment {
+  id                    String           @id @default(uuid()) @db.Uuid
+  accessoryId           String           @map("accessory_id") @db.Uuid
+  employeeId            String           @map("employee_id") @db.Uuid
+  /// Set when the accessory was handed over together with an asset (e.g. laptop charger).
+  assetAssignmentId     String?          @map("asset_assignment_id") @db.Uuid
+  quantity              Int              @default(1)
+  status                AssignmentStatus @default(ACTIVE)
+  assignedAt            DateTime         @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  returnedAt            DateTime?        @map("returned_at") @db.Timestamptz(6)
+  assignedById          String?          @map("assigned_by_id") @db.Uuid
+  returnedById          String?          @map("returned_by_id") @db.Uuid
+  conditionAtAssignment AssetCondition?  @map("condition_at_assignment")
+  conditionAtReturn     AssetCondition?  @map("condition_at_return")
+  notes                 String?
+  createdAt             DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  accessory       Accessory        @relation(fields: [accessoryId], references: [id], onDelete: Restrict)
+  employee        Employee         @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  assetAssignment AssetAssignment? @relation(fields: [assetAssignmentId], references: [id], onDelete: SetNull)
+  assignedBy      User?            @relation("AccessoryAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  returnedBy      User?            @relation("AccessoryReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+
+  @@index([accessoryId, status])
+  @@index([employeeId, status])
+  @@index([assetAssignmentId])
+  @@map("accessory_assignments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Maintenance
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Maintenance {
+  id                String            @id @default(uuid()) @db.Uuid
+  /// Human-friendly reference (MNT-000123).
+  number            Int               @unique @default(autoincrement())
+  assetId           String            @map("asset_id") @db.Uuid
+  type              MaintenanceType   @default(REPAIR)
+  status            MaintenanceStatus @default(SCHEDULED)
+  priority          Priority          @default(MEDIUM)
+  title             String            @db.VarChar(200)
+  description       String?
+  reportedById      String?           @map("reported_by_id") @db.Uuid
+  technicianId      String?           @map("technician_id") @db.Uuid
+  vendorId          String?           @map("vendor_id") @db.Uuid
+  ticketId          String?           @map("ticket_id") @db.Uuid
+  isWarrantyClaim   Boolean           @default(false) @map("is_warranty_claim")
+  /// Asset status before the repair, so completion can restore AVAILABLE/ASSIGNED correctly.
+  assetStatusBefore AssetStatus?      @map("asset_status_before")
+  scheduledAt       DateTime?         @map("scheduled_at") @db.Timestamptz(6)
+  startedAt         DateTime?         @map("started_at") @db.Timestamptz(6)
+  completedAt       DateTime?         @map("completed_at") @db.Timestamptz(6)
+  cancelledAt       DateTime?         @map("cancelled_at") @db.Timestamptz(6)
+  laborCost         Decimal?          @map("labor_cost") @db.Decimal(14, 2)
+  partsCost         Decimal?          @map("parts_cost") @db.Decimal(14, 2)
+  totalCost         Decimal?          @map("total_cost") @db.Decimal(14, 2)
+  currency          String?           @db.Char(3)
+  resolutionNotes   String?           @map("resolution_notes")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  asset      Asset          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  reportedBy User?          @relation("MaintenanceReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
+  technician User?          @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
+  vendor     Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  ticket     Ticket?        @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  history    AssetHistory[]
+  documents  Document[]
+
+  @@index([assetId, createdAt(sort: Desc)])
+  @@index([status])
+  @@index([technicianId, status])
+  @@index([vendorId])
+  @@index([ticketId])
+  @@map("maintenance")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Software & licenses
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Software {
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @db.VarChar(160)
+  version     String?   @db.VarChar(64)
+  publisherId String?   @map("publisher_id") @db.Uuid
+  category    String?   @db.VarChar(80)
+  description String?
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  publisher Vendor?           @relation(fields: [publisherId], references: [id], onDelete: SetNull)
+  licenses  SoftwareLicense[]
+
+  @@unique([name, version])
+  @@index([publisherId])
+  @@map("software")
+}
+
+model SoftwareLicense {
+  id                  String      @id @default(uuid()) @db.Uuid
+  softwareId          String      @map("software_id") @db.Uuid
+  name                String?     @db.VarChar(160)
+  licenseType         LicenseType @map("license_type")
+  /// Encrypted at the application layer — never store raw keys.
+  licenseKeyEncrypted String?     @map("license_key_encrypted")
+  /// Number of seats; NULL means unlimited (e.g. site licence / open source).
+  seats               Int?
+  /// Spec: allocation beyond `seats` is rejected unless explicitly enabled.
+  allowOverAllocation Boolean     @default(false) @map("allow_over_allocation")
+  purchaseId          String?     @map("purchase_id") @db.Uuid
+  vendorId            String?     @map("vendor_id") @db.Uuid
+  purchaseDate        DateTime?   @map("purchase_date") @db.Date
+  startDate           DateTime?   @map("start_date") @db.Date
+  expiryDate          DateTime?   @map("expiry_date") @db.Date
+  cost                Decimal?    @db.Decimal(14, 2)
+  currency            String?     @db.Char(3)
+  notes               String?
+  createdAt           DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?   @map("deleted_at") @db.Timestamptz(6)
+
+  software    Software             @relation(fields: [softwareId], references: [id], onDelete: Restrict)
+  purchase    Purchase?            @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  vendor      Vendor?              @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  assignments SoftwareAssignment[]
+  documents   Document[]
+
+  @@index([softwareId])
+  @@index([expiryDate])
+  @@map("software_licenses")
+}
+
+/// A seat allocated to exactly one asset OR one employee (CHECK constraint). Active while unassigned_at IS NULL.
+model SoftwareAssignment {
+  id             String    @id @default(uuid()) @db.Uuid
+  licenseId      String    @map("license_id") @db.Uuid
+  assetId        String?   @map("asset_id") @db.Uuid
+  employeeId     String?   @map("employee_id") @db.Uuid
+  assignedAt     DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  unassignedAt   DateTime? @map("unassigned_at") @db.Timestamptz(6)
+  assignedById   String?   @map("assigned_by_id") @db.Uuid
+  unassignedById String?   @map("unassigned_by_id") @db.Uuid
+  notes          String?
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  license      SoftwareLicense @relation(fields: [licenseId], references: [id], onDelete: Restrict)
+  asset        Asset?          @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  employee     Employee?       @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  assignedBy   User?           @relation("SoftwareAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+  unassignedBy User?           @relation("SoftwareUnassignedBy", fields: [unassignedById], references: [id], onDelete: SetNull)
+
+  @@index([licenseId, unassignedAt])
+  @@index([assetId])
+  @@index([employeeId])
+  @@map("software_assignments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpdesk
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Ticket {
+  id          String         @id @default(uuid()) @db.Uuid
+  /// Human-friendly reference (TCK-000123).
+  number      Int            @unique @default(autoincrement())
+  title       String         @db.VarChar(200)
+  description String
+  category    TicketCategory @default(OTHER)
+  priority    Priority       @default(MEDIUM)
+  status      TicketStatus   @default(OPEN)
+  requesterId String?        @map("requester_id") @db.Uuid
+  createdById String?        @map("created_by_id") @db.Uuid
+  assigneeId  String?        @map("assignee_id") @db.Uuid
+  assetId     String?        @map("asset_id") @db.Uuid
+  dueAt       DateTime?      @map("due_at") @db.Timestamptz(6)
+  resolvedAt  DateTime?      @map("resolved_at") @db.Timestamptz(6)
+  closedAt    DateTime?      @map("closed_at") @db.Timestamptz(6)
+  resolution  String?
+  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  requester   Employee?       @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  createdBy   User?           @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assignee    User?           @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  asset       Asset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  comments    TicketComment[]
+  maintenance Maintenance[]
+  documents   Document[]
+
+  @@index([status, priority])
+  @@index([requesterId])
+  @@index([assigneeId, status])
+  @@index([assetId])
+  @@index([createdAt(sort: Desc)])
+  @@map("tickets")
+}
+
+/// Required by POST /tickets/:id/comments (spec §5).
+model TicketComment {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @map("ticket_id") @db.Uuid
+  authorId   String?  @map("author_id") @db.Uuid
+  body       String
+  /// Internal notes are hidden from the requesting employee.
+  isInternal Boolean  @default(false) @map("is_internal")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author User?  @relation("TicketCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, createdAt])
+  @@map("ticket_comments")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Documents (files live in S3-compatible storage; this is the metadata)
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Document {
+  id                String       @id @default(uuid()) @db.Uuid
+  type              DocumentType
+  title             String       @db.VarChar(200)
+  originalFileName  String       @map("original_file_name") @db.VarChar(255)
+  mimeType          String       @map("mime_type") @db.VarChar(127)
+  sizeBytes         Int          @map("size_bytes")
+  storageKey        String       @unique @map("storage_key") @db.VarChar(512)
+  checksumSha256    String?      @map("checksum_sha256") @db.Char(64)
+  // Owning entity — nullable FKs keep referential integrity (vs. polymorphic entity_type/entity_id).
+  assetId           String?      @map("asset_id") @db.Uuid
+  assignmentId      String?      @map("assignment_id") @db.Uuid
+  maintenanceId     String?      @map("maintenance_id") @db.Uuid
+  purchaseId        String?      @map("purchase_id") @db.Uuid
+  softwareLicenseId String?      @map("software_license_id") @db.Uuid
+  ticketId          String?      @map("ticket_id") @db.Uuid
+  auditSessionId    String?      @map("audit_session_id") @db.Uuid
+  employeeId        String?      @map("employee_id") @db.Uuid
+  uploadedById      String?      @map("uploaded_by_id") @db.Uuid
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  assignment      AssetAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
+  maintenance     Maintenance?     @relation(fields: [maintenanceId], references: [id], onDelete: Restrict)
+  purchase        Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
+  softwareLicense SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: Restrict)
+  ticket          Ticket?          @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  auditSession    AuditSession?    @relation(fields: [auditSessionId], references: [id], onDelete: Restrict)
+  employee        Employee?        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
+  uploadedBy      User?            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
+
+  @@index([assetId])
+  @@index([assignmentId])
+  @@index([maintenanceId])
+  @@index([purchaseId])
+  @@index([softwareLicenseId])
+  @@index([ticketId])
+  @@index([auditSessionId])
+  @@index([employeeId])
+  @@index([type])
+  @@map("documents")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Inventory audits
+// ─────────────────────────────────────────────────────────────────────────────
+
+model AuditSession {
+  id            String             @id @default(uuid()) @db.Uuid
+  number        Int                @unique @default(autoincrement())
+  name          String             @db.VarChar(160)
+  status        AuditSessionStatus @default(DRAFT)
+  locationId    String?            @map("location_id") @db.Uuid
+  departmentId  String?            @map("department_id") @db.Uuid
+  scheduledAt   DateTime?          @map("scheduled_at") @db.Timestamptz(6)
+  startedAt     DateTime?          @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime?          @map("completed_at") @db.Timestamptz(6)
+  closedAt      DateTime?          @map("closed_at") @db.Timestamptz(6)
+  createdById   String?            @map("created_by_id") @db.Uuid
+  completedById String?            @map("completed_by_id") @db.Uuid
+  notes         String?
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  location    Location?   @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  department  Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  createdBy   User?       @relation("AuditSessionCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  completedBy User?       @relation("AuditSessionCompletedBy", fields: [completedById], references: [id], onDelete: SetNull)
+  items       AuditItem[]
+  documents   Document[]
+
+  @@index([status])
+  @@index([locationId])
+  @@index([departmentId])
+  @@map("audit_sessions")
+}
+
+/// One row per expected asset (snapshot at start) plus any unexpected scans.
+model AuditItem {
+  id                 String          @id @default(uuid()) @db.Uuid
+  auditSessionId     String          @map("audit_session_id") @db.Uuid
+  /// NULL when an unknown/unregistered code was scanned (see scanned_code).
+  assetId            String?         @map("asset_id") @db.Uuid
+  scannedCode        String?         @map("scanned_code") @db.VarChar(128)
+  expected           Boolean         @default(true)
+  result             AuditItemResult @default(PENDING)
+  expectedLocationId String?         @map("expected_location_id") @db.Uuid
+  observedLocationId String?         @map("observed_location_id") @db.Uuid
+  observedCondition  AssetCondition? @map("observed_condition")
+  scannedAt          DateTime?       @map("scanned_at") @db.Timestamptz(6)
+  scannedById        String?         @map("scanned_by_id") @db.Uuid
+  reviewedAt         DateTime?       @map("reviewed_at") @db.Timestamptz(6)
+  reviewedById       String?         @map("reviewed_by_id") @db.Uuid
+  resolution         String?
+  notes              String?
+  createdAt          DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  auditSession     AuditSession @relation(fields: [auditSessionId], references: [id], onDelete: Cascade)
+  asset            Asset?       @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  expectedLocation Location?    @relation("AuditItemExpectedLocation", fields: [expectedLocationId], references: [id], onDelete: SetNull)
+  observedLocation Location?    @relation("AuditItemObservedLocation", fields: [observedLocationId], references: [id], onDelete: SetNull)
+  scannedBy        User?        @relation("AuditItemScannedBy", fields: [scannedById], references: [id], onDelete: SetNull)
+  reviewedBy       User?        @relation("AuditItemReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+
+  @@unique([auditSessionId, assetId])
+  @@index([auditSessionId, result])
+  @@index([assetId])
+  @@map("audit_items")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Access control
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                  String     @id @default(uuid()) @db.Uuid
+  /// Stored lower-cased by the application.
+  email               String     @unique @db.VarChar(254)
+  /// Argon2id hash; NULL until the user sets a password (invite / SSO).
+  passwordHash        String?    @map("password_hash")
+  displayName         String     @map("display_name") @db.VarChar(160)
+  employeeId          String?    @unique @map("employee_id") @db.Uuid
+  status              UserStatus @default(ACTIVE)
+  failedLoginAttempts Int        @default(0) @map("failed_login_attempts")
+  lockedUntil         DateTime?  @map("locked_until") @db.Timestamptz(6)
+  lastLoginAt         DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  passwordChangedAt   DateTime?  @map("password_changed_at") @db.Timestamptz(6)
+  createdAt           DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  employee Employee?  @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  roles    UserRole[] @relation("UserRoleUser")
+
+  rolesGranted              UserRole[]            @relation("UserRoleAssignedBy")
+  purchasesCreated          Purchase[]            @relation("PurchaseCreatedBy")
+  assetsCreated             Asset[]               @relation("AssetCreatedBy")
+  assetsUpdated             Asset[]               @relation("AssetUpdatedBy")
+  assignmentsMade           AssetAssignment[]     @relation("AssignmentAssignedBy")
+  returnsProcessed          AssetAssignment[]     @relation("AssignmentReturnedBy")
+  assetHistory              AssetHistory[]        @relation("AssetHistoryPerformedBy")
+  accessoryAssignmentsMade  AccessoryAssignment[] @relation("AccessoryAssignedBy")
+  accessoryReturnsProcessed AccessoryAssignment[] @relation("AccessoryReturnedBy")
+  maintenanceReported       Maintenance[]         @relation("MaintenanceReportedBy")
+  maintenanceAssigned       Maintenance[]         @relation("MaintenanceTechnician")
+  softwareAssignmentsMade   SoftwareAssignment[]  @relation("SoftwareAssignedBy")
+  softwareUnassignmentsMade SoftwareAssignment[]  @relation("SoftwareUnassignedBy")
+  ticketsCreated            Ticket[]              @relation("TicketCreatedBy")
+  ticketsAssigned           Ticket[]              @relation("TicketAssignee")
+  ticketComments            TicketComment[]       @relation("TicketCommentAuthor")
+  documentsUploaded         Document[]            @relation("DocumentUploadedBy")
+  auditSessionsCreated      AuditSession[]        @relation("AuditSessionCreatedBy")
+  auditSessionsCompleted    AuditSession[]        @relation("AuditSessionCompletedBy")
+  auditItemsScanned         AuditItem[]           @relation("AuditItemScannedBy")
+  auditItemsReviewed        AuditItem[]           @relation("AuditItemReviewedBy")
+  notifications             Notification[]
+  activityLogs              ActivityLog[]
+  refreshTokens             RefreshToken[]
+  passwordResetTokens       PasswordResetToken[]
+  settingsUpdated           Setting[]
+
+  @@index([status])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// Stable machine name, e.g. SUPER_ADMIN.
+  name        String   @unique @db.VarChar(64)
+  displayName String   @map("display_name") @db.VarChar(120)
+  description String?
+  /// System roles are seeded and cannot be deleted or renamed.
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  /// e.g. asset.assign
+  key         String   @unique @db.VarChar(100)
+  module      String   @db.VarChar(64)
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  roles RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model UserRole {
+  userId       String   @map("user_id") @db.Uuid
+  roleId       String   @map("role_id") @db.Uuid
+  assignedById String?  @map("assigned_by_id") @db.Uuid
+  assignedAt   DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  user       User  @relation("UserRoleUser", fields: [userId], references: [id], onDelete: Cascade)
+  role       Role  @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  assignedBy User? @relation("UserRoleAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String   @map("role_id") @db.Uuid
+  permissionId String   @map("permission_id") @db.Uuid
+  grantedAt    DateTime @default(now()) @map("granted_at") @db.Timestamptz(6)
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Notifications & activity logs
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Notification {
+  id         String           @id @default(uuid()) @db.Uuid
+  userId     String           @map("user_id") @db.Uuid
+  type       NotificationType
+  title      String           @db.VarChar(200)
+  message    String
+  entityType String?          @map("entity_type") @db.VarChar(64)
+  entityId   String?          @map("entity_id") @db.Uuid
+  link       String?          @db.VarChar(512)
+  readAt     DateTime?        @map("read_at") @db.Timestamptz(6)
+  createdAt  DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+/// Security/audit trail for sensitive actions (spec: actor, timestamp, entity, old/new values). Append-only.
+model ActivityLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @map("actor_id") @db.Uuid
+  /// Permission-style verb, e.g. asset.assign, user.disable, auth.login_failed.
+  action     String   @db.VarChar(100)
+  entityType String   @map("entity_type") @db.VarChar(64)
+  entityId   String?  @map("entity_id") @db.VarChar(64)
+  oldValues  Json?    @map("old_values")
+  newValues  Json?    @map("new_values")
+  ipAddress  String?  @map("ip_address") @db.VarChar(45)
+  userAgent  String?  @map("user_agent") @db.VarChar(512)
+  requestId  String?  @map("request_id") @db.VarChar(128)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt(sort: Desc)])
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+  @@map("activity_logs")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Authentication & settings
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Opaque refresh tokens (only the SHA-256 hash is stored). Rotated on every use; reuse of a rotated
+/// token revokes the whole family (session).
+model RefreshToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  familyId   String    @map("family_id") @db.Uuid
+  tokenHash  String    @unique @map("token_hash") @db.Char(64)
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(6)
+  replacedAt DateTime? @map("replaced_at") @db.Timestamptz(6)
+  ipAddress  String?   @map("ip_address") @db.VarChar(45)
+  userAgent  String?   @map("user_agent") @db.VarChar(512)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+  @@map("refresh_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  usedAt    DateTime? @map("used_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+/// Application settings (company name, default currency, asset tag prefix, alert windows…).
+model Setting {
+  key         String   @id @db.VarChar(64)
+  value       Json
+  updatedById String?  @map("updated_by_id") @db.Uuid
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  updatedBy User? @relation(fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("settings")
+}

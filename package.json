@@ -1,0 +1,40 @@
+{
+  "name": "it-asset-management",
+  "version": "0.1.0",
+  "private": true,
+  "description": "IT Asset Management System — monorepo (Next.js web, NestJS API, shared types)",
+  "workspaces": [
+    "packages/shared",
+    "apps/api",
+    "apps/web"
+  ],
+  "engines": {
+    "node": ">=20.11"
+  },
+  "scripts": {
+    "postinstall": "npm run build -w @itam/shared && npm run prisma:generate -w @itam/api",
+    "build": "npm run build -w @itam/shared && npm run build -w @itam/api && npm run build -w @itam/web",
+    "dev:api": "npm run dev -w @itam/api",
+    "dev:web": "npm run dev -w @itam/web",
+    "test": "npm run test -w @itam/api && npm run test:e2e -w @itam/api && npm run test -w @itam/web",
+    "typecheck": "npm run typecheck -w @itam/shared && npm run typecheck -w @itam/api && npm run typecheck -w @itam/web",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:up": "docker compose -f docker/docker-compose.yml up -d db",
+    "db:down": "docker compose -f docker/docker-compose.yml down",
+    "test:db": "npm run test:db -w @itam/api",
+    "db:local": "node scripts/local-postgres.mjs",
+    "db:migrate": "npm run prisma:migrate -w @itam/api",
+    "db:deploy": "npm run prisma:deploy -w @itam/api",
+    "db:seed": "npm run db:seed -w @itam/api",
+    "db:reset": "npm run prisma:reset -w @itam/api",
+    "db:studio": "npm run prisma:studio -w @itam/api",
+    "db:seed:demo": "npm run db:seed:demo -w @itam/api",
+    "user:create-admin": "npm run user:create-admin -w @itam/api --"
+  },
+  "devDependencies": {
+    "embedded-postgres": "16.14.0-beta.17",
+    "prettier": "^3.3.3",
+    "typescript": "^5.6.3"
+  }
+}

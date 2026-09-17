@@ -1,0 +1,27 @@
+node_modules/
+dist/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+
+# Environment / secrets — never commit real values
+.env
+.env.*
+!.env.example
+
+# Uploads & local storage
+uploads/
+storage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+
+# Local embedded PostgreSQL data
+.local/

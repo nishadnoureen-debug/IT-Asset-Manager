@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: itam
+          POSTGRES_PASSWORD: itam
+          POSTGRES_DB: itam_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U itam -d itam_test"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://itam:itam@localhost:5432/itam_test?schema=public
+      TEST_DATABASE_URL: postgresql://itam:itam@localhost:5432/itam_test?schema=public
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run prisma:validate -w @itam/api
+      - run: npm run typecheck
+      - run: npm test
+      - name: Database integration tests (migrations, constraints, seed)
+        run: npm run test:db
+      - run: npm run build
