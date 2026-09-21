@@ -10,6 +10,7 @@ import {
   ForgotPasswordDto,
   LoginDto,
   RefreshDto,
+  RegisterDto,
   ResetPasswordDto,
 } from './auth.dto';
 import { AuthService, type SessionTokens } from './auth.service';
@@ -27,6 +28,21 @@ export class AuthController {
     private readonly auth: AuthService,
     private readonly config: ConfigService<Env, true>,
   ) {}
+
+  /** Lets the sign-in page decide whether to offer registration, and whether it needs approval. */
+  @Public()
+  @Get('registration')
+  async registration() {
+    return this.auth.registrationOptions();
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 5, ttl: 60_000 } })
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  register(@Body() dto: RegisterDto) {
+    return this.auth.register(dto);
+  }
 
   @Public()
   @Throttle({ default: { limit: 10, ttl: 60_000 } })

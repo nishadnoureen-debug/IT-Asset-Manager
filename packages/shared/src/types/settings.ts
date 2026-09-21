@@ -10,6 +10,13 @@ export interface AppSettings {
   licenseAlertDays: number;
   /** Days before a scheduled maintenance to notify the technician. */
   maintenanceDueDays: number;
+  /** Show "Create an account" on the sign-in page. */
+  allowSelfRegistration: boolean;
+  /**
+   * When true, self-registered accounts wait for an administrator to approve them and choose roles.
+   * When false (default) they can sign in immediately with the Employee role.
+   */
+  registrationRequiresApproval: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -19,6 +26,8 @@ export const DEFAULT_SETTINGS: AppSettings = {
   warrantyAlertDays: 30,
   licenseAlertDays: 30,
   maintenanceDueDays: 3,
+  allowSelfRegistration: true,
+  registrationRequiresApproval: false,
 };
 
 export const PASSWORD_POLICY = {

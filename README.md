@@ -9,14 +9,14 @@ tokens · S3-compatible storage · Docker · GitHub Actions
 
 ## What's included
 
-| Area                  | Highlights                                                                                                                                                                                                                     |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Authentication & RBAC | Argon2id passwords, short-lived access tokens, rotating httpOnly refresh cookies with reuse detection, lockout, password reset, 6 system roles + custom roles, 73 granular permissions with own / department / all data scopes |
-| Assets                | CRUD, auto-generated asset tags, lifecycle transitions, history timeline, documents, retire / dispose / report lost                                                                                                            |
-| Assignments           | Assign, return (to stock or repair) and transfer in one transaction each; accessories, condition, e-signature, generated handover / return PDFs, employee acknowledgement                                                      |
-| QR codes              | Per-asset QR, printable A4 label sheets, phone camera scanning, scan result shows only the actions your role allows                                                                                                            |
-| Operations            | Accessories stock, maintenance & repairs with costs, warranty tracking, purchases & vendors, software licences with seat limits and encrypted keys, helpdesk tickets, inventory audits with discrepancy review                 |
-| Insight               | Role-aware dashboard, 10 reports exportable to CSV / Excel / PDF, notifications with daily expiry & overdue checks, append-only activity log                                                                                   |
+| Area                  | Highlights                                                                                                                                                                                                                                                                         |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Authentication & RBAC | Argon2id passwords, short-lived access tokens, rotating httpOnly refresh cookies with reuse detection, lockout, password reset, self-registration (optionally with admin approval), 6 system roles + custom roles, 73 granular permissions with own / department / all data scopes |
+| Assets                | CRUD, auto-generated asset tags, lifecycle transitions, history timeline, documents, retire / dispose / report lost                                                                                                                                                                |
+| Assignments           | Assign, return (to stock or repair) and transfer in one transaction each; accessories, condition, e-signature, generated handover / return PDFs, employee acknowledgement                                                                                                          |
+| QR codes              | Per-asset QR, printable A4 label sheets, phone camera scanning, scan result shows only the actions your role allows                                                                                                                                                                |
+| Operations            | Accessories stock, maintenance & repairs with costs, warranty tracking, purchases & vendors, software licences with seat limits and encrypted keys, helpdesk tickets, inventory audits with discrepancy review                                                                     |
+| Insight               | Role-aware dashboard, 10 reports exportable to CSV / Excel / PDF, notifications with daily expiry & overdue checks, append-only activity log                                                                                                                                       |
 
 The screens are responsive; scanning, assigning and returning are designed phone-first.
 
@@ -72,6 +72,11 @@ npm run db:migrate
 ```bash
 npm run user:create-admin -- --email you@company.com --name "Your Name"
 ```
+
+Alternatively, open the sign-in page and choose **Create an account**: on a system with no active Super Admin the
+first person to register becomes Super Admin. Everyone after that can sign in straight away with the Employee role;
+an administrator gives them more access on **Users & roles**. **Settings** can require approval for new accounts or
+turn registration off.
 
 Optionally load demo data (employees, assets, assignments, tickets, licences, audits and one account per role;
 the demo password is printed at the end):

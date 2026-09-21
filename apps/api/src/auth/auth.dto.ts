@@ -51,3 +51,20 @@ export class ChangePasswordDto {
   @MaxLength(128)
   newPassword!: string;
 }
+
+export class RegisterDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.trim() : value))
+  @IsString()
+  @MinLength(2)
+  @MaxLength(160)
+  displayName!: string;
+
+  @Transform(lower)
+  @IsEmail()
+  @MaxLength(254)
+  email!: string;
+
+  @IsString()
+  @MaxLength(128)
+  password!: string;
+}

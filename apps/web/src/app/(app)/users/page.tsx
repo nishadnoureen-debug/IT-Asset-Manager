@@ -313,11 +313,117 @@ function RolesTab() {
   );
 }
 
+/** Approve a self-service account request: choose roles and optionally link the employee record. */
+function ApproveDialog({ user, onClose }: { user: UserAccount; onClose: () => void }) {
+  const toast = useToast();
+  const { can } = useAuth();
+  const roles = useApi<Role[]>('/roles');
+  const approve = useApiMutation<Record<string, unknown>>('post', `/users/${user.id}/approve`, [
+    '/users',
+  ]);
+  const [roleIds, setRoleIds] = useState<string[]>([]);
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Default to the least-privileged role; the approver widens it deliberately.
+  useEffect(() => {
+    const employee = roles.data?.data.find((r) => r.name === 'EMPLOYEE');
+    if (employee && roleIds.length === 0) setRoleIds([employee.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [roles.data]);
+
+  const submit = async () => {
+    setError(null);
+    if (!roleIds.length) return setError('Choose at least one role');
+    try {
+      await approve.mutateAsync({ roleIds, employeeId: employeeId ?? undefined });
+      toast.success(`${user.displayName} can now sign in`);
+      onClose();
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Approval failed');
+    }
+  };
+
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      size="lg"
+      title={`Approve ${user.displayName}`}
+      description={`${user.email} · requested ${formatRelative(user.createdAt)}`}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={submit} loading={approve.isPending}>
+            Approve access
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormError message={error} />
+        <Field
+          label="Linked employee"
+          hint="Needed to see their own assets and acknowledge hand-overs"
+        >
+          {(p) => (
+            <EmployeePicker
+              id={p.id}
+              value={employeeId}
+              onChange={setEmployeeId}
+              query={{ status: undefined }}
+            />
+          )}
+        </Field>
+        <fieldset>
+          <legend className="mb-2 text-sm font-medium text-slate-700 dark:text-slate-300">
+            Roles
+          </legend>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {(roles.data?.data ?? []).map((r) => {
+              const locked = r.name === 'SUPER_ADMIN' && !can('role.manage');
+              return (
+                <label
+                  key={r.id}
+                  className={`flex items-start gap-2 rounded-lg border p-3 text-sm ${roleIds.includes(r.id) ? 'border-blue-300 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/30' : 'border-slate-200 dark:border-slate-700'} ${locked ? 'opacity-50' : ''}`}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300"
+                    disabled={locked}
+                    checked={roleIds.includes(r.id)}
+                    onChange={(e) =>
+                      setRoleIds((ids) =>
+                        e.target.checked ? [...ids, r.id] : ids.filter((x) => x !== r.id),
+                      )
+                    }
+                  />
+                  <span>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">
+                      {r.displayName}
+                    </span>
+                    {r.description && (
+                      <span className="block text-xs text-slate-500">{r.description}</span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
+      </div>
+    </Dialog>
+  );
+}
+
 export default function UsersPage() {
   const { can, user: me } = useAuth();
   const toast = useToast();
   const { params, set } = useListParams(DEFAULTS);
   const [dialog, setDialog] = useState<UserAccount | 'new' | null>(null);
+  const [approving, setApproving] = useState<UserAccount | null>(null);
   const tab = can('user.view') ? params.tab : 'roles';
   const query = useApi<UserAccount[]>(tab === 'users' ? '/users' : null, {
     search: params.search,
@@ -325,6 +431,16 @@ export default function UsersPage() {
     page: params.page,
     limit: 25,
   });
+  const pending = useApi<UserAccount[]>(can('user.view') ? '/users' : null, {
+    status: 'PENDING',
+    limit: 50,
+  });
+  const requests = pending.data?.data ?? [];
+
+  const refreshAll = () => {
+    void query.refetch();
+    void pending.refetch();
+  };
 
   const toggle = async (u: UserAccount) => {
     try {
@@ -334,7 +450,17 @@ export default function UsersPage() {
           ? `${u.displayName} disabled and signed out`
           : `${u.displayName} enabled`,
       );
-      void query.refetch();
+      refreshAll();
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+
+  const reject = async (u: UserAccount) => {
+    try {
+      await api.post(`/users/${u.id}/disable`);
+      toast.success(`Request from ${u.displayName} rejected`);
+      refreshAll();
     } catch (e) {
       toast.error(e);
     }
@@ -391,15 +517,32 @@ export default function UsersPage() {
       header: <span className="sr-only">Actions</span>,
       cell: (u) => (
         <div className="flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-          {can('user.edit') && (
-            <Button variant="ghost" size="sm" onClick={() => setDialog(u)}>
-              Edit
-            </Button>
-          )}
-          {can('user.disable') && u.id !== me?.id && (
-            <Button variant="ghost" size="sm" onClick={() => toggle(u)}>
-              {u.status === 'ACTIVE' ? 'Disable' : 'Enable'}
-            </Button>
+          {u.status === 'PENDING' ? (
+            <>
+              {can('user.create') && (
+                <Button size="sm" onClick={() => setApproving(u)}>
+                  Approve
+                </Button>
+              )}
+              {can('user.disable') && (
+                <Button variant="ghost" size="sm" onClick={() => reject(u)}>
+                  Reject
+                </Button>
+              )}
+            </>
+          ) : (
+            <>
+              {can('user.edit') && (
+                <Button variant="ghost" size="sm" onClick={() => setDialog(u)}>
+                  Edit
+                </Button>
+              )}
+              {can('user.disable') && u.id !== me?.id && (
+                <Button variant="ghost" size="sm" onClick={() => toggle(u)}>
+                  {u.status === 'ACTIVE' ? 'Disable' : 'Enable'}
+                </Button>
+              )}
+            </>
           )}
         </div>
       ),
@@ -420,6 +563,48 @@ export default function UsersPage() {
           )
         }
       />
+      {requests.length > 0 && (
+        <Card className="mb-6 border-amber-200 dark:border-amber-900">
+          <div className="border-b border-amber-100 px-5 py-3 dark:border-amber-900/60">
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              {requests.length} account request{requests.length > 1 ? 's' : ''} waiting for approval
+            </p>
+            <p className="text-xs text-slate-500">
+              People who registered on the sign-in page. They cannot sign in until approved.
+            </p>
+          </div>
+          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
+            {requests.map((u) => (
+              <li
+                key={u.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm"
+              >
+                <span>
+                  <span className="font-medium text-slate-900 dark:text-slate-100">
+                    {u.displayName}
+                  </span>
+                  <span className="text-slate-500">
+                    {' '}
+                    · {u.email} · {formatRelative(u.createdAt)}
+                  </span>
+                </span>
+                <span className="flex gap-2">
+                  {can('user.create') && (
+                    <Button size="sm" onClick={() => setApproving(u)}>
+                      Approve
+                    </Button>
+                  )}
+                  {can('user.disable') && (
+                    <Button variant="secondary" size="sm" onClick={() => reject(u)}>
+                      Reject
+                    </Button>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       <Card>
         <div className="px-4 pt-3">
           <Tabs
@@ -466,6 +651,15 @@ export default function UsersPage() {
         onClose={() => setDialog(null)}
         user={dialog && dialog !== 'new' ? dialog : undefined}
       />
+      {approving && (
+        <ApproveDialog
+          user={approving}
+          onClose={() => {
+            setApproving(null);
+            refreshAll();
+          }}
+        />
+      )}
     </>
   );
 }

@@ -83,6 +83,11 @@ class UpdateRoleDto {
   @IsOptional() @IsString() @MaxLength(2000) description?: string;
 }
 
+class ApproveUserDto {
+  @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @IsUUID('all', { each: true }) roleIds!: string[];
+  @IsOptional() @IsUUID() employeeId?: string;
+}
+
 class RolePermissionsDto {
   @IsArray() @ArrayMaxSize(500) @IsString({ each: true }) permissionKeys!: string[];
 }
@@ -341,6 +346,9 @@ export class UsersController {
   @RequirePermissions('user.disable')
   async enable(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
     const existing = await this.get(id);
+    if (existing.status === 'PENDING') {
+      throw Errors.invalidState('Approve this account request and choose its roles instead');
+    }
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({
         where: { id },
@@ -354,6 +362,47 @@ export class UsersController {
           entityId: id,
           oldValues: { status: existing.status },
           newValues: { status: 'ACTIVE' },
+        },
+        tx,
+      );
+    });
+    this.access.invalidate(id);
+    return this.get(id);
+  }
+
+  /** Approve a self-service account request: activate it with the chosen roles. */
+  @Post(':id/approve')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('user.create')
+  async approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApproveUserDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
+    const existing = await this.get(id);
+    if (existing.status !== 'PENDING')
+      throw Errors.invalidState('This account is not waiting for approval');
+    await this.assertRoles(dto.roleIds, actor);
+    await this.assertEmployee(dto.employeeId, id);
+    await this.prisma.$transaction(async (tx) => {
+      const updated = await tx.user.updateMany({
+        where: { id, status: 'PENDING' },
+        data: { status: 'ACTIVE', employeeId: dto.employeeId },
+      });
+      if (updated.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'This request was already handled');
+      await tx.userRole.createMany({
+        data: dto.roleIds.map((roleId) => ({ userId: id, roleId, assignedById: actor.id })),
+        skipDuplicates: true,
+      });
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'user.approve',
+          entityType: 'user',
+          entityId: id,
+          oldValues: { status: 'PENDING' },
+          newValues: { status: 'ACTIVE', roleIds: dto.roleIds, employeeId: dto.employeeId },
         },
         tx,
       );

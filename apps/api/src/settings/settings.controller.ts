@@ -2,6 +2,7 @@ import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import {
+  IsBoolean,
   IsInt,
   IsOptional,
   IsString,
@@ -32,6 +33,8 @@ class UpdateSettingsDto {
   @IsOptional() @IsInt() @Min(1) @Max(365) warrantyAlertDays?: number;
   @IsOptional() @IsInt() @Min(1) @Max(365) licenseAlertDays?: number;
   @IsOptional() @IsInt() @Min(0) @Max(60) maintenanceDueDays?: number;
+  @IsOptional() @IsBoolean() allowSelfRegistration?: boolean;
+  @IsOptional() @IsBoolean() registrationRequiresApproval?: boolean;
 }
 
 @ApiTags('Settings')

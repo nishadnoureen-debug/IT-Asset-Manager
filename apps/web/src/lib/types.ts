@@ -434,7 +434,7 @@ export interface UserAccount {
   id: Id;
   email: string;
   displayName: string;
-  status: 'ACTIVE' | 'DISABLED' | 'LOCKED';
+  status: 'ACTIVE' | 'DISABLED' | 'LOCKED' | 'PENDING';
   lastLoginAt: string | null;
   lockedUntil: string | null;
   createdAt: string;
@@ -520,4 +520,10 @@ export interface ReportResult {
   total: number;
   truncated: boolean;
   generatedAt: string;
+}
+
+/** `GET /auth/registration`: whether the sign-in page offers registration, and if it needs approval. */
+export interface RegistrationOptions {
+  enabled: boolean;
+  requiresApproval: boolean;
 }

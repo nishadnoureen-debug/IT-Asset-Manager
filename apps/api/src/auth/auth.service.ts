@@ -8,10 +8,14 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
+import { ROLES } from '@itam/shared';
 import { ActivityLogService } from '../activity-logs/activity-log.service';
 import { CryptoService } from '../common/crypto/crypto.service';
+import { Errors } from '../common/errors';
 import { RequestContext } from '../common/context/request-context';
 import type { Env } from '../config/env.validation';
+import { NotificationsService } from '../notifications/notifications.service';
+import { SettingsService } from '../settings/settings.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type { AuthUser } from './auth-user';
 import type { AccessTokenPayload } from './guards/jwt-auth.guard';
@@ -40,7 +44,133 @@ export class AuthService {
     private readonly passwords: PasswordService,
     private readonly access: UserAccessService,
     private readonly activity: ActivityLogService,
+    private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
+
+  async registrationOptions(): Promise<{ enabled: boolean; requiresApproval: boolean }> {
+    const settings = await this.settings.get();
+    return {
+      enabled: settings.allowSelfRegistration,
+      requiresApproval: settings.registrationRequiresApproval,
+    };
+  }
+
+  /**
+   * Self-service registration. By default the account is active straight away with the Employee role, so
+   * the person signs in with the details they registered. When `registrationRequiresApproval` is on, the
+   * account is created PENDING with no roles and administrators approve it on the Users screen. If the
+   * system has no active Super Admin (fresh install), the registrant becomes the Super Admin.
+   */
+  async register(input: { displayName: string; email: string; password: string }) {
+    const options = await this.registrationOptions();
+    if (!options.enabled) {
+      throw new HttpException(
+        {
+          code: 'REGISTRATION_DISABLED',
+          message: 'Registration is turned off. Ask an administrator for an account.',
+        },
+        HttpStatus.FORBIDDEN,
+      );
+    }
+    this.passwords.assertPolicy(input.password);
+    const emailTaken = () =>
+      Errors.conflict(
+        'EMAIL_TAKEN',
+        'An account with this email already exists. Sign in, or reset your password if you forgot it.',
+      );
+    if (
+      await this.prisma.user.findUnique({ where: { email: input.email }, select: { id: true } })
+    ) {
+      throw emailTaken();
+    }
+    const passwordHash = await this.passwords.hash(input.password);
+
+    const outcome = await this.prisma
+      .$transaction(async (tx) => {
+        const superAdmin = await tx.role.findUniqueOrThrow({ where: { name: ROLES.SUPER_ADMIN } });
+        const activeSuperAdmins = await tx.user.count({
+          where: { deletedAt: null, status: 'ACTIVE', roles: { some: { roleId: superAdmin.id } } },
+        });
+        const kind: 'bootstrap' | 'pending' | 'active' =
+          activeSuperAdmins === 0 ? 'bootstrap' : options.requiresApproval ? 'pending' : 'active';
+        const roleId =
+          kind === 'bootstrap'
+            ? superAdmin.id
+            : kind === 'active'
+              ? (await tx.role.findUniqueOrThrow({ where: { name: ROLES.EMPLOYEE } })).id
+              : undefined;
+        const user = await tx.user.create({
+          data: {
+            email: input.email,
+            displayName: input.displayName,
+            passwordHash,
+            passwordChangedAt: new Date(),
+            status: kind === 'pending' ? 'PENDING' : 'ACTIVE',
+            roles: roleId ? { create: { roleId } } : undefined,
+          },
+        });
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: kind === 'bootstrap' ? 'auth.register_bootstrap_admin' : 'auth.register',
+            entityType: 'user',
+            entityId: user.id,
+            newValues: { email: input.email, displayName: input.displayName, status: user.status },
+          },
+          tx,
+        );
+        if (kind !== 'bootstrap') {
+          const admins = await this.notifications.usersWithPermission(tx, 'user.create');
+          await this.notifications.notifyUsers(
+            tx,
+            admins,
+            kind === 'pending'
+              ? {
+                  type: 'SYSTEM',
+                  title: 'New account request',
+                  message: `${input.displayName} (${input.email}) asked for access. Approve and choose roles on the Users screen.`,
+                  entityType: 'user',
+                  entityId: user.id,
+                  link: '/users?status=PENDING',
+                }
+              : {
+                  type: 'SYSTEM',
+                  title: 'New user registered',
+                  message: `${input.displayName} (${input.email}) registered and has the Employee role. Change their roles or link them to an employee record on the Users screen.`,
+                  entityType: 'user',
+                  entityId: user.id,
+                  link: `/users?search=${encodeURIComponent(input.email)}`,
+                },
+          );
+        }
+        return kind;
+      })
+      .catch((error: { code?: string }) => {
+        // A concurrent request registered the same email first.
+        if (error?.code === 'P2002') throw emailTaken();
+        throw error;
+      });
+
+    switch (outcome) {
+      case 'bootstrap':
+        return {
+          status: 'ACTIVE' as const,
+          message: 'You are the first administrator of this system. You can sign in now.',
+        };
+      case 'active':
+        return {
+          status: 'ACTIVE' as const,
+          message: 'Your account is ready. You can sign in now.',
+        };
+      default:
+        return {
+          status: 'PENDING' as const,
+          message:
+            'Request received. An administrator will review it; you can sign in once it is approved.',
+        };
+    }
+  }
 
   async login(email: string, password: string) {
     const user = await this.prisma.user.findUnique({ where: { email } });
@@ -79,6 +209,12 @@ export class AuthService {
       });
     }
 
+    if (user.status === 'PENDING') {
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_PENDING',
+        message: 'Your account request is waiting for approval by an administrator.',
+      });
+    }
     if (user.status !== 'ACTIVE') {
       await this.activity.recordSafely({
         actorId: user.id,

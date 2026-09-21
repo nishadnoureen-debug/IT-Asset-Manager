@@ -139,7 +139,12 @@ export const LABELS = {
     WRONG_LOCATION: 'Wrong location',
     DAMAGED: 'Damaged',
   },
-  userStatus: { ACTIVE: 'Active', DISABLED: 'Disabled', LOCKED: 'Locked' },
+  userStatus: {
+    ACTIVE: 'Active',
+    DISABLED: 'Disabled',
+    LOCKED: 'Locked',
+    PENDING: 'Pending approval',
+  },
   notificationType: {
     WARRANTY_EXPIRING: 'Warranty expiring',
     LICENSE_EXPIRING: 'License expiring',

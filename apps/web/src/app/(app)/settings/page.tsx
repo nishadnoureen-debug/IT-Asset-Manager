@@ -21,6 +21,17 @@ import type { AssetType, Department, Location } from '@/lib/types';
 
 type Tab = 'general' | 'departments' | 'locations' | 'types';
 
+interface SettingsForm {
+  companyName: string;
+  defaultCurrency: string;
+  assetTagPrefix: string;
+  warrantyAlertDays: string;
+  licenseAlertDays: string;
+  maintenanceDueDays: string;
+  allowSelfRegistration: boolean;
+  registrationRequiresApproval: boolean;
+}
+
 function GeneralSettings() {
   const { can } = useAuth();
   const toast = useToast();
@@ -34,11 +45,22 @@ function GeneralSettings() {
     reset,
     setError,
     formState: { errors, isDirty },
-  } = useForm<Record<string, string>>();
+    watch,
+  } = useForm<SettingsForm>();
 
   useEffect(() => {
-    if (query.data)
-      reset(Object.fromEntries(Object.entries(query.data.data).map(([k, v]) => [k, String(v)])));
+    if (!query.data) return;
+    const d = query.data.data;
+    reset({
+      companyName: d.companyName,
+      defaultCurrency: d.defaultCurrency,
+      assetTagPrefix: d.assetTagPrefix,
+      warrantyAlertDays: String(d.warrantyAlertDays),
+      licenseAlertDays: String(d.licenseAlertDays),
+      maintenanceDueDays: String(d.maintenanceDueDays),
+      allowSelfRegistration: d.allowSelfRegistration,
+      registrationRequiresApproval: d.registrationRequiresApproval,
+    });
   }, [query.data, reset]);
 
   const onSubmit = handleSubmit(async (v) => {
@@ -50,11 +72,14 @@ function GeneralSettings() {
         warrantyAlertDays: Number(v.warrantyAlertDays),
         licenseAlertDays: Number(v.licenseAlertDays),
         maintenanceDueDays: Number(v.maintenanceDueDays),
+        allowSelfRegistration: v.allowSelfRegistration,
+        registrationRequiresApproval: v.registrationRequiresApproval,
       });
       toast.success('Settings saved');
     } catch (e) {
       if (e instanceof ApiError) {
-        for (const [f, m] of Object.entries(e.fieldErrors)) setError(f, { message: m });
+        for (const [f, m] of Object.entries(e.fieldErrors))
+          setError(f as keyof SettingsForm, { message: m });
         setError('root', { message: e.message });
       }
     }
@@ -155,6 +180,29 @@ function GeneralSettings() {
                   )}
                 </Field>
               </FormGrid>
+              <div className="space-y-3 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+                <div>
+                  <Checkbox
+                    label="Allow people to create an account from the sign-in page"
+                    {...register('allowSelfRegistration')}
+                  />
+                  <p className="mt-1 pl-6 text-xs text-slate-500">
+                    New accounts get the Employee role. Change roles or link an employee record on
+                    the Users screen.
+                  </p>
+                </div>
+                <div>
+                  <Checkbox
+                    label="Require administrator approval for new accounts"
+                    disabled={!watch('allowSelfRegistration')}
+                    {...register('registrationRequiresApproval')}
+                  />
+                  <p className="mt-1 pl-6 text-xs text-slate-500">
+                    When on, new accounts cannot sign in until an administrator approves them and
+                    chooses their roles.
+                  </p>
+                </div>
+              </div>
             </fieldset>
             {editable && (
               <div className="flex justify-end">
