@@ -1,10 +1,14 @@
 import type { NextConfig } from 'next';
 
-/** Where the Next.js server forwards /api/v1 requests (the browser never talks to the API directly). */
-const API_INTERNAL_URL = (process.env.API_INTERNAL_URL ?? 'http://localhost:4000').replace(
-  /\/+$/,
-  '',
-);
+/**
+ * Where the Next.js server forwards /api/v1 requests (the browser never talks to the API directly).
+ * Baked in at build time. A bare host (Render's private-network hostname) means http://<host>:4000.
+ */
+function apiInternalUrl(raw = process.env.API_INTERNAL_URL?.trim() || 'http://localhost:4000') {
+  const url = /^https?:\/\//i.test(raw) ? raw : `http://${raw}${raw.includes(':') ? '' : ':4000'}`;
+  return url.replace(/\/+$/, '');
+}
+const API_INTERNAL_URL = apiInternalUrl();
 
 const nextConfig: NextConfig = {
   output: 'standalone',

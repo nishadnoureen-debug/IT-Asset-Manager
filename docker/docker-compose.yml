@@ -38,6 +38,7 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER:-itam}:${POSTGRES_PASSWORD:-itam}@db:5432/${POSTGRES_DB:-itam}?schema=public
       CORS_ORIGINS: ${PUBLIC_WEB_URL:-http://localhost:3000}
       PUBLIC_WEB_URL: ${PUBLIC_WEB_URL:-http://localhost:3000}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
       TRUST_PROXY: ${TRUST_PROXY:-uniquelocal}
       LOG_LEVEL: info
       JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Set JWT_ACCESS_SECRET in docker/.env}

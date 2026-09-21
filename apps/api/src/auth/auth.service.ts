@@ -60,7 +60,8 @@ export class AuthService {
    * Self-service registration. By default the account is active straight away with the Employee role, so
    * the person signs in with the details they registered. When `registrationRequiresApproval` is on, the
    * account is created PENDING with no roles and administrators approve it on the Users screen. If the
-   * system has no active Super Admin (fresh install), the registrant becomes the Super Admin.
+   * system has no active Super Admin (fresh install), the registrant becomes the Super Admin; when
+   * `BOOTSTRAP_ADMIN_EMAIL` is set only that email may do so, and registration is then switched off.
    */
   async register(input: { displayName: string; email: string; password: string }) {
     const options = await this.registrationOptions();
@@ -86,12 +87,23 @@ export class AuthService {
     }
     const passwordHash = await this.passwords.hash(input.password);
 
+    const ownerEmail = this.config.get('BOOTSTRAP_ADMIN_EMAIL', { infer: true });
+
     const outcome = await this.prisma
       .$transaction(async (tx) => {
         const superAdmin = await tx.role.findUniqueOrThrow({ where: { name: ROLES.SUPER_ADMIN } });
         const activeSuperAdmins = await tx.user.count({
           where: { deletedAt: null, status: 'ACTIVE', roles: { some: { roleId: superAdmin.id } } },
         });
+        if (activeSuperAdmins === 0 && ownerEmail && input.email !== ownerEmail) {
+          throw new HttpException(
+            {
+              code: 'REGISTRATION_DISABLED',
+              message: 'This system is being set up. Only its owner can create the first account.',
+            },
+            HttpStatus.FORBIDDEN,
+          );
+        }
         const kind: 'bootstrap' | 'pending' | 'active' =
           activeSuperAdmins === 0 ? 'bootstrap' : options.requiresApproval ? 'pending' : 'active';
         const roleId =
@@ -144,7 +156,7 @@ export class AuthService {
                 },
           );
         }
-        return kind;
+        return { kind, userId: user.id };
       })
       .catch((error: { code?: string }) => {
         // A concurrent request registered the same email first.
@@ -152,7 +164,12 @@ export class AuthService {
         throw error;
       });
 
-    switch (outcome) {
+    if (outcome.kind === 'bootstrap' && ownerEmail) {
+      // Single-owner install: nobody else can register unless the owner reopens it in Settings.
+      await this.settings.update({ allowSelfRegistration: false }, outcome.userId);
+    }
+
+    switch (outcome.kind) {
       case 'bootstrap':
         return {
           status: 'ACTIVE' as const,

@@ -36,3 +36,27 @@ jobs:
       - name: Database integration tests (migrations, constraints, seed)
         run: npm run test:db
       - run: npm run build
+
+  # The images Render (and Docker Compose) run. Render deploys only after these checks pass.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build API image
+        run: docker build -f docker/api.Dockerfile -t itam-api .
+      - name: Build web image
+        run: docker build -f docker/web.Dockerfile --build-arg API_INTERNAL_URL=api-host -t itam-web .
+      - name: API image drops root and can write to a root-owned storage mount (like a Render disk)
+        run: |
+          sudo install -d -o root -g root -m 755 /tmp/storage
+          docker run --rm -v /tmp/storage:/data/storage itam-api \
+            sh -c 'test "$(id -un)" = app && touch /data/storage/probe && echo "storage writable as $(id -un)"'
+      - name: Web image serves the sign-in page
+        run: |
+          docker run -d --name web -p 3000:3000 itam-web
+          for i in $(seq 1 30); do
+            if curl -fsS -o /dev/null http://localhost:3000/login; then echo "web is up"; exit 0; fi
+            sleep 1
+          done
+          docker logs web
+          exit 1

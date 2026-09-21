@@ -6,6 +6,10 @@ const booleanString = (fallback: 'true' | 'false') =>
     .default(fallback)
     .transform((value) => value === 'true');
 
+/** Treats blank values (e.g. an empty dashboard field) as "not set". */
+const blankToUndefined = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? undefined : value;
+
 export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -47,8 +51,21 @@ export const envSchema = z
         'ENCRYPTION_KEY must be 32 bytes, base64',
       ),
 
-    /** Public URL of the web app — used in QR codes, reset links and PDFs. */
-    PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
+    /** Public URL of the web app — used in QR codes, reset links and PDFs. A bare host gets https://. */
+    PUBLIC_WEB_URL: z.preprocess((value) => {
+      const v = blankToUndefined(value);
+      if (typeof v !== 'string') return v;
+      const url = /^https?:\/\//i.test(v.trim()) ? v.trim() : `https://${v.trim()}`;
+      return url.replace(/\/+$/, '');
+    }, z.string().url('PUBLIC_WEB_URL must be a URL').default('http://localhost:3000')),
+    /**
+     * Owner of a new install. While the system has no active Super Admin, only this email can register
+     * (becoming the Super Admin); registration then closes. Protects a public URL during first setup.
+     */
+    BOOTSTRAP_ADMIN_EMAIL: z.preprocess((value) => {
+      const v = blankToUndefined(value);
+      return typeof v === 'string' ? v.trim().toLowerCase() : v;
+    }, z.string().email('BOOTSTRAP_ADMIN_EMAIL must be an email address').optional()),
 
     // File storage
     STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
