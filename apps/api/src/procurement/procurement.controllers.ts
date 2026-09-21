@@ -36,9 +36,17 @@ class CreateVendorDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) name!: string;
   @IsOptional() @IsArray() @IsEnum(VendorType, { each: true }) types?: VendorType[];
   @IsOptional() @IsString() @MaxLength(120) contactName?: string;
-  @IsOptional() @Transform(({ value }) => (value === '' ? undefined : value)) @IsEmail() @MaxLength(254) email?: string;
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsEmail()
+  @MaxLength(254)
+  email?: string;
   @IsOptional() @IsString() @MaxLength(40) phone?: string;
-  @IsOptional() @Transform(({ value }) => (value === '' ? undefined : value)) @IsUrl() @MaxLength(255) website?: string;
+  @IsOptional()
+  @Transform(({ value }) => (value === '' ? undefined : value))
+  @IsUrl()
+  @MaxLength(255)
+  website?: string;
   @IsOptional() @IsString() @MaxLength(500) address?: string;
   @IsOptional() @IsString() @MaxLength(64) taxNumber?: string;
   @IsOptional() @IsString() @MaxLength(5000) notes?: string;
@@ -48,7 +56,10 @@ class UpdateVendorDto extends PartialType(CreateVendorDto) {}
 
 class VendorQueryDto extends PaginationQueryDto {
   @IsOptional() @IsEnum(VendorType) type?: VendorType;
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() activeOnly?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  activeOnly?: boolean;
 }
 
 @ApiTags('Vendors')
@@ -74,7 +85,11 @@ export class VendorsController {
         this.prisma.vendor.findMany({
           where,
           include: { _count: { select: { purchases: true, assets: true, maintenance: true } } },
-          orderBy: resolveOrderBy<Prisma.VendorOrderByWithRelationInput>(q, { name: (o) => ({ name: o }), createdAt: (o) => ({ createdAt: o }) }, { name: 'asc' }),
+          orderBy: resolveOrderBy<Prisma.VendorOrderByWithRelationInput>(
+            q,
+            { name: (o) => ({ name: o }), createdAt: (o) => ({ createdAt: o }) },
+            { name: 'asc' },
+          ),
           ...page,
         }),
       () => this.prisma.vendor.count({ where }),
@@ -88,7 +103,15 @@ export class VendorsController {
       where: { id, deletedAt: null },
       include: {
         purchases: { where: { deletedAt: null }, orderBy: { purchaseDate: 'desc' }, take: 50 },
-        _count: { select: { purchases: true, assets: true, warrantyAssets: true, maintenance: true, softwareLicenses: true } },
+        _count: {
+          select: {
+            purchases: true,
+            assets: true,
+            warrantyAssets: true,
+            maintenance: true,
+            softwareLicenses: true,
+          },
+        },
       },
     });
     if (!vendor) throw Errors.notFound('Vendor');
@@ -100,20 +123,46 @@ export class VendorsController {
   create(@Body() dto: CreateVendorDto, @CurrentUser() user: AuthUser) {
     return this.prisma.$transaction(async (tx) => {
       const vendor = await tx.vendor.create({ data: dto });
-      await this.activity.record({ actorId: user.id, action: 'vendor.create', entityType: 'vendor', entityId: vendor.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'vendor.create',
+          entityType: 'vendor',
+          entityId: vendor.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return vendor;
     });
   }
 
   @Patch(':id')
   @RequirePermissions('vendor.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateVendorDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateVendorDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.vendor.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw Errors.notFound('Vendor');
-    const changes = diff(existing as unknown as Record<string, unknown>, dto as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      dto as Record<string, unknown>,
+    );
     return this.prisma.$transaction(async (tx) => {
       const vendor = await tx.vendor.update({ where: { id }, data: dto });
-      if (changes) await this.activity.record({ actorId: user.id, action: 'vendor.update', entityType: 'vendor', entityId: id, ...changes }, tx);
+      if (changes)
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: 'vendor.update',
+            entityType: 'vendor',
+            entityId: id,
+            ...changes,
+          },
+          tx,
+        );
       return vendor;
     });
   }
@@ -128,9 +177,24 @@ class CreatePurchaseDto {
   @Type(() => Date) @IsDate() purchaseDate!: Date;
   @IsOptional() @Type(() => Date) @IsDate() invoiceDate?: Date;
   @IsOptional() @Transform(upper) @Matches(/^[A-Z]{3}$/) currency?: string;
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(999_999_999_999) subtotal?: number;
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(999_999_999_999) taxAmount?: number;
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(999_999_999_999) totalAmount?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999_999_999_999)
+  subtotal?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999_999_999_999)
+  taxAmount?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999_999_999_999)
+  totalAmount?: number;
   @IsOptional() @IsString() @MaxLength(5000) notes?: string;
   /** Link existing assets to this purchase. */
   @IsOptional() @IsArray() @IsUUID('all', { each: true }) assetIds?: string[];
@@ -168,11 +232,22 @@ export class PurchasesController {
           where,
           include: {
             vendor: { select: { id: true, name: true } },
-            _count: { select: { assets: true, accessories: true, softwareLicenses: true, documents: { where: { deletedAt: null } } } },
+            _count: {
+              select: {
+                assets: true,
+                accessories: true,
+                softwareLicenses: true,
+                documents: { where: { deletedAt: null } },
+              },
+            },
           },
           orderBy: resolveOrderBy<Prisma.PurchaseOrderByWithRelationInput>(
             q,
-            { purchaseDate: (o) => ({ purchaseDate: o }), totalAmount: (o) => ({ totalAmount: o }), createdAt: (o) => ({ createdAt: o }) },
+            {
+              purchaseDate: (o) => ({ purchaseDate: o }),
+              totalAmount: (o) => ({ totalAmount: o }),
+              createdAt: (o) => ({ createdAt: o }),
+            },
             { purchaseDate: 'desc' },
           ),
           ...page,
@@ -191,11 +266,24 @@ export class PurchasesController {
         createdBy: { select: { id: true, displayName: true } },
         assets: {
           where: { deletedAt: null },
-          select: { id: true, assetTag: true, name: true, status: true, purchaseCost: true, currency: true },
+          select: {
+            id: true,
+            assetTag: true,
+            name: true,
+            status: true,
+            purchaseCost: true,
+            currency: true,
+          },
           orderBy: { assetTag: 'asc' },
         },
-        accessories: { where: { deletedAt: null }, select: { id: true, name: true, quantityTotal: true, unitCost: true } },
-        softwareLicenses: { where: { deletedAt: null }, select: { id: true, name: true, seats: true, software: { select: { name: true } } } },
+        accessories: {
+          where: { deletedAt: null },
+          select: { id: true, name: true, quantityTotal: true, unitCost: true },
+        },
+        softwareLicenses: {
+          where: { deletedAt: null },
+          select: { id: true, name: true, seats: true, software: { select: { name: true } } },
+        },
         documents: { where: { deletedAt: null }, select: documentSelect },
       },
     });
@@ -224,7 +312,16 @@ export class PurchasesController {
           data: { purchaseId: purchase.id, vendorId: dto.vendorId, purchaseDate: dto.purchaseDate },
         });
       }
-      await this.activity.record({ actorId: user.id, action: 'purchase.create', entityType: 'purchase', entityId: purchase.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'purchase.create',
+          entityType: 'purchase',
+          entityId: purchase.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return purchase;
     });
     return this.get(created.id);
@@ -232,12 +329,19 @@ export class PurchasesController {
 
   @Patch(':id')
   @RequirePermissions('purchase.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdatePurchaseDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdatePurchaseDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.purchase.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw Errors.notFound('Purchase');
     if (dto.vendorId) await this.assertVendor(dto.vendorId);
     const { assetIds, ...data } = dto;
-    const changes = diff(existing as unknown as Record<string, unknown>, data as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      data as Record<string, unknown>,
+    );
     await this.prisma.$transaction(async (tx) => {
       await tx.purchase.update({ where: { id }, data });
       if (assetIds) {
@@ -248,7 +352,14 @@ export class PurchasesController {
       }
       if (changes || assetIds) {
         await this.activity.record(
-          { actorId: user.id, action: 'purchase.update', entityType: 'purchase', entityId: id, oldValues: changes?.oldValues, newValues: { ...changes?.newValues, assetIds } },
+          {
+            actorId: user.id,
+            action: 'purchase.update',
+            entityType: 'purchase',
+            entityId: id,
+            oldValues: changes?.oldValues,
+            newValues: { ...changes?.newValues, assetIds },
+          },
           tx,
         );
       }

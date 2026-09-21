@@ -124,7 +124,13 @@ export interface MaintenanceRecord {
   createdAt: string;
   technicianId: Id | null;
   vendorId: Id | null;
-  asset?: { id: Id; assetTag: string; name: string; status: AssetStatus; assetType?: { name: string } };
+  asset?: {
+    id: Id;
+    assetTag: string;
+    name: string;
+    status: AssetStatus;
+    assetType?: { name: string };
+  };
   technician?: UserRef | null;
   reportedBy?: UserRef | null;
   vendor?: Ref | null;
@@ -249,7 +255,14 @@ export interface Purchase {
   notes: string | null;
   vendor: Ref;
   _count?: { assets: number; accessories: number; softwareLicenses: number; documents: number };
-  assets?: { id: Id; assetTag: string; name: string; status: AssetStatus; purchaseCost: Decimal; currency: string | null }[];
+  assets?: {
+    id: Id;
+    assetTag: string;
+    name: string;
+    status: AssetStatus;
+    purchaseCost: Decimal;
+    currency: string | null;
+  }[];
   documents?: DocumentItem[];
   createdBy?: UserRef | null;
 }
@@ -269,7 +282,9 @@ export interface Accessory {
   notes: string | null;
   locationId: Id | null;
   location: Ref | null;
-  assignments?: (AccessoryAssignment & { assetAssignment: { id: Id; asset: { id: Id; assetTag: string } } | null })[];
+  assignments?: (AccessoryAssignment & {
+    assetAssignment: { id: Id; asset: { id: Id; assetTag: string } } | null;
+  })[];
 }
 
 export interface Software {
@@ -339,7 +354,13 @@ export interface Ticket {
   asset: { id: Id; assetTag: string; name: string } | null;
   createdBy?: UserRef | null;
   _count?: { comments: number };
-  comments?: { id: Id; body: string; isInternal: boolean; createdAt: string; author: UserRef | null }[];
+  comments?: {
+    id: Id;
+    body: string;
+    isInternal: boolean;
+    createdAt: string;
+    author: UserRef | null;
+  }[];
   maintenance?: { id: Id; number: number; title: string; status: string }[];
   documents?: DocumentItem[];
 }
@@ -384,7 +405,15 @@ export interface AuditItem {
   reviewedAt: string | null;
   resolution: string | null;
   notes: string | null;
-  asset: { id: Id; assetTag: string; name: string; serialNumber: string | null; status: AssetStatus; assetType: { name: string }; location: Ref | null } | null;
+  asset: {
+    id: Id;
+    assetTag: string;
+    name: string;
+    serialNumber: string | null;
+    status: AssetStatus;
+    assetType: { name: string };
+    location: Ref | null;
+  } | null;
   observedLocation: Ref | null;
   expectedLocation: Ref | null;
   scannedBy: UserRef | null;
@@ -409,7 +438,13 @@ export interface UserAccount {
   lastLoginAt: string | null;
   lockedUntil: string | null;
   createdAt: string;
-  employee: { id: Id; firstName: string; lastName: string; employeeNumber: string; department: { name: string } | null } | null;
+  employee: {
+    id: Id;
+    firstName: string;
+    lastName: string;
+    employeeNumber: string;
+    department: { name: string } | null;
+  } | null;
   roles: { role: { id: Id; name: string; displayName: string } }[];
 }
 
@@ -445,7 +480,13 @@ export interface ScanResult {
     department: Ref | null;
     warrantyEndDate: string | null;
   };
-  currentAssignment: { id: Id; assignedAt: string; acknowledgedAt: string | null; employee: EmployeeRef | null; location: Ref | null } | null;
+  currentAssignment: {
+    id: Id;
+    assignedAt: string;
+    acknowledgedAt: string | null;
+    employee: EmployeeRef | null;
+    location: Ref | null;
+  } | null;
   openMaintenance: { id: Id; number: number; status: string } | null;
   inProgressAudits: { id: Id; number: number; name: string }[];
   allowedActions: AssetAction[];

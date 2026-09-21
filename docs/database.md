@@ -17,14 +17,15 @@ whichever option you use.
 
 ## Commands
 
-| Command              | Purpose                                                                  |
-| -------------------- | ------------------------------------------------------------------------ |
-| `npm run db:migrate` | Create/apply migrations in development (`prisma migrate dev`)            |
-| `npm run db:deploy`  | Apply pending migrations in staging/production (`prisma migrate deploy`) |
-| `npm run db:seed`    | Sync permissions, system roles and default asset types (idempotent)      |
-| `npm run db:reset`   | Drop, re-migrate and re-seed the dev database (**destroys data**)        |
-| `npm run db:studio`  | Browse data in Prisma Studio                                             |
-| `npm run test:db`    | Integration tests against `itam_test`: migrations, constraints and seed  |
+| Command                | Purpose                                                                                |
+| ---------------------- | -------------------------------------------------------------------------------------- |
+| `npm run db:migrate`   | Create/apply migrations in development (`prisma migrate dev`)                          |
+| `npm run db:deploy`    | Apply pending migrations in staging/production (`prisma migrate deploy`)               |
+| `npm run db:seed`      | Sync permissions, system roles and default asset types (idempotent)                    |
+| `npm run db:seed:demo` | Load demo data through the real services (never in production)                         |
+| `npm run db:reset`     | Drop, re-migrate and re-seed the dev database (**destroys data**)                      |
+| `npm run db:studio`    | Browse data in Prisma Studio                                                           |
+| `npm run test:db`      | Integration tests against `itam_test`: migrations, constraints, seed and API workflows |
 
 The Docker API image runs `migrate deploy` and then the compiled seed on every start.
 
@@ -94,9 +95,12 @@ erDiagram
 | Documents    | `documents` (file metadata; files go to S3-compatible storage)    |
 | Audits       | `audit_sessions`, `audit_items`                                   |
 | Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
-| System       | `notifications`, `activity_logs`                                  |
+| System       | `notifications`, `activity_logs`, `settings`                      |
+| Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)    |
 
 `ticket_comments` is not in the table list in spec §3, but `POST /tickets/:id/comments` in spec §5 needs it.
+`refresh_tokens`, `password_reset_tokens` and `settings` were added with authentication and the Settings screen
+(migration `auth_and_settings`, which also creates the `asset_tag_seq` sequence used for generated tags).
 
 ### Assignment model
 
@@ -143,9 +147,11 @@ API, the web app and the seed. Where spec §4 limits a role's data scope, the sc
 | ------------------ | -------------------------------------------------------------------------- |
 | Super Admin        | All 73                                                                     |
 | IT Administrator   | 70 (everything except `role.manage`, `settings.edit`, `activity_log.view`) |
-| IT Technician      | 35                                                                         |
+| IT Technician      | 36                                                                         |
 | Auditor            | 18                                                                         |
 | Department Manager | 11                                                                         |
 | Employee           | 9                                                                          |
 
-The seed resets **system** roles to exactly this mapping on every run. Custom roles are left untouched.
+The seed grants a **system** role its catalogue permissions when the role is first created. After that it only
+adds permissions that are _new to the catalogue_, so changes made on the Users & roles screen survive redeploys.
+Super Admin always holds every permission and cannot be edited. Custom roles are never touched by the seed.

@@ -1,16 +1,10 @@
 {
-  "moduleFileExtensions": [
-    "js",
-    "json",
-    "ts"
-  ],
+  "moduleFileExtensions": ["js", "json", "ts"],
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".db-spec.ts$",
   "globalSetup": "<rootDir>/db/global-setup.ts",
-  "setupFiles": [
-    "<rootDir>/db/setup-env.ts"
-  ],
+  "setupFiles": ["<rootDir>/db/setup-env.ts"],
   "testTimeout": 60000,
   "transform": {
     "^.+\\.ts$": [

@@ -36,7 +36,9 @@ const assignmentInclude = {
   location: { select: { id: true, name: true } },
   assignedBy: { select: { id: true, displayName: true } },
   returnedBy: { select: { id: true, displayName: true } },
-  accessoryAssignments: { include: { accessory: { select: { id: true, name: true, category: true } } } },
+  accessoryAssignments: {
+    include: { accessory: { select: { id: true, name: true, category: true } } },
+  },
 } satisfies Prisma.AssetAssignmentInclude;
 
 @Injectable()
@@ -100,7 +102,13 @@ export class AssignmentsService {
     );
     return paginate(
       q,
-      (page) => this.prisma.assetAssignment.findMany({ where, include: assignmentInclude, orderBy, ...page }),
+      (page) =>
+        this.prisma.assetAssignment.findMany({
+          where,
+          include: assignmentInclude,
+          orderBy,
+          ...page,
+        }),
       () => this.prisma.assetAssignment.count({ where }),
     );
   }
@@ -110,8 +118,12 @@ export class AssignmentsService {
       where: { AND: [{ id }, this.scopeWhere(user)] },
       include: {
         ...assignmentInclude,
-        previousAssignment: { include: { employee: { select: employeeSummarySelect }, location: true } },
-        nextAssignment: { include: { employee: { select: employeeSummarySelect }, location: true } },
+        previousAssignment: {
+          include: { employee: { select: employeeSummarySelect }, location: true },
+        },
+        nextAssignment: {
+          include: { employee: { select: employeeSummarySelect }, location: true },
+        },
         documents: { where: { deletedAt: null }, select: documentSelect },
       },
     });
@@ -123,7 +135,9 @@ export class AssignmentsService {
     const asset = await this.assets.findVisible(assetId, user);
     const target = await this.resolveTarget(dto.employeeId, dto.locationId);
     if (!ASSIGNABLE_STATUSES.includes(asset.status)) {
-      throw Errors.invalidState(`Only assets that are In stock or Available can be assigned (current: ${asset.status})`);
+      throw Errors.invalidState(
+        `Only assets that are In stock or Available can be assigned (current: ${asset.status})`,
+      );
     }
     if (asset.assignments.length) throw Errors.invalidState('This asset is already assigned');
     if (asset.maintenance.length) throw Errors.invalidState('This asset has open maintenance');
@@ -183,7 +197,13 @@ export class AssignmentsService {
           entityType: 'asset',
           entityId: assetId,
           oldValues: { status: asset.status },
-          newValues: { status: 'ASSIGNED', assignmentId: created.id, employeeId: target.employee?.id, locationId: target.location?.id, accessories: dto.accessories },
+          newValues: {
+            status: 'ASSIGNED',
+            assignmentId: created.id,
+            employeeId: target.employee?.id,
+            locationId: target.location?.id,
+            accessories: dto.accessories,
+          },
         },
         tx,
       );
@@ -231,11 +251,19 @@ export class AssignmentsService {
           returnNotes: dto.notes,
         },
       });
-      if (closed.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'This assignment was already closed');
+      if (closed.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'This assignment was already closed');
 
       for (const acc of active.accessoryAssignments) {
         const line = lines.get(acc.id);
-        await this.returnAccessory(tx, acc, line?.returned ?? true, line?.condition ?? dto.condition, user.id, now);
+        await this.returnAccessory(
+          tx,
+          acc,
+          line?.returned ?? true,
+          line?.condition ?? dto.condition,
+          user.id,
+          now,
+        );
       }
 
       await this.assets.setStatus(tx, assetId, 'ASSIGNED', dto.returnTo, {
@@ -284,7 +312,11 @@ export class AssignmentsService {
           entityType: 'asset',
           entityId: assetId,
           oldValues: { status: 'ASSIGNED', assignmentId: active.id },
-          newValues: { status: dto.returnTo, condition: dto.condition, accessories: dto.accessories },
+          newValues: {
+            status: dto.returnTo,
+            condition: dto.condition,
+            accessories: dto.accessories,
+          },
         },
         tx,
       );
@@ -297,10 +329,17 @@ export class AssignmentsService {
   async transfer(assetId: string, dto: TransferAssetDto, user: AuthUser) {
     const asset = await this.assets.findVisible(assetId, user);
     const active = asset.assignments[0];
-    if (!active || asset.status !== 'ASSIGNED') throw Errors.invalidState('Only assigned assets can be transferred');
+    if (!active || asset.status !== 'ASSIGNED')
+      throw Errors.invalidState('Only assigned assets can be transferred');
     const target = await this.resolveTarget(dto.employeeId, dto.locationId);
-    if ((target.employee?.id ?? null) === active.employeeId && (target.location?.id ?? null) === active.locationId) {
-      throw Errors.badRequest('The asset is already assigned to this employee/location', 'employeeId');
+    if (
+      (target.employee?.id ?? null) === active.employeeId &&
+      (target.location?.id ?? null) === active.locationId
+    ) {
+      throw Errors.badRequest(
+        'The asset is already assigned to this employee/location',
+        'employeeId',
+      );
     }
     const signature = this.parseSignature(dto.signature);
     const now = new Date();
@@ -316,7 +355,8 @@ export class AssignmentsService {
           returnNotes: `Transferred: ${dto.reason}`,
         },
       });
-      if (closed.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'This assignment was already closed');
+      if (closed.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'This assignment was already closed');
 
       const created = await tx.assetAssignment.create({
         data: {
@@ -338,7 +378,12 @@ export class AssignmentsService {
         if (target.employee) {
           await tx.accessoryAssignment.update({
             where: { id: acc.id },
-            data: { status: 'RETURNED', returnedAt: now, returnedById: user.id, notes: 'Transferred with asset' },
+            data: {
+              status: 'RETURNED',
+              returnedAt: now,
+              returnedById: user.id,
+              notes: 'Transferred with asset',
+            },
           });
           await tx.accessoryAssignment.create({
             data: {
@@ -351,7 +396,14 @@ export class AssignmentsService {
             },
           });
         } else {
-          await this.returnAccessory(tx, acc, true, acc.conditionAtAssignment ?? dto.condition, user.id, now);
+          await this.returnAccessory(
+            tx,
+            acc,
+            true,
+            acc.conditionAtAssignment ?? dto.condition,
+            user.id,
+            now,
+          );
         }
       }
 
@@ -361,7 +413,9 @@ export class AssignmentsService {
         locationId: newLocationId,
         updatedById: user.id,
       });
-      const fromLabel = active.employee ? `${active.employee.firstName} ${active.employee.lastName}` : active.location?.name;
+      const fromLabel = active.employee
+        ? `${active.employee.firstName} ${active.employee.lastName}`
+        : active.location?.name;
       await this.history.record(tx, {
         assetId,
         action: 'TRANSFERRED',
@@ -380,8 +434,17 @@ export class AssignmentsService {
           action: 'asset.transfer',
           entityType: 'asset',
           entityId: assetId,
-          oldValues: { assignmentId: active.id, employeeId: active.employeeId, locationId: active.locationId },
-          newValues: { assignmentId: created.id, employeeId: target.employee?.id, locationId: target.location?.id, reason: dto.reason },
+          oldValues: {
+            assignmentId: active.id,
+            employeeId: active.employeeId,
+            locationId: active.locationId,
+          },
+          newValues: {
+            assignmentId: created.id,
+            employeeId: target.employee?.id,
+            locationId: target.location?.id,
+            reason: dto.reason,
+          },
         },
         tx,
       );
@@ -412,8 +475,10 @@ export class AssignmentsService {
     if (!assignment || !user.employeeId || assignment.employeeId !== user.employeeId) {
       throw Errors.notFound('Assignment');
     }
-    if (assignment.status !== 'ACTIVE') throw Errors.invalidState('Only active assignments can be acknowledged');
-    if (assignment.acknowledgedAt) throw Errors.invalidState('This assignment is already acknowledged');
+    if (assignment.status !== 'ACTIVE')
+      throw Errors.invalidState('Only active assignments can be acknowledged');
+    if (assignment.acknowledgedAt)
+      throw Errors.invalidState('This assignment is already acknowledged');
     const signature = this.parseSignature(dto.signature);
 
     await this.prisma.$transaction(async (tx) => {
@@ -423,7 +488,13 @@ export class AssignmentsService {
       });
       if (updated.count !== 1) throw Errors.invalidState('This assignment is already acknowledged');
       await this.activity.record(
-        { actorId: user.id, action: 'asset.acknowledge', entityType: 'asset_assignment', entityId: id, newValues: { signed: !!signature } },
+        {
+          actorId: user.id,
+          action: 'asset.acknowledge',
+          entityType: 'asset_assignment',
+          entityId: id,
+          newValues: { signed: !!signature },
+        },
         tx,
       );
     });
@@ -444,7 +515,11 @@ export class AssignmentsService {
         where: { id: assignmentId },
         select: { assetId: true, asset: { select: { assetTag: true } } },
       });
-      const owner = { assignmentId, assetId: assignment.assetId, employeeId: employeeId ?? undefined };
+      const owner = {
+        assignmentId,
+        assetId: assignment.assetId,
+        employeeId: employeeId ?? undefined,
+      };
       const pdf = await this.handoverPdf.render(assignmentId, kind, signature);
       await this.prisma.$transaction(async (tx) => {
         if (signature) {
@@ -489,17 +564,21 @@ export class AssignmentsService {
   }
 
   private async resolveTarget(employeeId?: string, locationId?: string) {
-    if (!employeeId && !locationId) throw Errors.badRequest('Choose an employee or a location', 'employeeId');
+    if (!employeeId && !locationId)
+      throw Errors.badRequest('Choose an employee or a location', 'employeeId');
     const employee = employeeId
       ? await this.prisma.employee.findFirst({ where: { id: employeeId, deletedAt: null } })
       : null;
     if (employeeId && !employee) throw Errors.badRequest('Employee not found', 'employeeId');
-    if (employee?.status === 'TERMINATED') throw Errors.badRequest('Cannot assign to a terminated employee', 'employeeId');
+    if (employee?.status === 'TERMINATED')
+      throw Errors.badRequest('Cannot assign to a terminated employee', 'employeeId');
     const location = locationId
       ? await this.prisma.location.findFirst({ where: { id: locationId, deletedAt: null } })
       : null;
     if (locationId && !location) throw Errors.badRequest('Location not found', 'locationId');
-    const label = [employee && `${employee.firstName} ${employee.lastName}`, location?.name].filter(Boolean).join(' @ ');
+    const label = [employee && `${employee.firstName} ${employee.lastName}`, location?.name]
+      .filter(Boolean)
+      .join(' @ ');
     return { employee, location, label };
   }
 
@@ -509,9 +588,14 @@ export class AssignmentsService {
       data: { quantityAvailable: { decrement: quantity } },
     });
     if (taken.count !== 1) {
-      const accessory = await db.accessory.findFirst({ where: { id: accessoryId, deletedAt: null } });
+      const accessory = await db.accessory.findFirst({
+        where: { id: accessoryId, deletedAt: null },
+      });
       if (!accessory) throw Errors.badRequest('Accessory not found', 'accessories');
-      throw Errors.conflict('ACCESSORY_OUT_OF_STOCK', `Only ${accessory.quantityAvailable} × ${accessory.name} available`);
+      throw Errors.conflict(
+        'ACCESSORY_OUT_OF_STOCK',
+        `Only ${accessory.quantityAvailable} × ${accessory.name} available`,
+      );
     }
   }
 
@@ -532,7 +616,11 @@ export class AssignmentsService {
         returnedAt: now,
         returnedById: userId,
         conditionAtReturn: returned ? condition : null,
-        notes: returned ? (usable ? null : 'Returned damaged — written off') : 'Not returned — written off',
+        notes: returned
+          ? usable
+            ? null
+            : 'Returned damaged — written off'
+          : 'Not returned — written off',
       },
     });
     await db.accessory.update({

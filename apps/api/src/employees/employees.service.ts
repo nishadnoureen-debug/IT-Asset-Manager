@@ -33,11 +33,28 @@ export class EmployeesService {
     const where: Prisma.EmployeeWhereInput = {
       AND: [
         this.scopeWhere(user),
-        { deletedAt: null, departmentId: q.departmentId, locationId: q.locationId, status: q.status },
-        q.search ? { OR: searchFilter(q.search, ['firstName', 'lastName', 'email', 'employeeNumber', 'jobTitle']) } : {},
+        {
+          deletedAt: null,
+          departmentId: q.departmentId,
+          locationId: q.locationId,
+          status: q.status,
+        },
+        q.search
+          ? {
+              OR: searchFilter(q.search, [
+                'firstName',
+                'lastName',
+                'email',
+                'employeeNumber',
+                'jobTitle',
+              ]),
+            }
+          : {},
       ],
     };
-    const orderBy = resolveOrderBy<Prisma.EmployeeOrderByWithRelationInput | Prisma.EmployeeOrderByWithRelationInput[]>(
+    const orderBy = resolveOrderBy<
+      Prisma.EmployeeOrderByWithRelationInput | Prisma.EmployeeOrderByWithRelationInput[]
+    >(
       q,
       {
         name: (o) => [{ lastName: o }, { firstName: o }],
@@ -79,7 +96,13 @@ export class EmployeesService {
     return this.prisma.$transaction(async (tx) => {
       const employee = await tx.employee.create({ data: dto });
       await this.activity.record(
-        { actorId: user.id, action: 'employee.create', entityType: 'employee', entityId: employee.id, newValues: dto },
+        {
+          actorId: user.id,
+          action: 'employee.create',
+          entityType: 'employee',
+          entityId: employee.id,
+          newValues: dto,
+        },
         tx,
       );
       return employee;
@@ -91,7 +114,9 @@ export class EmployeesService {
     await this.assertReferences(dto, id);
     if (dto.status === 'TERMINATED' && existing.status !== 'TERMINATED') {
       if (existing._count.assignments > 0 || existing._count.accessoryAssignments > 0) {
-        throw Errors.invalidState('Return all assets and accessories before terminating this employee');
+        throw Errors.invalidState(
+          'Return all assets and accessories before terminating this employee',
+        );
       }
       dto.terminationDate ??= new Date();
     }
@@ -102,9 +127,21 @@ export class EmployeesService {
       await tx.employee.update({ where: { id }, data: dto });
       if (dto.status === 'TERMINATED' && existing.user) {
         await tx.user.update({ where: { id: existing.user.id }, data: { status: 'DISABLED' } });
-        await tx.refreshToken.updateMany({ where: { userId: existing.user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.refreshToken.updateMany({
+          where: { userId: existing.user.id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
       }
-      await this.activity.record({ actorId: user.id, action: 'employee.update', entityType: 'employee', entityId: id, ...changes }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'employee.update',
+          entityType: 'employee',
+          entityId: id,
+          ...changes,
+        },
+        tx,
+      );
     });
     return this.get(id, user);
   }
@@ -120,7 +157,13 @@ export class EmployeesService {
     await this.prisma.$transaction(async (tx) => {
       await tx.employee.update({ where: { id }, data: { deletedAt: new Date() } });
       await this.activity.record(
-        { actorId: user.id, action: 'employee.delete', entityType: 'employee', entityId: id, oldValues: { employeeNumber: existing.employeeNumber, email: existing.email } },
+        {
+          actorId: user.id,
+          action: 'employee.delete',
+          entityType: 'employee',
+          entityId: id,
+          oldValues: { employeeNumber: existing.employeeNumber, email: existing.email },
+        },
         tx,
       );
     });
@@ -167,20 +210,39 @@ export class EmployeesService {
       where: { requesterId: id },
       orderBy: { createdAt: 'desc' },
       take: 100,
-      select: { id: true, number: true, title: true, status: true, priority: true, category: true, createdAt: true },
+      select: {
+        id: true,
+        number: true,
+        title: true,
+        status: true,
+        priority: true,
+        category: true,
+        createdAt: true,
+      },
     });
   }
 
   private async assertReferences(dto: Partial<CreateEmployeeDto>, selfId?: string) {
-    if (dto.departmentId && !(await this.prisma.department.findFirst({ where: { id: dto.departmentId, deletedAt: null } }))) {
+    if (
+      dto.departmentId &&
+      !(await this.prisma.department.findFirst({
+        where: { id: dto.departmentId, deletedAt: null },
+      }))
+    ) {
       throw Errors.badRequest('Department not found', 'departmentId');
     }
-    if (dto.locationId && !(await this.prisma.location.findFirst({ where: { id: dto.locationId, deletedAt: null } }))) {
+    if (
+      dto.locationId &&
+      !(await this.prisma.location.findFirst({ where: { id: dto.locationId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Location not found', 'locationId');
     }
     if (dto.managerId) {
-      if (dto.managerId === selfId) throw Errors.badRequest('An employee cannot manage themselves', 'managerId');
-      if (!(await this.prisma.employee.findFirst({ where: { id: dto.managerId, deletedAt: null } }))) {
+      if (dto.managerId === selfId)
+        throw Errors.badRequest('An employee cannot manage themselves', 'managerId');
+      if (
+        !(await this.prisma.employee.findFirst({ where: { id: dto.managerId, deletedAt: null } }))
+      ) {
         throw Errors.badRequest('Manager not found', 'managerId');
       }
     }

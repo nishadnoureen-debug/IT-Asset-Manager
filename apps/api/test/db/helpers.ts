@@ -37,7 +37,11 @@ export async function createUser(
     data: {
       email,
       displayName: email.split('@')[0],
-      passwordHash: await (cachedHash ??= hash(TEST_PASSWORD, { memoryCost: 19_456, timeCost: 2, parallelism: 1 })),
+      passwordHash: await (cachedHash ??= hash(TEST_PASSWORD, {
+        memoryCost: 19_456,
+        timeCost: 2,
+        parallelism: 1,
+      })),
       employeeId,
       roles: { create: { roleId: role.id } },
     },
@@ -57,14 +61,25 @@ export function clientIp(): string {
   return `10.1.${(ipCounter >> 8) & 255}.${ipCounter & 255}`;
 }
 
-export async function login(app: INestApplication, email: string, password = TEST_PASSWORD): Promise<Session> {
+export async function login(
+  app: INestApplication,
+  email: string,
+  password = TEST_PASSWORD,
+): Promise<Session> {
   const res = await request(app.getHttpServer())
     .post('/api/v1/auth/login')
     .set('X-Forwarded-For', clientIp())
     .send({ email, password });
-  if (res.status !== 200) throw new Error(`Login failed for ${email}: ${res.status} ${JSON.stringify(res.body)}`);
-  const cookie = ([] as string[]).concat(res.headers['set-cookie'] ?? []).find((c) => c.startsWith('itam_rt='))!;
-  return { token: res.body.data.accessToken, cookie: cookie.split(';')[0], auth: { Authorization: `Bearer ${res.body.data.accessToken}` } };
+  if (res.status !== 200)
+    throw new Error(`Login failed for ${email}: ${res.status} ${JSON.stringify(res.body)}`);
+  const cookie = ([] as string[])
+    .concat(res.headers['set-cookie'] ?? [])
+    .find((c) => c.startsWith('itam_rt='))!;
+  return {
+    token: res.body.data.accessToken,
+    cookie: cookie.split(';')[0],
+    auth: { Authorization: `Bearer ${res.body.data.accessToken}` },
+  };
 }
 
 /** 1×1 transparent PNG. */

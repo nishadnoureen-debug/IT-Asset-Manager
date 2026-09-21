@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { HttpException, HttpStatus, Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import {
+  HttpException,
+  HttpStatus,
+  Injectable,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { ActivityLogService } from '../activity-logs/activity-log.service';
@@ -41,16 +47,25 @@ export class AuthService {
     const now = new Date();
 
     if (user?.lockedUntil && user.lockedUntil > now) {
-      await this.activity.recordSafely({ actorId: user.id, action: 'auth.login_locked', entityType: 'user', entityId: user.id });
+      await this.activity.recordSafely({
+        actorId: user.id,
+        action: 'auth.login_locked',
+        entityType: 'user',
+        entityId: user.id,
+      });
       throw new HttpException(
         { code: 'ACCOUNT_LOCKED', message: 'Too many failed attempts. Try again later.' },
         HttpStatus.UNAUTHORIZED,
       );
     }
 
-    const valid = await this.passwords.verify(user?.deletedAt ? null : user?.passwordHash, password);
+    const valid = await this.passwords.verify(
+      user?.deletedAt ? null : user?.passwordHash,
+      password,
+    );
     if (!user || user.deletedAt || !valid) {
-      if (user && !user.deletedAt) await this.registerFailedAttempt(user.id, user.failedLoginAttempts);
+      if (user && !user.deletedAt)
+        await this.registerFailedAttempt(user.id, user.failedLoginAttempts);
       await this.activity.recordSafely({
         actorId: user?.id,
         action: 'auth.login_failed',
@@ -58,12 +73,23 @@ export class AuthService {
         entityId: user?.id,
         newValues: { email },
       });
-      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Invalid email or password' });
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Invalid email or password',
+      });
     }
 
     if (user.status !== 'ACTIVE') {
-      await this.activity.recordSafely({ actorId: user.id, action: 'auth.login_disabled', entityType: 'user', entityId: user.id });
-      throw new UnauthorizedException({ code: 'ACCOUNT_DISABLED', message: 'This account is disabled' });
+      await this.activity.recordSafely({
+        actorId: user.id,
+        action: 'auth.login_disabled',
+        entityType: 'user',
+        entityId: user.id,
+      });
+      throw new UnauthorizedException({
+        code: 'ACCOUNT_DISABLED',
+        message: 'This account is disabled',
+      });
     }
 
     await this.prisma.user.update({
@@ -71,7 +97,12 @@ export class AuthService {
       data: { failedLoginAttempts: 0, lockedUntil: null, lastLoginAt: now },
     });
     const tokens = await this.issueSession(user.id, randomUUID());
-    await this.activity.recordSafely({ actorId: user.id, action: 'auth.login', entityType: 'user', entityId: user.id });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'auth.login',
+      entityType: 'user',
+      entityId: user.id,
+    });
     return { tokens, profile: await this.profile(user.id) };
   }
 
@@ -86,7 +117,8 @@ export class AuthService {
     if (token.revokedAt) {
       // Only a *rotated* token replayed after the grace window indicates theft. Tokens revoked by logout
       // or by an earlier family revocation are simply rejected.
-      const replayedRotation = !!token.replacedAt && now - token.replacedAt.getTime() >= ROTATION_GRACE_MS;
+      const replayedRotation =
+        !!token.replacedAt && now - token.replacedAt.getTime() >= ROTATION_GRACE_MS;
       if (replayedRotation) {
         // A rotated token was replayed: assume theft and kill the whole session family.
         await this.prisma.refreshToken.updateMany({
@@ -99,7 +131,10 @@ export class AuthService {
           entityType: 'user',
           entityId: token.userId,
         });
+        throw invalidRefresh();
       }
+      // Rotated moments ago by a parallel request (another tab): the browser already holds the new cookie.
+      if (token.replacedAt) throw refreshRace();
       throw invalidRefresh();
     }
     if (token.expiresAt.getTime() <= now) throw invalidRefresh();
@@ -112,7 +147,7 @@ export class AuthService {
       where: { id: token.id, revokedAt: null },
       data: { revokedAt: new Date(), replacedAt: new Date() },
     });
-    if (rotated.count !== 1) throw invalidRefresh();
+    if (rotated.count !== 1) throw refreshRace();
 
     const tokens = await this.issueSession(token.userId, token.familyId);
     return { tokens, profile: await this.profile(token.userId) };
@@ -137,7 +172,9 @@ export class AuthService {
   }
 
   async forgotPassword(email: string): Promise<void> {
-    const user = await this.prisma.user.findFirst({ where: { email, deletedAt: null, status: 'ACTIVE' } });
+    const user = await this.prisma.user.findFirst({
+      where: { email, deletedAt: null, status: 'ACTIVE' },
+    });
     if (!user) return; // Same response either way — never reveal whether an account exists.
 
     const raw = CryptoService.randomToken();
@@ -158,7 +195,9 @@ export class AuthService {
     const link = `${this.config.get('PUBLIC_WEB_URL', { infer: true })}/reset-password?token=${raw}`;
     if (this.config.get('NODE_ENV', { infer: true }) === 'production') {
       // No mail provider is configured yet; never log the secret link in production.
-      this.logger.warn(`Password reset requested for user ${user.id}, but email delivery is not configured`);
+      this.logger.warn(
+        `Password reset requested for user ${user.id}, but email delivery is not configured`,
+      );
     } else {
       this.logger.warn(`[dev] Password reset link for ${email}: ${link}`);
     }
@@ -170,14 +209,25 @@ export class AuthService {
       where: { tokenHash: CryptoService.sha256(rawToken) },
     });
     if (!token || token.usedAt || token.expiresAt <= new Date()) {
-      throw new UnauthorizedException({ code: 'INVALID_RESET_TOKEN', message: 'This reset link is invalid or has expired' });
+      throw new UnauthorizedException({
+        code: 'INVALID_RESET_TOKEN',
+        message: 'This reset link is invalid or has expired',
+      });
     }
     const passwordHash = await this.passwords.hash(password);
     await this.prisma.$transaction([
-      this.prisma.passwordResetToken.update({ where: { id: token.id }, data: { usedAt: new Date() } }),
+      this.prisma.passwordResetToken.update({
+        where: { id: token.id },
+        data: { usedAt: new Date() },
+      }),
       this.prisma.user.update({
         where: { id: token.userId },
-        data: { passwordHash, passwordChangedAt: new Date(), failedLoginAttempts: 0, lockedUntil: null },
+        data: {
+          passwordHash,
+          passwordChangedAt: new Date(),
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        },
       }),
       this.prisma.refreshToken.updateMany({
         where: { userId: token.userId, revokedAt: null },
@@ -193,17 +243,29 @@ export class AuthService {
     });
   }
 
-  async changePassword(user: AuthUser, currentPassword: string, newPassword: string): Promise<void> {
+  async changePassword(
+    user: AuthUser,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
     const record = await this.prisma.user.findUniqueOrThrow({ where: { id: user.id } });
     if (!(await this.passwords.verify(record.passwordHash, currentPassword))) {
-      throw new UnauthorizedException({ code: 'INVALID_CREDENTIALS', message: 'Current password is incorrect' });
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Current password is incorrect',
+      });
     }
     this.passwords.assertPolicy(newPassword, 'newPassword');
     await this.prisma.user.update({
       where: { id: user.id },
       data: { passwordHash: await this.passwords.hash(newPassword), passwordChangedAt: new Date() },
     });
-    await this.activity.record({ actorId: user.id, action: 'auth.password_changed', entityType: 'user', entityId: user.id });
+    await this.activity.record({
+      actorId: user.id,
+      action: 'auth.password_changed',
+      entityType: 'user',
+      entityId: user.id,
+    });
   }
 
   async profile(userId: string) {
@@ -275,6 +337,17 @@ export class AuthService {
   }
 }
 
+/** A concurrent refresh already rotated this token; the client should retry with the newer cookie. */
+function refreshRace() {
+  return new UnauthorizedException({
+    code: 'REFRESH_RACE',
+    message: 'Session was refreshed by another request. Retry.',
+  });
+}
+
 function invalidRefresh() {
-  return new UnauthorizedException({ code: 'INVALID_REFRESH_TOKEN', message: 'Session expired. Please sign in again.' });
+  return new UnauthorizedException({
+    code: 'INVALID_REFRESH_TOKEN',
+    message: 'Session expired. Please sign in again.',
+  });
 }

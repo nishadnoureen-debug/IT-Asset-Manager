@@ -1,7 +1,17 @@
 import { Controller, Get, Param, ParseEnumPipe, Query, Res, StreamableFile } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
-import { IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min } from 'class-validator';
+import {
+  IsDate,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+} from 'class-validator';
 import type { Response } from 'express';
 import { can, type AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -14,7 +24,8 @@ import { toCsv, toPdf, toXlsx } from './report-renderers';
 import { REPORT_TYPES, ReportsService, type ReportType } from './reports.service';
 
 class ReportQueryDto {
-  @IsOptional() @IsIn(['json', 'csv', 'xlsx', 'pdf']) format: 'json' | 'csv' | 'xlsx' | 'pdf' = 'json';
+  @IsOptional() @IsIn(['json', 'csv', 'xlsx', 'pdf']) format: 'json' | 'csv' | 'xlsx' | 'pdf' =
+    'json';
   @IsOptional() @IsString() @MaxLength(200) status?: string;
   @IsOptional() @Type(() => Date) @IsDate() from?: Date;
   @IsOptional() @Type(() => Date) @IsDate() to?: Date;
@@ -66,11 +77,16 @@ export class ReportsController {
       return { success: true, data: report };
     }
 
-    if (!can(user, 'report.export')) throw Errors.forbidden('Exporting reports requires the report.export permission');
+    if (!can(user, 'report.export'))
+      throw Errors.forbidden('Exporting reports requires the report.export permission');
     const report = await this.reports.run(type, filters, user, format === 'pdf' ? 3000 : undefined);
     const { companyName } = await this.settings.get();
     const body =
-      format === 'csv' ? toCsv(report) : format === 'xlsx' ? await toXlsx(report) : await toPdf(report, this.pdf, companyName);
+      format === 'csv'
+        ? toCsv(report)
+        : format === 'xlsx'
+          ? await toXlsx(report)
+          : await toPdf(report, this.pdf, companyName);
     await this.activity.record({
       actorId: user.id,
       action: 'report.export',

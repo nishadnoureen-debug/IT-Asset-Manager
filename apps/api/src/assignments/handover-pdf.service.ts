@@ -16,7 +16,11 @@ export class HandoverPdfService {
     private readonly settings: SettingsService,
   ) {}
 
-  async render(assignmentId: string, kind: 'HANDOVER' | 'RETURN', signature?: Buffer): Promise<Buffer> {
+  async render(
+    assignmentId: string,
+    kind: 'HANDOVER' | 'RETURN',
+    signature?: Buffer,
+  ): Promise<Buffer> {
     const a = await this.prisma.assetAssignment.findUniqueOrThrow({
       where: { id: assignmentId },
       include: {
@@ -44,7 +48,10 @@ export class HandoverPdfService {
       this.pdf.keyValues(doc, [
         { label: 'Asset tag', value: a.asset.assetTag },
         { label: 'Name', value: a.asset.name },
-        { label: 'Type', value: `${a.asset.assetType.name} (${label('assetCategory', a.asset.assetType.category)})` },
+        {
+          label: 'Type',
+          value: `${a.asset.assetType.name} (${label('assetCategory', a.asset.assetType.category)})`,
+        },
         { label: 'Brand / model', value: [a.asset.brand, a.asset.model].filter(Boolean).join(' ') },
         { label: 'Serial number', value: a.asset.serialNumber },
         {
@@ -55,12 +62,22 @@ export class HandoverPdfService {
 
       this.pdf.section(doc, isReturn ? 'Returned by' : 'Assigned to');
       this.pdf.keyValues(doc, [
-        { label: 'Employee', value: a.employee ? `${a.employee.firstName} ${a.employee.lastName}` : null },
+        {
+          label: 'Employee',
+          value: a.employee ? `${a.employee.firstName} ${a.employee.lastName}` : null,
+        },
         { label: 'Employee number', value: a.employee?.employeeNumber },
         { label: 'Department', value: a.employee?.department?.name },
         { label: 'Email', value: a.employee?.email },
         { label: 'Location', value: a.location?.name ?? a.employee?.location?.name },
-        ...(isReturn ? [] : [{ label: 'Expected return', value: a.expectedReturnAt ? fmtDate(a.expectedReturnAt) : 'Not set' }]),
+        ...(isReturn
+          ? []
+          : [
+              {
+                label: 'Expected return',
+                value: a.expectedReturnAt ? fmtDate(a.expectedReturnAt) : 'Not set',
+              },
+            ]),
       ]);
 
       if (a.previousAssignment && !isReturn) {
@@ -88,7 +105,9 @@ export class HandoverPdfService {
           a.accessoryAssignments.map((acc) => [
             acc.accessory.name,
             acc.quantity,
-            isReturn ? `${label('assignmentStatus', acc.status)}${acc.notes ? ` — ${acc.notes}` : ''}` : 'Handed over',
+            isReturn
+              ? `${label('assignmentStatus', acc.status)}${acc.notes ? ` — ${acc.notes}` : ''}`
+              : 'Handed over',
           ]),
         );
       }
@@ -117,9 +136,17 @@ export class HandoverPdfService {
       if (signature) {
         doc.image(signature, left, y, { fit: [200, 70] });
       } else {
-        doc.font('Helvetica-Oblique').fontSize(9).fillColor('#94a3b8').text('Not signed electronically', left, y + 30);
+        doc
+          .font('Helvetica-Oblique')
+          .fontSize(9)
+          .fillColor('#94a3b8')
+          .text('Not signed electronically', left, y + 30);
       }
-      doc.strokeColor('#94a3b8').moveTo(left, y + 76).lineTo(left + 220, y + 76).stroke();
+      doc
+        .strokeColor('#94a3b8')
+        .moveTo(left, y + 76)
+        .lineTo(left + 220, y + 76)
+        .stroke();
       doc
         .font('Helvetica')
         .fontSize(9)
@@ -131,7 +158,8 @@ export class HandoverPdfService {
         );
       const staff = isReturn ? a.returnedBy?.displayName : a.assignedBy?.displayName;
       doc.text(`Processed by: ${pdfSafe(staff) || '—'}`, left + 280, y + 80);
-      if (a.acknowledgedAt && !isReturn) doc.text(`Acknowledged: ${fmtDate(a.acknowledgedAt)}`, left + 280, y + 94);
+      if (a.acknowledgedAt && !isReturn)
+        doc.text(`Acknowledged: ${fmtDate(a.acknowledgedAt)}`, left + 280, y + 94);
     });
   }
 }

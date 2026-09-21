@@ -39,7 +39,9 @@ describe('file validation', () => {
 
   it('accepts only real PNG signatures', () => {
     expect(() => decodeSignature('data:image/svg+xml;base64,PHN2Zz4=')).toThrow();
-    expect(() => decodeSignature(`data:image/png;base64,${Buffer.from('not png').toString('base64')}`)).toThrow(/valid PNG/);
+    expect(() =>
+      decodeSignature(`data:image/png;base64,${Buffer.from('not png').toString('base64')}`),
+    ).toThrow(/valid PNG/);
   });
 });
 
@@ -48,7 +50,9 @@ describe('parseScannedCode', () => {
 
   it('extracts the token from label URLs and bare UUIDs', () => {
     expect(parseScannedCode(`https://itam.example.com/qr/${token}`).token).toBe(token);
-    expect(parseScannedCode(`http://localhost:3000/qr/${token.toUpperCase()}?x=1`).token).toBe(token);
+    expect(parseScannedCode(`http://localhost:3000/qr/${token.toUpperCase()}?x=1`).token).toBe(
+      token,
+    );
     expect(parseScannedCode(`  ${token} `).token).toBe(token);
   });
 
@@ -65,7 +69,10 @@ describe('report CSV', () => {
     const csv = toCsv({
       type: 'assets',
       title: 'x',
-      columns: [{ key: 'a', label: 'Name' }, { key: 'b', label: 'Cost', type: 'money' }],
+      columns: [
+        { key: 'a', label: 'Name' },
+        { key: 'b', label: 'Cost', type: 'money' },
+      ],
       rows: [{ a: 'He said "hi", =cmd', b: 12.5 }],
       total: 1,
       truncated: false,
@@ -79,7 +86,9 @@ describe('report CSV', () => {
 
 describe('activity log helpers', () => {
   it('redacts secrets recursively', () => {
-    expect(sanitize({ email: 'a@b.c', password: 'x', nested: { refreshToken: 'y', licenseKey: 'z' } })).toEqual({
+    expect(
+      sanitize({ email: 'a@b.c', password: 'x', nested: { refreshToken: 'y', licenseKey: 'z' } }),
+    ).toEqual({
       email: 'a@b.c',
       password: '[REDACTED]',
       nested: { refreshToken: '[REDACTED]', licenseKey: '[REDACTED]' },
@@ -89,6 +98,9 @@ describe('activity log helpers', () => {
   it('diffs only changed fields, comparing dates by value', () => {
     const before = { name: 'A', date: new Date('2026-01-01'), notes: null };
     expect(diff(before, { name: 'A', date: new Date('2026-01-01') })).toBeNull();
-    expect(diff(before, { name: 'B', notes: undefined })).toEqual({ oldValues: { name: 'A' }, newValues: { name: 'B' } });
+    expect(diff(before, { name: 'B', notes: undefined })).toEqual({
+      oldValues: { name: 'A' },
+      newValues: { name: 'B' },
+    });
   });
 });

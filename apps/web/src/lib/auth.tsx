@@ -1,6 +1,14 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { PermissionKey } from '@itam/shared';
 import { api, ApiError, session } from './api-client';
 
@@ -42,6 +50,14 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+/** The API sets a non-secret `itam_session` cookie alongside the httpOnly refresh token. */
+function hasSessionHint(): boolean {
+  return (
+    typeof document !== 'undefined' &&
+    document.cookie.split('; ').some((c) => c.startsWith('itam_session='))
+  );
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<Status>('loading');
   const [user, setUser] = useState<Profile | null>(null);
@@ -59,21 +75,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(result.user);
     setStatus('authenticated');
     // Refresh proactively one minute before the access token expires.
-    timer.current = setTimeout(() => void session.refresh(), Math.max(30, result.expiresIn - 60) * 1000);
+    timer.current = setTimeout(
+      () => void session.refresh(),
+      Math.max(30, result.expiresIn - 60) * 1000,
+    );
   }, []);
 
   const refresh = useCallback(async (): Promise<boolean> => {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    // No session hint cookie → definitely signed out; skip the network round trip.
+    if (!hasSessionHint()) {
+      apply(null);
+      return false;
+    }
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
         const { data } = await api.post<SessionResponse>('/auth/refresh', {}, { anonymous: true });
         apply(data);
         return true;
       } catch (error) {
-        // A parallel tab may have rotated the cookie a moment ago — retry once with the new cookie.
-        if (attempt === 0 && error instanceof ApiError && error.status === 401) {
-          await new Promise((r) => setTimeout(r, 400));
+        // Another tab rotated the token a moment ago; its response already stored the newer cookie.
+        if (error instanceof ApiError && error.code === 'REFRESH_RACE' && attempt < 2) {
+          await new Promise((r) => setTimeout(r, 300));
           continue;
         }
+        // Network errors keep the current state (the API may be restarting); anything else signs out.
         if (!(error instanceof ApiError) || error.status !== 0) apply(null);
         return false;
       }
@@ -92,7 +117,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const { data } = await api.post<SessionResponse>('/auth/login', { email, password }, { anonymous: true });
+      const { data } = await api.post<SessionResponse>(
+        '/auth/login',
+        { email, password },
+        { anonymous: true },
+      );
       apply(data);
       return data.user;
     },

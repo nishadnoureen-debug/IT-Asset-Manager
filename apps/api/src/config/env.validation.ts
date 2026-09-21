@@ -42,7 +42,10 @@ export const envSchema = z
     /** 32-byte key, base64 — encrypts licence keys at rest (AES-256-GCM). */
     ENCRYPTION_KEY: z
       .string({ required_error: 'ENCRYPTION_KEY is required' })
-      .refine((v) => Buffer.from(v, 'base64').length === 32, 'ENCRYPTION_KEY must be 32 bytes, base64'),
+      .refine(
+        (v) => Buffer.from(v, 'base64').length === 32,
+        'ENCRYPTION_KEY must be 32 bytes, base64',
+      ),
 
     /** Public URL of the web app — used in QR codes, reset links and PDFs. */
     PUBLIC_WEB_URL: z.string().url().default('http://localhost:3000'),
@@ -56,11 +59,19 @@ export const envSchema = z
     S3_ACCESS_KEY_ID: z.string().optional(),
     S3_SECRET_ACCESS_KEY: z.string().optional(),
     S3_FORCE_PATH_STYLE: booleanString('true'),
-    UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
+    UPLOAD_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10 * 1024 * 1024),
   })
   .superRefine((env, ctx) => {
     if (env.STORAGE_DRIVER === 's3' && !env.S3_BUCKET) {
-      ctx.addIssue({ code: 'custom', path: ['S3_BUCKET'], message: 'S3_BUCKET is required for s3 storage' });
+      ctx.addIssue({
+        code: 'custom',
+        path: ['S3_BUCKET'],
+        message: 'S3_BUCKET is required for s3 storage',
+      });
     }
   });
 

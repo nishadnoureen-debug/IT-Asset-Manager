@@ -5,11 +5,19 @@ import { Throttle } from '@nestjs/throttler';
 import type { Request, Response } from 'express';
 import type { Env } from '../config/env.validation';
 import type { AuthUser } from './auth-user';
-import { ChangePasswordDto, ForgotPasswordDto, LoginDto, RefreshDto, ResetPasswordDto } from './auth.dto';
+import {
+  ChangePasswordDto,
+  ForgotPasswordDto,
+  LoginDto,
+  RefreshDto,
+  ResetPasswordDto,
+} from './auth.dto';
 import { AuthService, type SessionTokens } from './auth.service';
 import { CurrentUser, Public } from './decorators';
 
 export const REFRESH_COOKIE = 'itam_rt';
+/** Non-secret hint readable by the web app, so a signed-out browser can skip the refresh call. */
+export const SESSION_HINT_COOKIE = 'itam_session';
 const COOKIE_PATH = '/api/v1/auth';
 
 @ApiTags('Auth')
@@ -34,13 +42,19 @@ export class AuthController {
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  async refresh(@Body() dto: RefreshDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async refresh(
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     try {
       const { tokens, profile } = await this.auth.refresh(this.readRefreshToken(req, dto));
       this.setRefreshCookie(res, tokens);
       return { accessToken: tokens.accessToken, expiresIn: tokens.expiresIn, user: profile };
     } catch (error) {
-      this.clearRefreshCookie(res);
+      // On a benign race the browser already holds a newer cookie from the winning request — keep it.
+      const code = (error as { getResponse?: () => { code?: string } }).getResponse?.()?.code;
+      if (code !== 'REFRESH_RACE') this.clearRefreshCookie(res);
       throw error;
     }
   }
@@ -48,7 +62,11 @@ export class AuthController {
   @Public()
   @Post('logout')
   @HttpCode(HttpStatus.OK)
-  async logout(@Body() dto: RefreshDto, @Req() req: Request, @Res({ passthrough: true }) res: Response) {
+  async logout(
+    @Body() dto: RefreshDto,
+    @Req() req: Request,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     await this.auth.logout(this.readRefreshToken(req, dto));
     this.clearRefreshCookie(res);
     return { loggedOut: true };
@@ -91,16 +109,25 @@ export class AuthController {
   }
 
   private setRefreshCookie(res: Response, tokens: SessionTokens): void {
+    const secure = this.config.get('NODE_ENV', { infer: true }) === 'production';
     res.cookie(REFRESH_COOKIE, tokens.refreshToken, {
       httpOnly: true,
-      secure: this.config.get('NODE_ENV', { infer: true }) === 'production',
+      secure,
       sameSite: 'lax',
       path: COOKIE_PATH,
+      expires: tokens.refreshExpiresAt,
+    });
+    res.cookie(SESSION_HINT_COOKIE, '1', {
+      httpOnly: false,
+      secure,
+      sameSite: 'lax',
+      path: '/',
       expires: tokens.refreshExpiresAt,
     });
   }
 
   private clearRefreshCookie(res: Response): void {
     res.clearCookie(REFRESH_COOKIE, { path: COOKIE_PATH });
+    res.clearCookie(SESSION_HINT_COOKIE, { path: '/' });
   }
 }

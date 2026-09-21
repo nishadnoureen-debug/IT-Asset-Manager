@@ -19,15 +19,24 @@ export class DashboardController {
 
   @Get()
   async overview(@CurrentUser() user: AuthUser) {
-    const [assets, warrantyAlerts, licenseAlerts, recentActivity, operations, mine] = await Promise.all([
-      this.assetsSummary(user),
-      this.warrantyAlerts(user),
-      this.licenseAlerts(user),
-      this.recentActivity(user),
-      this.operations(user),
-      this.personal(user),
-    ]);
-    return { scope: dataScope(user, 'asset'), assets, warrantyAlerts, licenseAlerts, recentActivity, ...operations, mine };
+    const [assets, warrantyAlerts, licenseAlerts, recentActivity, operations, mine] =
+      await Promise.all([
+        this.assetsSummary(user),
+        this.warrantyAlerts(user),
+        this.licenseAlerts(user),
+        this.recentActivity(user),
+        this.operations(user),
+        this.personal(user),
+      ]);
+    return {
+      scope: dataScope(user, 'asset'),
+      assets,
+      warrantyAlerts,
+      licenseAlerts,
+      recentActivity,
+      ...operations,
+      mine,
+    };
   }
 
   @Get('assets-summary')
@@ -38,15 +47,26 @@ export class DashboardController {
   @Get('warranty-alerts')
   async warrantyAlerts(@CurrentUser() user: AuthUser) {
     const scope = assetScopeWhere(user);
-    if (!scope || (!can(user, 'warranty.view') && dataScope(user, 'asset') === 'own')) return { expiringCount: 0, expiredCount: 0, items: [] };
+    if (!scope || (!can(user, 'warranty.view') && dataScope(user, 'asset') === 'own'))
+      return { expiringCount: 0, expiredCount: 0, items: [] };
     const { warrantyAlertDays } = await this.settings.get();
     const today = startOfDay();
-    const base: Prisma.AssetWhereInput = { AND: [scope, { deletedAt: null, status: { notIn: ['RETIRED', 'DISPOSED'] } }] };
-    const expiringWhere: Prisma.AssetWhereInput = { AND: [base, { warrantyEndDate: { gte: today, lte: addDays(today, warrantyAlertDays) } }] };
+    const base: Prisma.AssetWhereInput = {
+      AND: [scope, { deletedAt: null, status: { notIn: ['RETIRED', 'DISPOSED'] } }],
+    };
+    const expiringWhere: Prisma.AssetWhereInput = {
+      AND: [base, { warrantyEndDate: { gte: today, lte: addDays(today, warrantyAlertDays) } }],
+    };
     const [items, expiringCount, expiredCount] = await Promise.all([
       this.prisma.asset.findMany({
         where: expiringWhere,
-        select: { id: true, assetTag: true, name: true, warrantyEndDate: true, warrantyProvider: { select: { name: true } } },
+        select: {
+          id: true,
+          assetTag: true,
+          name: true,
+          warrantyEndDate: true,
+          warrantyProvider: { select: { name: true } },
+        },
         orderBy: { warrantyEndDate: 'asc' },
         take: 8,
       }),
@@ -61,18 +81,30 @@ export class DashboardController {
     if (!can(user, 'license.view', 'license.manage')) return { expiringCount: 0, items: [] };
     const { licenseAlertDays } = await this.settings.get();
     const today = startOfDay();
-    const where: Prisma.SoftwareLicenseWhereInput = { deletedAt: null, expiryDate: { gte: today, lte: addDays(today, licenseAlertDays) } };
+    const where: Prisma.SoftwareLicenseWhereInput = {
+      deletedAt: null,
+      expiryDate: { gte: today, lte: addDays(today, licenseAlertDays) },
+    };
     const [items, expiringCount, licenses] = await Promise.all([
       this.prisma.softwareLicense.findMany({
         where,
-        select: { id: true, name: true, expiryDate: true, seats: true, software: { select: { name: true, version: true } } },
+        select: {
+          id: true,
+          name: true,
+          expiryDate: true,
+          seats: true,
+          software: { select: { name: true, version: true } },
+        },
         orderBy: { expiryDate: 'asc' },
         take: 8,
       }),
       this.prisma.softwareLicense.count({ where }),
       this.prisma.softwareLicense.findMany({
         where: { deletedAt: null, seats: { not: null } },
-        select: { seats: true, _count: { select: { assignments: { where: { unassignedAt: null } } } } },
+        select: {
+          seats: true,
+          _count: { select: { assignments: { where: { unassignedAt: null } } } },
+        },
       }),
     ]);
     const totalSeats = licenses.reduce((s, l) => s + (l.seats ?? 0), 0);
@@ -110,7 +142,9 @@ export class DashboardController {
       this.prisma.asset.groupBy({ by: ['status'], where, _count: { _all: true } }),
       this.prisma.asset.groupBy({ by: ['assetTypeId'], where, _count: { _all: true } }),
     ]);
-    const types = await this.prisma.assetType.findMany({ where: { id: { in: byType.map((t) => t.assetTypeId) } } });
+    const types = await this.prisma.assetType.findMany({
+      where: { id: { in: byType.map((t) => t.assetTypeId) } },
+    });
     const categoryCounts = new Map<string, number>();
     for (const row of byType) {
       const category = types.find((t) => t.id === row.assetTypeId)?.category ?? 'ACCESSORY';
@@ -119,7 +153,9 @@ export class DashboardController {
     return {
       total,
       byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count._all])),
-      byCategory: [...categoryCounts].map(([category, count]) => ({ category, count })).sort((a, b) => b.count - a.count),
+      byCategory: [...categoryCounts]
+        .map(([category, count]) => ({ category, count }))
+        .sort((a, b) => b.count - a.count),
     };
   }
 
@@ -130,14 +166,30 @@ export class DashboardController {
 
     const assignments = assetScope
       ? await (async () => {
-          const scoped: Prisma.AssetAssignmentWhereInput = { asset: { AND: [assetScope, { deletedAt: null }] } };
-          const [active, assignedThisMonth, returnedThisMonth, overdue, unacknowledged] = await Promise.all([
-            this.prisma.assetAssignment.count({ where: { ...scoped, status: 'ACTIVE' } }),
-            this.prisma.assetAssignment.count({ where: { ...scoped, assignedAt: { gte: monthStart } } }),
-            this.prisma.assetAssignment.count({ where: { ...scoped, status: 'RETURNED', returnedAt: { gte: monthStart } } }),
-            this.prisma.assetAssignment.count({ where: { ...scoped, status: 'ACTIVE', expectedReturnAt: { lt: new Date() } } }),
-            this.prisma.assetAssignment.count({ where: { ...scoped, status: 'ACTIVE', acknowledgedAt: null, employeeId: { not: null } } }),
-          ]);
+          const scoped: Prisma.AssetAssignmentWhereInput = {
+            asset: { AND: [assetScope, { deletedAt: null }] },
+          };
+          const [active, assignedThisMonth, returnedThisMonth, overdue, unacknowledged] =
+            await Promise.all([
+              this.prisma.assetAssignment.count({ where: { ...scoped, status: 'ACTIVE' } }),
+              this.prisma.assetAssignment.count({
+                where: { ...scoped, assignedAt: { gte: monthStart } },
+              }),
+              this.prisma.assetAssignment.count({
+                where: { ...scoped, status: 'RETURNED', returnedAt: { gte: monthStart } },
+              }),
+              this.prisma.assetAssignment.count({
+                where: { ...scoped, status: 'ACTIVE', expectedReturnAt: { lt: new Date() } },
+              }),
+              this.prisma.assetAssignment.count({
+                where: {
+                  ...scoped,
+                  status: 'ACTIVE',
+                  acknowledgedAt: null,
+                  employeeId: { not: null },
+                },
+              }),
+            ]);
           return { active, assignedThisMonth, returnedThisMonth, overdue, unacknowledged };
         })()
       : null;
@@ -147,10 +199,20 @@ export class DashboardController {
           const [scheduled, inProgress, completedThisMonth, cost] = await Promise.all([
             this.prisma.maintenance.count({ where: { status: 'SCHEDULED' } }),
             this.prisma.maintenance.count({ where: { status: 'IN_PROGRESS' } }),
-            this.prisma.maintenance.count({ where: { status: 'COMPLETED', completedAt: { gte: monthStart } } }),
-            this.prisma.maintenance.aggregate({ where: { status: 'COMPLETED', completedAt: { gte: monthStart } }, _sum: { totalCost: true } }),
+            this.prisma.maintenance.count({
+              where: { status: 'COMPLETED', completedAt: { gte: monthStart } },
+            }),
+            this.prisma.maintenance.aggregate({
+              where: { status: 'COMPLETED', completedAt: { gte: monthStart } },
+              _sum: { totalCost: true },
+            }),
           ]);
-          return { scheduled, inProgress, completedThisMonth, costThisMonth: Number(cost._sum.totalCost ?? 0) };
+          return {
+            scheduled,
+            inProgress,
+            completedThisMonth,
+            costThisMonth: Number(cost._sum.totalCost ?? 0),
+          };
         })()
       : null;
 
@@ -162,19 +224,40 @@ export class DashboardController {
               ? {}
               : ticketScope === 'department'
                 ? { requester: { departmentId: user.departmentId ?? NO_MATCH_ID } }
-                : { OR: [{ requesterId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }] };
+                : {
+                    OR: [{ requesterId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }],
+                  };
           const [open, inProgress, highPriority, assignedToMe] = await Promise.all([
             this.prisma.ticket.count({ where: { ...where, status: 'OPEN' } }),
-            this.prisma.ticket.count({ where: { ...where, status: { in: ['IN_PROGRESS', 'ON_HOLD'] } } }),
-            this.prisma.ticket.count({ where: { ...where, status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] }, priority: { in: ['HIGH', 'CRITICAL'] } } }),
-            staff ? this.prisma.ticket.count({ where: { assigneeId: user.id, status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] } } }) : Promise.resolve(0),
+            this.prisma.ticket.count({
+              where: { ...where, status: { in: ['IN_PROGRESS', 'ON_HOLD'] } },
+            }),
+            this.prisma.ticket.count({
+              where: {
+                ...where,
+                status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+                priority: { in: ['HIGH', 'CRITICAL'] },
+              },
+            }),
+            staff
+              ? this.prisma.ticket.count({
+                  where: {
+                    assigneeId: user.id,
+                    status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+                  },
+                })
+              : Promise.resolve(0),
           ]);
           return { open, inProgress, highPriority, assignedToMe };
         })()
       : null;
 
     const audits = can(user, 'audit.view')
-      ? { inProgress: await this.prisma.auditSession.count({ where: { status: { in: ['IN_PROGRESS', 'IN_REVIEW'] } } }) }
+      ? {
+          inProgress: await this.prisma.auditSession.count({
+            where: { status: { in: ['IN_PROGRESS', 'IN_REVIEW'] } },
+          }),
+        }
       : null;
 
     return { assignments, maintenance, tickets, audits };
@@ -192,14 +275,27 @@ export class DashboardController {
           assignedAt: true,
           acknowledgedAt: true,
           expectedReturnAt: true,
-          asset: { select: { id: true, assetTag: true, name: true, status: true, assetType: { select: { name: true, category: true } } } },
+          asset: {
+            select: {
+              id: true,
+              assetTag: true,
+              name: true,
+              status: true,
+              assetType: { select: { name: true, category: true } },
+            },
+          },
         },
       }),
       this.prisma.accessoryAssignment.findMany({
         where: { employeeId: user.employeeId, status: 'ACTIVE' },
         select: { id: true, quantity: true, accessory: { select: { id: true, name: true } } },
       }),
-      this.prisma.ticket.count({ where: { requesterId: user.employeeId, status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'RESOLVED'] } } }),
+      this.prisma.ticket.count({
+        where: {
+          requesterId: user.employeeId,
+          status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'RESOLVED'] },
+        },
+      }),
     ]);
     return { assets, accessories, openTickets };
   }

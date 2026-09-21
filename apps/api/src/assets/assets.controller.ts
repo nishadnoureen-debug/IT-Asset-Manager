@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -40,7 +52,11 @@ export class AssetsController {
 
   @Patch(':id')
   @RequirePermissions('asset.edit')
-  update(@Param('id', ParseUUIDPipe) id: Id, @Body() dto: UpdateAssetDto, @CurrentUser() user: AuthUser) {
+  update(
+    @Param('id', ParseUUIDPipe) id: Id,
+    @Body() dto: UpdateAssetDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.assets.update(id, dto, user);
   }
 
@@ -83,21 +99,33 @@ export class AssetsController {
   @Post(':id/retire')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('asset.retire')
-  retire(@Param('id', ParseUUIDPipe) id: Id, @Body() dto: RetireAssetDto, @CurrentUser() user: AuthUser) {
+  retire(
+    @Param('id', ParseUUIDPipe) id: Id,
+    @Body() dto: RetireAssetDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.assets.retire(id, dto, user);
   }
 
   @Post(':id/dispose')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('asset.dispose')
-  dispose(@Param('id', ParseUUIDPipe) id: Id, @Body() dto: DisposeAssetDto, @CurrentUser() user: AuthUser) {
+  dispose(
+    @Param('id', ParseUUIDPipe) id: Id,
+    @Body() dto: DisposeAssetDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.assets.dispose(id, dto, user);
   }
 
   @Post(':id/report-lost')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('asset.report_lost')
-  reportLost(@Param('id', ParseUUIDPipe) id: Id, @Body() dto: ReportLostDto, @CurrentUser() user: AuthUser) {
+  reportLost(
+    @Param('id', ParseUUIDPipe) id: Id,
+    @Body() dto: ReportLostDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     return this.assets.reportLost(id, dto, user);
   }
 }

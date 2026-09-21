@@ -13,7 +13,10 @@ export function Tabs<T extends string>({
 }) {
   return (
     <div className="-mx-4 overflow-x-auto px-4 sm:mx-0 sm:px-0">
-      <div role="tablist" className="flex min-w-max gap-1 border-b border-slate-200 dark:border-slate-800">
+      <div
+        role="tablist"
+        className="flex min-w-max gap-1 border-b border-slate-200 dark:border-slate-800"
+      >
         {tabs
           .filter((t) => !t.hidden)
           .map((tab) => {
@@ -34,7 +37,9 @@ export function Tabs<T extends string>({
               >
                 {tab.label}
                 {tab.count !== undefined && (
-                  <span className="rounded-full bg-slate-100 px-1.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">{tab.count}</span>
+                  <span className="rounded-full bg-slate-100 px-1.5 text-xs text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                    {tab.count}
+                  </span>
                 )}
               </button>
             );

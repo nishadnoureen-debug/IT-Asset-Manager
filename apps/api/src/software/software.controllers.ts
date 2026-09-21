@@ -1,4 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, PartialType } from '@nestjs/swagger';
 import { LicenseType, Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
@@ -26,7 +37,13 @@ import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { CryptoService, maskSecret } from '../common/crypto/crypto.service';
 import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
-import { addDays, paginate, resolveOrderBy, searchFilter, startOfDay } from '../common/query/list-query';
+import {
+  addDays,
+  paginate,
+  resolveOrderBy,
+  searchFilter,
+  startOfDay,
+} from '../common/query/list-query';
 import { documentSelect } from '../documents/documents.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
@@ -54,7 +71,10 @@ export class SoftwareController {
   @Get()
   @RequirePermissions('software.view', 'software.manage')
   list(@Query() q: PaginationQueryDto) {
-    const where: Prisma.SoftwareWhereInput = { deletedAt: null, OR: searchFilter(q.search, ['name', 'version', 'category', 'publisher.name']) };
+    const where: Prisma.SoftwareWhereInput = {
+      deletedAt: null,
+      OR: searchFilter(q.search, ['name', 'version', 'category', 'publisher.name']),
+    };
     return paginate(
       q,
       async (page) => {
@@ -62,15 +82,28 @@ export class SoftwareController {
           where,
           include: {
             publisher: { select: { id: true, name: true } },
-            licenses: { where: { deletedAt: null }, select: { id: true, seats: true, _count: { select: { assignments: { where: { unassignedAt: null } } } } } },
+            licenses: {
+              where: { deletedAt: null },
+              select: {
+                id: true,
+                seats: true,
+                _count: { select: { assignments: { where: { unassignedAt: null } } } },
+              },
+            },
           },
-          orderBy: resolveOrderBy<Prisma.SoftwareOrderByWithRelationInput>(q, { name: (o) => ({ name: o }), createdAt: (o) => ({ createdAt: o }) }, { name: 'asc' }),
+          orderBy: resolveOrderBy<Prisma.SoftwareOrderByWithRelationInput>(
+            q,
+            { name: (o) => ({ name: o }), createdAt: (o) => ({ createdAt: o }) },
+            { name: 'asc' },
+          ),
           ...page,
         });
         return rows.map(({ licenses, ...s }) => ({
           ...s,
           licenseCount: licenses.length,
-          totalSeats: licenses.some((l) => l.seats === null) ? null : licenses.reduce((sum, l) => sum + (l.seats ?? 0), 0),
+          totalSeats: licenses.some((l) => l.seats === null)
+            ? null
+            : licenses.reduce((sum, l) => sum + (l.seats ?? 0), 0),
           usedSeats: licenses.reduce((sum, l) => sum + l._count.assignments, 0),
         }));
       },
@@ -93,7 +126,13 @@ export class SoftwareController {
       },
     });
     if (!software) throw Errors.notFound('Software');
-    return { ...software, licenses: software.licenses.map(({ licenseKeyEncrypted, ...l }) => ({ ...l, hasLicenseKey: !!licenseKeyEncrypted })) };
+    return {
+      ...software,
+      licenses: software.licenses.map(({ licenseKeyEncrypted, ...l }) => ({
+        ...l,
+        hasLicenseKey: !!licenseKeyEncrypted,
+      })),
+    };
   }
 
   @Post()
@@ -101,20 +140,46 @@ export class SoftwareController {
   create(@Body() dto: CreateSoftwareDto, @CurrentUser() user: AuthUser) {
     return this.prisma.$transaction(async (tx) => {
       const software = await tx.software.create({ data: dto });
-      await this.activity.record({ actorId: user.id, action: 'software.create', entityType: 'software', entityId: software.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'software.create',
+          entityType: 'software',
+          entityId: software.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return software;
     });
   }
 
   @Patch(':id')
   @RequirePermissions('software.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateSoftwareDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateSoftwareDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.software.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw Errors.notFound('Software');
-    const changes = diff(existing as unknown as Record<string, unknown>, dto as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      dto as Record<string, unknown>,
+    );
     return this.prisma.$transaction(async (tx) => {
       const software = await tx.software.update({ where: { id }, data: dto });
-      if (changes) await this.activity.record({ actorId: user.id, action: 'software.update', entityType: 'software', entityId: id, ...changes }, tx);
+      if (changes)
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: 'software.update',
+            entityType: 'software',
+            entityId: id,
+            ...changes,
+          },
+          tx,
+        );
       return software;
     });
   }
@@ -128,7 +193,13 @@ class CreateLicenseDto {
   @IsEnum(LicenseType) licenseType!: LicenseType;
   /** Plain licence key — encrypted before storage and never returned unless explicitly revealed. */
   @IsOptional() @IsString() @MaxLength(2000) licenseKey?: string;
-  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Number) @IsInt() @Min(0) @Max(1_000_000) seats?: number | null;
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Type(() => Number)
+  @IsInt()
+  @Min(0)
+  @Max(1_000_000)
+  seats?: number | null;
   @IsOptional() @IsBoolean() allowOverAllocation?: boolean;
   @IsOptional() @IsUUID() purchaseId?: string;
   @IsOptional() @IsUUID() vendorId?: string;
@@ -157,7 +228,10 @@ class UnassignLicenseDto {
 }
 
 class RevealQueryDto {
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() reveal?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  reveal?: boolean;
 }
 
 const licenseInclude = {
@@ -195,7 +269,11 @@ export class LicensesController {
 
   @Get(':id')
   @RequirePermissions('license.view', 'license.manage')
-  async get(@Param('id', ParseUUIDPipe) id: string, @Query() q: RevealQueryDto, @CurrentUser() user: AuthUser) {
+  async get(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() q: RevealQueryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const license = await this.prisma.softwareLicense.findFirst({
       where: { id, deletedAt: null },
       include: {
@@ -204,7 +282,9 @@ export class LicensesController {
           orderBy: { assignedAt: 'desc' },
           include: {
             asset: { select: { id: true, assetTag: true, name: true } },
-            employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+            employee: {
+              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+            },
             assignedBy: { select: { id: true, displayName: true } },
           },
         },
@@ -214,9 +294,20 @@ export class LicensesController {
     if (!license) throw Errors.notFound('License');
     const presented = this.present(license);
     if (q.reveal) {
-      if (!can(user, 'license.manage')) throw Errors.forbidden('Only licence managers can reveal licence keys');
-      await this.activity.record({ actorId: user.id, action: 'license.reveal_key', entityType: 'software_license', entityId: id });
-      return { ...presented, licenseKey: license.licenseKeyEncrypted ? this.crypto.decrypt(license.licenseKeyEncrypted) : null };
+      if (!can(user, 'license.manage'))
+        throw Errors.forbidden('Only licence managers can reveal licence keys');
+      await this.activity.record({
+        actorId: user.id,
+        action: 'license.reveal_key',
+        entityType: 'software_license',
+        entityId: id,
+      });
+      return {
+        ...presented,
+        licenseKey: license.licenseKeyEncrypted
+          ? this.crypto.decrypt(license.licenseKeyEncrypted)
+          : null,
+      };
     }
     return presented;
   }
@@ -235,7 +326,16 @@ export class LicensesController {
           licenseKeyEncrypted: licenseKey ? this.crypto.encrypt(licenseKey) : undefined,
         },
       });
-      await this.activity.record({ actorId: user.id, action: 'license.create', entityType: 'software_license', entityId: license.id, newValues: { ...data, licenseKey: licenseKey ? '[REDACTED]' : undefined } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'license.create',
+          entityType: 'software_license',
+          entityId: license.id,
+          newValues: { ...data, licenseKey: licenseKey ? '[REDACTED]' : undefined },
+        },
+        tx,
+      );
       return license;
     });
     return this.get(created.id, {}, user);
@@ -243,15 +343,26 @@ export class LicensesController {
 
   @Patch(':id')
   @RequirePermissions('license.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateLicenseDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateLicenseDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.softwareLicense.findFirst({
       where: { id, deletedAt: null },
       include: { _count: { select: { assignments: { where: { unassignedAt: null } } } } },
     });
     if (!existing) throw Errors.notFound('License');
     await this.assertRefs(dto);
-    if (dto.seats !== undefined && dto.seats !== null && dto.seats < existing._count.assignments && !(dto.allowOverAllocation ?? existing.allowOverAllocation)) {
-      throw Errors.invalidState(`${existing._count.assignments} seats are in use; unassign some before reducing to ${dto.seats}`);
+    if (
+      dto.seats !== undefined &&
+      dto.seats !== null &&
+      dto.seats < existing._count.assignments &&
+      !(dto.allowOverAllocation ?? existing.allowOverAllocation)
+    ) {
+      throw Errors.invalidState(
+        `${existing._count.assignments} seats are in use; unassign some before reducing to ${dto.seats}`,
+      );
     }
     const { licenseKey, ...data } = dto;
     const { _count, licenseKeyEncrypted, ...before } = existing;
@@ -259,11 +370,29 @@ export class LicensesController {
     await this.prisma.$transaction(async (tx) => {
       await tx.softwareLicense.update({
         where: { id },
-        data: { ...data, licenseKeyEncrypted: licenseKey !== undefined ? (licenseKey ? this.crypto.encrypt(licenseKey) : null) : undefined },
+        data: {
+          ...data,
+          licenseKeyEncrypted:
+            licenseKey !== undefined
+              ? licenseKey
+                ? this.crypto.encrypt(licenseKey)
+                : null
+              : undefined,
+        },
       });
       if (changes || licenseKey !== undefined) {
         await this.activity.record(
-          { actorId: user.id, action: 'license.update', entityType: 'software_license', entityId: id, oldValues: changes?.oldValues, newValues: { ...changes?.newValues, licenseKey: licenseKey !== undefined ? '[CHANGED]' : undefined } },
+          {
+            actorId: user.id,
+            action: 'license.update',
+            entityType: 'software_license',
+            entityId: id,
+            oldValues: changes?.oldValues,
+            newValues: {
+              ...changes?.newValues,
+              licenseKey: licenseKey !== undefined ? '[CHANGED]' : undefined,
+            },
+          },
           tx,
         );
       }
@@ -273,28 +402,63 @@ export class LicensesController {
 
   @Post(':id/assign')
   @RequirePermissions('license.assign', 'license.manage')
-  async assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignLicenseDto, @CurrentUser() user: AuthUser) {
-    if (!!dto.assetId === !!dto.employeeId) throw Errors.badRequest('Assign to exactly one asset or one employee', 'assetId');
-    if (dto.assetId && !(await this.prisma.asset.findFirst({ where: { id: dto.assetId, deletedAt: null, status: { notIn: ['DISPOSED'] } } }))) {
+  async assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignLicenseDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    if (!!dto.assetId === !!dto.employeeId)
+      throw Errors.badRequest('Assign to exactly one asset or one employee', 'assetId');
+    if (
+      dto.assetId &&
+      !(await this.prisma.asset.findFirst({
+        where: { id: dto.assetId, deletedAt: null, status: { notIn: ['DISPOSED'] } },
+      }))
+    ) {
       throw Errors.badRequest('Asset not found', 'assetId');
     }
-    if (dto.employeeId && !(await this.prisma.employee.findFirst({ where: { id: dto.employeeId, deletedAt: null, status: { not: 'TERMINATED' } } }))) {
+    if (
+      dto.employeeId &&
+      !(await this.prisma.employee.findFirst({
+        where: { id: dto.employeeId, deletedAt: null, status: { not: 'TERMINATED' } },
+      }))
+    ) {
       throw Errors.badRequest('Employee not found', 'employeeId');
     }
 
     const assignment = await this.prisma.$transaction(async (tx) => {
       // Lock the licence row so concurrent allocations cannot both take the last seat.
-      const [license] = await tx.$queryRaw<{ id: string; seats: number | null; allow_over_allocation: boolean; expiry_date: Date | null }[]>`
+      const [license] = await tx.$queryRaw<
+        {
+          id: string;
+          seats: number | null;
+          allow_over_allocation: boolean;
+          expiry_date: Date | null;
+        }[]
+      >`
         SELECT id, seats, allow_over_allocation, expiry_date FROM software_licenses
         WHERE id = ${id}::uuid AND deleted_at IS NULL FOR UPDATE`;
       if (!license) throw Errors.notFound('License');
-      if (license.expiry_date && license.expiry_date < startOfDay()) throw Errors.invalidState('This licence has expired');
-      const used = await tx.softwareAssignment.count({ where: { licenseId: id, unassignedAt: null } });
+      if (license.expiry_date && license.expiry_date < startOfDay())
+        throw Errors.invalidState('This licence has expired');
+      const used = await tx.softwareAssignment.count({
+        where: { licenseId: id, unassignedAt: null },
+      });
       if (license.seats !== null && used >= license.seats && !license.allow_over_allocation) {
-        throw Errors.conflict('LICENSE_SEATS_EXHAUSTED', `All ${license.seats} seats are allocated`, { seats: license.seats, used });
+        throw Errors.conflict(
+          'LICENSE_SEATS_EXHAUSTED',
+          `All ${license.seats} seats are allocated`,
+          { seats: license.seats, used },
+        );
       }
       const created = await tx.softwareAssignment.create({
-        data: { licenseId: id, assetId: dto.assetId, employeeId: dto.employeeId, notes: dto.notes, assignedById: user.id },
+        data: {
+          licenseId: id,
+          assetId: dto.assetId,
+          employeeId: dto.employeeId,
+          notes: dto.notes,
+          assignedById: user.id,
+        },
       });
       if (dto.assetId) {
         await this.history.record(tx, {
@@ -304,7 +468,16 @@ export class LicensesController {
           metadata: { licenseId: id, softwareAssignmentId: created.id },
         });
       }
-      await this.activity.record({ actorId: user.id, action: 'license.assign', entityType: 'software_license', entityId: id, newValues: { ...dto, softwareAssignmentId: created.id } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'license.assign',
+          entityType: 'software_license',
+          entityId: id,
+          newValues: { ...dto, softwareAssignmentId: created.id },
+        },
+        tx,
+      );
       return created;
     });
     return assignment;
@@ -313,12 +486,21 @@ export class LicensesController {
   @Post(':id/unassign')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('license.assign', 'license.manage')
-  async unassign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UnassignLicenseDto, @CurrentUser() user: AuthUser) {
-    const assignment = await this.prisma.softwareAssignment.findFirst({ where: { id: dto.assignmentId, licenseId: id } });
+  async unassign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UnassignLicenseDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const assignment = await this.prisma.softwareAssignment.findFirst({
+      where: { id: dto.assignmentId, licenseId: id },
+    });
     if (!assignment) throw Errors.notFound('Licence assignment');
     if (assignment.unassignedAt) throw Errors.invalidState('This seat is already released');
     await this.prisma.$transaction(async (tx) => {
-      await tx.softwareAssignment.update({ where: { id: assignment.id }, data: { unassignedAt: new Date(), unassignedById: user.id } });
+      await tx.softwareAssignment.update({
+        where: { id: assignment.id },
+        data: { unassignedAt: new Date(), unassignedById: user.id },
+      });
       if (assignment.assetId) {
         await this.history.record(tx, {
           assetId: assignment.assetId,
@@ -327,7 +509,16 @@ export class LicensesController {
           metadata: { licenseId: id, softwareAssignmentId: assignment.id },
         });
       }
-      await this.activity.record({ actorId: user.id, action: 'license.unassign', entityType: 'software_license', entityId: id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'license.unassign',
+          entityType: 'software_license',
+          entityId: id,
+          newValues: dto,
+        },
+        tx,
+      );
     });
     return { id: assignment.id, released: true };
   }
@@ -349,7 +540,11 @@ export class LicensesController {
             include: licenseInclude,
             orderBy: resolveOrderBy<Prisma.SoftwareLicenseOrderByWithRelationInput>(
               q,
-              { expiryDate: (o) => ({ expiryDate: { sort: o, nulls: 'last' } }), createdAt: (o) => ({ createdAt: o }), seats: (o) => ({ seats: { sort: o, nulls: 'last' } }) },
+              {
+                expiryDate: (o) => ({ expiryDate: { sort: o, nulls: 'last' } }),
+                createdAt: (o) => ({ createdAt: o }),
+                seats: (o) => ({ seats: { sort: o, nulls: 'last' } }),
+              },
               q.expiringDays ? { expiryDate: 'asc' } : { createdAt: 'desc' },
             ),
             ...page,
@@ -380,13 +575,22 @@ export class LicensesController {
   }
 
   private async assertRefs(dto: Partial<CreateLicenseDto>) {
-    if (dto.softwareId && !(await this.prisma.software.findFirst({ where: { id: dto.softwareId, deletedAt: null } }))) {
+    if (
+      dto.softwareId &&
+      !(await this.prisma.software.findFirst({ where: { id: dto.softwareId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Software not found', 'softwareId');
     }
-    if (dto.vendorId && !(await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null } }))) {
+    if (
+      dto.vendorId &&
+      !(await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Vendor not found', 'vendorId');
     }
-    if (dto.purchaseId && !(await this.prisma.purchase.findFirst({ where: { id: dto.purchaseId, deletedAt: null } }))) {
+    if (
+      dto.purchaseId &&
+      !(await this.prisma.purchase.findFirst({ where: { id: dto.purchaseId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Purchase not found', 'purchaseId');
     }
     if (dto.startDate && dto.expiryDate && dto.expiryDate < dto.startDate) {

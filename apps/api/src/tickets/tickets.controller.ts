@@ -1,8 +1,30 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Prisma, Priority, TicketCategory, TicketStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsBoolean, IsDate, IsEnum, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength, ValidateIf } from 'class-validator';
+import {
+  IsBoolean,
+  IsDate,
+  IsEnum,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+  ValidateIf,
+} from 'class-validator';
 import { ActivityLogService, diff } from '../activity-logs/activity-log.service';
 import { assetScopeWhere } from '../assets/asset-access';
 import { trim } from '../assets/assets.dto';
@@ -30,7 +52,8 @@ class UpdateTicketDto {
   @IsOptional() @IsString() @MaxLength(10000) description?: string;
   @IsOptional() @IsEnum(TicketCategory) category?: TicketCategory;
   @IsOptional() @IsEnum(Priority) priority?: Priority;
-  @IsOptional() @IsIn(['OPEN', 'IN_PROGRESS', 'ON_HOLD']) status?: 'OPEN' | 'IN_PROGRESS' | 'ON_HOLD';
+  @IsOptional() @IsIn(['OPEN', 'IN_PROGRESS', 'ON_HOLD']) status?:
+    'OPEN' | 'IN_PROGRESS' | 'ON_HOLD';
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() assetId?: string | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Date) @IsDate() dueAt?: Date | null;
 }
@@ -55,8 +78,14 @@ class TicketQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() assigneeId?: string;
   @IsOptional() @IsUUID() assetId?: string;
   @IsOptional() @IsUUID() requesterId?: string;
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() open?: boolean;
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() assignedToMe?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  open?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  assignedToMe?: boolean;
 }
 
 const VIEW = ['ticket.view', 'ticket.view_department', 'ticket.view_own'] as const;
@@ -88,7 +117,8 @@ export class TicketsController {
         ],
       };
     }
-    if (scope === 'own') return { OR: [{ requesterId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }] };
+    if (scope === 'own')
+      return { OR: [{ requesterId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }] };
     throw Errors.forbidden();
   }
 
@@ -109,8 +139,14 @@ export class TicketsController {
         q.search ? { OR: searchFilter(q.search, ['title', 'description', 'asset.assetTag']) } : {},
       ],
     };
-    const numeric = q.search && /^\d+$/.test(q.search.replace(/^tck-?/i, '')) ? Number(q.search.replace(/^tck-?/i, '')) : null;
-    if (numeric !== null) (where.AND as Prisma.TicketWhereInput[])[2] = { OR: [{ number: numeric }, ...searchFilter(q.search, ['title'])!] };
+    const numeric =
+      q.search && /^\d+$/.test(q.search.replace(/^tck-?/i, ''))
+        ? Number(q.search.replace(/^tck-?/i, ''))
+        : null;
+    if (numeric !== null)
+      (where.AND as Prisma.TicketWhereInput[])[2] = {
+        OR: [{ number: numeric }, ...searchFilter(q.search, ['title'])!],
+      };
     return paginate(
       q,
       (page) =>
@@ -119,7 +155,13 @@ export class TicketsController {
           include: listInclude,
           orderBy: resolveOrderBy<Prisma.TicketOrderByWithRelationInput>(
             q,
-            { createdAt: (o) => ({ createdAt: o }), updatedAt: (o) => ({ updatedAt: o }), priority: (o) => ({ priority: o }), status: (o) => ({ status: o }), number: (o) => ({ number: o }) },
+            {
+              createdAt: (o) => ({ createdAt: o }),
+              updatedAt: (o) => ({ updatedAt: o }),
+              priority: (o) => ({ priority: o }),
+              status: (o) => ({ status: o }),
+              number: (o) => ({ number: o }),
+            },
             { createdAt: 'desc' },
           ),
           ...page,
@@ -158,7 +200,10 @@ export class TicketsController {
     if (dto.requesterId && !staff && dto.requesterId !== user.employeeId) {
       throw Errors.forbidden('You can only raise tickets for yourself');
     }
-    if (requesterId && !(await this.prisma.employee.findFirst({ where: { id: requesterId, deletedAt: null } }))) {
+    if (
+      requesterId &&
+      !(await this.prisma.employee.findFirst({ where: { id: requesterId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Requester not found', 'requesterId');
     }
     if (dto.assetId) await this.assertAssetVisible(dto.assetId, user);
@@ -175,7 +220,16 @@ export class TicketsController {
           createdById: user.id,
         },
       });
-      await this.activity.record({ actorId: user.id, action: 'ticket.create', entityType: 'ticket', entityId: ticket.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'ticket.create',
+          entityType: 'ticket',
+          entityId: ticket.id,
+          newValues: dto,
+        },
+        tx,
+      );
       const staffIds = await this.notifications.usersWithPermission(tx, 'ticket.assign');
       await this.notifications.notifyUsers(
         tx,
@@ -197,16 +251,37 @@ export class TicketsController {
 
   @Patch(':id')
   @RequirePermissions('ticket.edit')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateTicketDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTicketDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.loadOpen(id, user);
     if (dto.assetId) await this.assertAssetVisible(dto.assetId, user);
-    const changes = diff(existing as unknown as Record<string, unknown>, dto as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      dto as Record<string, unknown>,
+    );
     if (!changes) return this.get(id, user);
     await this.prisma.$transaction(async (tx) => {
       await tx.ticket.update({ where: { id }, data: dto });
-      await this.activity.record({ actorId: user.id, action: 'ticket.update', entityType: 'ticket', entityId: id, ...changes }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'ticket.update',
+          entityType: 'ticket',
+          entityId: id,
+          ...changes,
+        },
+        tx,
+      );
       if (dto.status && dto.status !== existing.status) {
-        await this.notifyRequester(tx, existing, `Status changed to ${dto.status.replace('_', ' ').toLowerCase()}`, user.id);
+        await this.notifyRequester(
+          tx,
+          existing,
+          `Status changed to ${dto.status.replace('_', ' ').toLowerCase()}`,
+          user.id,
+        );
       }
     });
     return this.get(id, user);
@@ -214,9 +289,14 @@ export class TicketsController {
 
   @Post(':id/comments')
   @RequirePermissions('ticket.comment')
-  async comment(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CommentDto, @CurrentUser() user: AuthUser) {
+  async comment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CommentDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const ticket = await this.get(id, user);
-    if (ticket.status === 'CLOSED') throw Errors.invalidState('Closed tickets cannot receive comments');
+    if (ticket.status === 'CLOSED')
+      throw Errors.invalidState('Closed tickets cannot receive comments');
     const isInternal = !!dto.isInternal && can(user, 'ticket.edit');
     return this.prisma.$transaction(async (tx) => {
       const comment = await tx.ticketComment.create({
@@ -224,18 +304,37 @@ export class TicketsController {
         include: { author: { select: { id: true, displayName: true } } },
       });
       await tx.ticket.update({ where: { id }, data: { updatedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'ticket.comment', entityType: 'ticket', entityId: id, newValues: { commentId: comment.id, isInternal } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'ticket.comment',
+          entityType: 'ticket',
+          entityId: id,
+          newValues: { commentId: comment.id, isInternal },
+        },
+        tx,
+      );
       const recipients = [ticket.assignee?.id].filter((x): x is string => !!x);
       if (!isInternal) {
         const requesterUser = ticket.requester
-          ? await tx.user.findFirst({ where: { employeeId: ticket.requester.id, deletedAt: null }, select: { id: true } })
+          ? await tx.user.findFirst({
+              where: { employeeId: ticket.requester.id, deletedAt: null },
+              select: { id: true },
+            })
           : null;
         if (requesterUser) recipients.push(requesterUser.id);
       }
       await this.notifications.notifyUsers(
         tx,
         recipients,
-        { type: 'TICKET_UPDATE', title: `New comment on TCK-${ticket.number}`, message: dto.body.slice(0, 200), entityType: 'ticket', entityId: id, link: `/tickets/${id}` },
+        {
+          type: 'TICKET_UPDATE',
+          title: `New comment on TCK-${ticket.number}`,
+          message: dto.body.slice(0, 200),
+          entityType: 'ticket',
+          entityId: id,
+          link: `/tickets/${id}`,
+        },
         { excludeUserId: user.id },
       );
       return comment;
@@ -245,28 +344,57 @@ export class TicketsController {
   @Post(':id/assign')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('ticket.assign')
-  async assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignTicketDto, @CurrentUser() user: AuthUser) {
+  async assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignTicketDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.loadOpen(id, user);
     if (dto.assigneeId) {
       const assignee = await this.prisma.user.findFirst({
-        where: { id: dto.assigneeId, deletedAt: null, status: 'ACTIVE', roles: { some: { role: { permissions: { some: { permission: { key: 'ticket.edit' } } } } } } },
+        where: {
+          id: dto.assigneeId,
+          deletedAt: null,
+          status: 'ACTIVE',
+          roles: {
+            some: { role: { permissions: { some: { permission: { key: 'ticket.edit' } } } } },
+          },
+        },
       });
-      if (!assignee) throw Errors.badRequest('Assignee must be an active IT staff member', 'assigneeId');
+      if (!assignee)
+        throw Errors.badRequest('Assignee must be an active IT staff member', 'assigneeId');
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.ticket.update({
         where: { id },
-        data: { assigneeId: dto.assigneeId, status: dto.assigneeId && existing.status === 'OPEN' ? 'IN_PROGRESS' : undefined },
+        data: {
+          assigneeId: dto.assigneeId,
+          status: dto.assigneeId && existing.status === 'OPEN' ? 'IN_PROGRESS' : undefined,
+        },
       });
       await this.activity.record(
-        { actorId: user.id, action: 'ticket.assign', entityType: 'ticket', entityId: id, oldValues: { assigneeId: existing.assigneeId }, newValues: { assigneeId: dto.assigneeId } },
+        {
+          actorId: user.id,
+          action: 'ticket.assign',
+          entityType: 'ticket',
+          entityId: id,
+          oldValues: { assigneeId: existing.assigneeId },
+          newValues: { assigneeId: dto.assigneeId },
+        },
         tx,
       );
       if (dto.assigneeId) {
         await this.notifications.notifyUsers(
           tx,
           [dto.assigneeId],
-          { type: 'TICKET_UPDATE', title: `Ticket TCK-${existing.number} assigned to you`, message: existing.title, entityType: 'ticket', entityId: id, link: `/tickets/${id}` },
+          {
+            type: 'TICKET_UPDATE',
+            title: `Ticket TCK-${existing.number} assigned to you`,
+            message: existing.title,
+            entityType: 'ticket',
+            entityId: id,
+            link: `/tickets/${id}`,
+          },
           { excludeUserId: user.id },
         );
       }
@@ -277,12 +405,34 @@ export class TicketsController {
   @Post(':id/resolve')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('ticket.resolve')
-  async resolve(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ResolveTicketDto, @CurrentUser() user: AuthUser) {
+  async resolve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ResolveTicketDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.loadOpen(id, user);
     await this.prisma.$transaction(async (tx) => {
-      await tx.ticket.update({ where: { id }, data: { status: 'RESOLVED', resolution: dto.resolution, resolvedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'ticket.resolve', entityType: 'ticket', entityId: id, oldValues: { status: existing.status }, newValues: { status: 'RESOLVED', resolution: dto.resolution } }, tx);
-      await this.notifyRequester(tx, existing, `Resolved: ${dto.resolution.slice(0, 160)}`, user.id);
+      await tx.ticket.update({
+        where: { id },
+        data: { status: 'RESOLVED', resolution: dto.resolution, resolvedAt: new Date() },
+      });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'ticket.resolve',
+          entityType: 'ticket',
+          entityId: id,
+          oldValues: { status: existing.status },
+          newValues: { status: 'RESOLVED', resolution: dto.resolution },
+        },
+        tx,
+      );
+      await this.notifyRequester(
+        tx,
+        existing,
+        `Resolved: ${dto.resolution.slice(0, 160)}`,
+        user.id,
+      );
     });
     return this.get(id, user);
   }
@@ -300,13 +450,25 @@ export class TicketsController {
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.ticket.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'ticket.close', entityType: 'ticket', entityId: id, oldValues: { status: ticket.status }, newValues: { status: 'CLOSED' } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'ticket.close',
+          entityType: 'ticket',
+          entityId: id,
+          oldValues: { status: ticket.status },
+          newValues: { status: 'CLOSED' },
+        },
+        tx,
+      );
     });
     return this.get(id, user);
   }
 
   private async loadOpen(id: string, user: AuthUser) {
-    const ticket = await this.prisma.ticket.findFirst({ where: { AND: [{ id }, this.scopeWhere(user)] } });
+    const ticket = await this.prisma.ticket.findFirst({
+      where: { AND: [{ id }, this.scopeWhere(user)] },
+    });
     if (!ticket) throw Errors.notFound('Ticket');
     if (ticket.status === 'CLOSED') throw Errors.invalidState('Closed tickets cannot be changed');
     return ticket;
@@ -314,15 +476,29 @@ export class TicketsController {
 
   private async assertAssetVisible(assetId: string, user: AuthUser) {
     const scope = assetScopeWhere(user) ?? { id: NO_MATCH_ID };
-    const asset = await this.prisma.asset.findFirst({ where: { AND: [{ id: assetId, deletedAt: null }, scope] } });
+    const asset = await this.prisma.asset.findFirst({
+      where: { AND: [{ id: assetId, deletedAt: null }, scope] },
+    });
     if (!asset) throw Errors.badRequest('Asset not found', 'assetId');
   }
 
-  private async notifyRequester(tx: Prisma.TransactionClient, ticket: { id: string; number: number; requesterId: string | null }, message: string, actorId: string) {
+  private async notifyRequester(
+    tx: Prisma.TransactionClient,
+    ticket: { id: string; number: number; requesterId: string | null },
+    message: string,
+    actorId: string,
+  ) {
     await this.notifications.notifyEmployee(
       tx,
       ticket.requesterId,
-      { type: 'TICKET_UPDATE', title: `Update on TCK-${ticket.number}`, message, entityType: 'ticket', entityId: ticket.id, link: `/tickets/${ticket.id}` },
+      {
+        type: 'TICKET_UPDATE',
+        title: `Update on TCK-${ticket.number}`,
+        message,
+        entityType: 'ticket',
+        entityId: ticket.id,
+        link: `/tickets/${ticket.id}`,
+      },
       actorId,
     );
   }

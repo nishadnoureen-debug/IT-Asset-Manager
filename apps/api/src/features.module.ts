@@ -16,7 +16,11 @@ import { EmployeesService } from './employees/employees.service';
 import { MaintenanceController } from './maintenance/maintenance.controller';
 import { AlertsScheduler } from './notifications/alerts.scheduler';
 import { NotificationsController } from './notifications/notifications.controller';
-import { AssetTypesController, DepartmentsController, LocationsController } from './organization/organization.controllers';
+import {
+  AssetTypesController,
+  DepartmentsController,
+  LocationsController,
+} from './organization/organization.controllers';
 import { PurchasesController, VendorsController } from './procurement/procurement.controllers';
 import { QrController } from './qr/qr.controller';
 import { QrService } from './qr/qr.service';
@@ -31,13 +35,19 @@ import { WarrantiesController } from './warranties/warranties.controller';
 @Module({ controllers: [AuthController], providers: [AuthService] })
 export class AuthModule {}
 
-@Module({ controllers: [UsersController, RolesController, ActivityLogsController, SettingsController] })
+@Module({
+  controllers: [UsersController, RolesController, ActivityLogsController, SettingsController],
+})
 export class AdministrationModule {}
 
 @Module({ controllers: [DepartmentsController, LocationsController, AssetTypesController] })
 export class OrganizationModule {}
 
-@Module({ controllers: [EmployeesController], providers: [EmployeesService], exports: [EmployeesService] })
+@Module({
+  controllers: [EmployeesController],
+  providers: [EmployeesService],
+  exports: [EmployeesService],
+})
 export class EmployeesModule {}
 
 @Module({

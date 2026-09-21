@@ -36,7 +36,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     () => ({
       success: (message) => push('success', message),
       error: (error, fallback = 'Something went wrong') =>
-        push('error', error instanceof ApiError || error instanceof Error ? error.message : fallback),
+        push(
+          'error',
+          error instanceof ApiError || error instanceof Error ? error.message : fallback,
+        ),
     }),
     [push],
   );
@@ -44,7 +47,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={api}>
       {children}
-      <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6 md:items-end">
+      <div
+        aria-live="polite"
+        className="pointer-events-none fixed inset-x-0 bottom-20 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6 md:items-end"
+      >
         {toasts.map((t) => (
           <div
             key={t.id}
@@ -62,7 +68,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <XCircle className="h-5 w-5 shrink-0 text-red-500" aria-hidden />
             )}
             <p className="flex-1">{t.message}</p>
-            <button type="button" onClick={() => dismiss(t.id)} aria-label="Dismiss" className="text-slate-400 hover:text-slate-600">
+            <button
+              type="button"
+              onClick={() => dismiss(t.id)}
+              aria-label="Dismiss"
+              className="text-slate-400 hover:text-slate-600"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>

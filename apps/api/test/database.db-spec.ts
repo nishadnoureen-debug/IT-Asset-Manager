@@ -166,7 +166,9 @@ describe('seed', () => {
   it('preserves admin customisations of system roles and custom asset types across re-seeds', async () => {
     await seedDatabase(prisma);
     const employeeRole = await prisma.role.findUniqueOrThrow({ where: { name: ROLES.EMPLOYEE } });
-    const ticketCreate = await prisma.permission.findUniqueOrThrow({ where: { key: 'ticket.create' } });
+    const ticketCreate = await prisma.permission.findUniqueOrThrow({
+      where: { key: 'ticket.create' },
+    });
     await prisma.rolePermission.delete({
       where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: ticketCreate.id } },
     });

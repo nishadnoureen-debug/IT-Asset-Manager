@@ -1,0 +1,61 @@
+# Security
+
+This document describes how the system protects accounts, data and the audit trail (spec §10).
+
+## Authentication
+
+| Aspect          | Implementation                                                                                                                                                                                                                                                                                                 |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Passwords       | Argon2id (19 MiB, 2 iterations — OWASP baseline) via `@node-rs/argon2`. Policy: ≥ 10 characters with a letter and a digit. Login timing is equalised for unknown accounts.                                                                                                                                     |
+| Access token    | HS256 JWT, 15 minutes (`JWT_ACCESS_TTL_SECONDS`), kept in memory in the browser — never in `localStorage`.                                                                                                                                                                                                     |
+| Refresh token   | 48 random bytes, stored only as a SHA-256 hash, sent as an `httpOnly`, `SameSite=Lax`, `Secure` (in production) cookie scoped to `/api/v1/auth`, valid 7 days (`REFRESH_TOKEN_TTL_DAYS`).                                                                                                                      |
+| Rotation        | Every refresh revokes the presented token and issues a new one in the same _family_. Replaying a rotated token after a 30 s grace window revokes the whole family and logs `auth.refresh_reuse_detected`. A replay inside the window (parallel tabs) returns `REFRESH_RACE` without clearing the newer cookie. |
+| Session hint    | A non-secret `itam_session=1` cookie tells the web app a session may exist, so signed-out browsers skip the refresh call. It grants nothing.                                                                                                                                                                   |
+| Lockout         | 5 failed attempts (`LOGIN_MAX_ATTEMPTS`) lock the account for 15 minutes (`LOGIN_LOCK_MINUTES`). Login is additionally rate-limited to 10 requests/minute per client IP.                                                                                                                                       |
+| Password reset  | Single-use token (hashed), valid 1 hour; resetting revokes all refresh tokens. The endpoint never reveals whether an account exists. **Email delivery is not wired yet**: in development the link is written to the API log; in production it is not logged — see "Known gaps".                                |
+| Disabling users | Takes effect on the next request (user state is cached for at most 15 s per process and invalidated immediately on change); all refresh tokens are revoked.                                                                                                                                                    |
+
+## Authorization
+
+- A global guard chain runs on every route: rate limit → JWT authentication → permission check. Routes are
+  private unless explicitly marked `@Public()` (health, login, refresh, logout, forgot/reset password).
+- `@RequirePermissions(...)` takes _any-of_ permission keys; the catalogue lives in
+  `packages/shared/src/constants/permissions.ts`.
+- **Row-level scope**: for assets, employees and tickets the service applies the widest scope the user holds:
+  `x.view` (all), `x.view_department` (own department) or `x.view_own` (own records). Out-of-scope records
+  return **404**, never 403, so existence is not revealed (IDOR protection — covered by tests).
+- Privilege escalation is blocked: only Super Admins (`role.manage`) can grant the Super Admin role, change role
+  permissions or modify Super Admin accounts; nobody can disable themselves or remove their own Super Admin role.
+- The web UI uses the same permission list to hide actions, but the API is the only enforcement point.
+
+## Data protection
+
+- **Validation**: every DTO is validated with `class-validator`; unknown fields are rejected (`whitelist` +
+  `forbidNonWhitelisted`). Sort fields are whitelisted per endpoint.
+- **SQL**: all data access goes through Prisma (parameterised). The few raw queries use tagged templates.
+- **Licence keys**: encrypted with AES-256-GCM (`ENCRYPTION_KEY`), masked in every response, revealed only to
+  `license.manage` holders and every reveal is logged.
+- **Uploads**: 10 MB limit, type detected from magic bytes (PDF, PNG, JPEG, WebP only — the declared MIME type is
+  ignored), file names sanitised, stored under random keys, downloaded with `Content-Disposition: attachment` and
+  `nosniff`. Signatures must be real PNGs ≤ 512 KB.
+- **Exports**: CSV/XLSX cells beginning with `= + - @` are neutralised to prevent formula injection.
+- **Logs**: pino with request ids; `Authorization`, cookies, passwords and tokens are redacted. Activity-log
+  payloads strip any key that looks like a password, token, secret or licence key.
+- **Headers**: Helmet on the API; `nosniff`, `X-Frame-Options: DENY`, strict referrer policy and a camera-only
+  `Permissions-Policy` on the web app. CORS is an explicit allow-list.
+
+## Audit trail
+
+- `activity_logs` records actor, action, entity, before/after values, IP, user agent and request id for every
+  sensitive action (auth events, CRUD on master data, lifecycle actions, exports, key reveals, role changes).
+- `asset_history` and `activity_logs` are **append-only at the database level** (triggers reject UPDATE/DELETE).
+- Lifecycle changes use conditional updates (`WHERE status = <expected>`) inside transactions, so concurrent
+  requests cannot both succeed (tested with parallel assignments).
+
+## Known gaps / before going live
+
+- Configure an email provider for password-reset and notification emails (in-app notifications work today).
+- Put the web app behind HTTPS (required for secure cookies and phone camera scanning).
+- PDF exports use the built-in Helvetica font, which only covers Latin characters; Arabic and other scripts are
+  replaced with `?` in PDFs (CSV/XLSX and the UI are fully Unicode). Embed a Unicode font to lift this.
+- Run a dependency audit (`npm audit`) and a DAST scan against staging as part of release.

@@ -44,7 +44,13 @@ export class ActivityLogsController {
     };
     return paginate(
       q,
-      (page) => this.prisma.activityLog.findMany({ where, include, orderBy: { createdAt: 'desc' }, ...page }),
+      (page) =>
+        this.prisma.activityLog.findMany({
+          where,
+          include,
+          orderBy: { createdAt: 'desc' },
+          ...page,
+        }),
       () => this.prisma.activityLog.count({ where }),
     );
   }

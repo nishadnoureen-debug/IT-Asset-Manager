@@ -2,17 +2,19 @@ import { Injectable } from '@nestjs/common';
 import { AssetStatus, Prisma } from '@prisma/client';
 import { canTransition, WORKFLOW_ONLY_STATUSES } from '@itam/shared';
 import { ActivityLogService, diff, type Db } from '../activity-logs/activity-log.service';
-import { can, dataScope, type AuthUser } from '../auth/auth-user';
+import { can, dataScope, NO_MATCH_ID, type AuthUser } from '../auth/auth-user';
 import { Errors } from '../common/errors';
-import { addDays, paginate, resolveOrderBy, searchFilter, startOfDay } from '../common/query/list-query';
+import {
+  addDays,
+  paginate,
+  resolveOrderBy,
+  searchFilter,
+  startOfDay,
+} from '../common/query/list-query';
 import { documentSelect } from '../documents/documents.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
-import {
-  allowedAssetActions,
-  assetScopeWhere,
-  employeeSummarySelect,
-} from './asset-access';
+import { allowedAssetActions, assetScopeWhere, employeeSummarySelect } from './asset-access';
 import { AssetHistoryService } from './asset-history.service';
 import type {
   AssetQueryDto,
@@ -23,7 +25,9 @@ import type {
   UpdateAssetDto,
 } from './assets.dto';
 
-export const OPEN_MAINTENANCE: Prisma.MaintenanceWhereInput = { status: { in: ['SCHEDULED', 'IN_PROGRESS'] } };
+export const OPEN_MAINTENANCE: Prisma.MaintenanceWhereInput = {
+  status: { in: ['SCHEDULED', 'IN_PROGRESS'] },
+};
 
 const listSelect = {
   id: true,
@@ -77,7 +81,9 @@ const detailInclude = {
     },
   },
   maintenance: { where: OPEN_MAINTENANCE, take: 1, orderBy: { createdAt: 'desc' } },
-  _count: { select: { assignments: true, maintenance: true, documents: { where: { deletedAt: null } } } },
+  _count: {
+    select: { assignments: true, maintenance: true, documents: { where: { deletedAt: null } } },
+  },
 } satisfies Prisma.AssetInclude;
 
 @Injectable()
@@ -114,10 +120,21 @@ export class AssetsService {
         q.locationId ? { locationId: q.locationId } : {},
         q.departmentId ? { departmentId: q.departmentId } : {},
         q.purchaseId ? { purchaseId: q.purchaseId } : {},
-        q.employeeId ? { assignments: { some: { status: 'ACTIVE', employeeId: q.employeeId } } } : {},
+        q.employeeId
+          ? { assignments: { some: { status: 'ACTIVE', employeeId: q.employeeId } } }
+          : {},
         q.warranty ? warrantyWhere[q.warranty] : {},
         q.search
-          ? { OR: searchFilter(q.search, ['assetTag', 'name', 'serialNumber', 'serviceTag', 'brand', 'model']) }
+          ? {
+              OR: searchFilter(q.search, [
+                'assetTag',
+                'name',
+                'serialNumber',
+                'serviceTag',
+                'brand',
+                'model',
+              ]),
+            }
           : {},
       ],
     };
@@ -181,7 +198,10 @@ export class AssetsService {
           ...dto,
           assetTag,
           status: dto.status ?? 'IN_STOCK',
-          currency: dto.purchaseCost !== undefined ? (dto.currency ?? settings.defaultCurrency) : dto.currency,
+          currency:
+            dto.purchaseCost !== undefined
+              ? (dto.currency ?? settings.defaultCurrency)
+              : dto.currency,
           specifications: dto.specifications as Prisma.InputJsonValue | undefined,
           createdById: user.id,
           updatedById: user.id,
@@ -196,7 +216,13 @@ export class AssetsService {
         description: `Registered ${asset.assetTag}`,
       });
       await this.activity.record(
-        { actorId: user.id, action: 'asset.create', entityType: 'asset', entityId: asset.id, newValues: dto },
+        {
+          actorId: user.id,
+          action: 'asset.create',
+          entityType: 'asset',
+          entityId: asset.id,
+          newValues: dto,
+        },
         tx,
       );
       return asset;
@@ -205,7 +231,8 @@ export class AssetsService {
 
   async update(id: string, dto: UpdateAssetDto, user: AuthUser) {
     const existing = await this.findVisible(id, user);
-    if (existing.status === 'DISPOSED') throw Errors.invalidState('Disposed assets cannot be edited');
+    if (existing.status === 'DISPOSED')
+      throw Errors.invalidState('Disposed assets cannot be edited');
     await this.assertReferences(dto);
     this.assertWarrantyDates(
       dto.warrantyStartDate ?? existing.warrantyStartDate ?? undefined,
@@ -213,13 +240,32 @@ export class AssetsService {
     );
 
     if (dto.status && dto.status !== existing.status) {
-      if (WORKFLOW_ONLY_STATUSES.includes(dto.status) || !canTransition(existing.status, dto.status)) {
-        throw Errors.invalidState(`Cannot change status from ${existing.status} to ${dto.status} directly`);
+      if (
+        WORKFLOW_ONLY_STATUSES.includes(dto.status) ||
+        !canTransition(existing.status, dto.status)
+      ) {
+        throw Errors.invalidState(
+          `Cannot change status from ${existing.status} to ${dto.status} directly`,
+        );
       }
-      if (existing.assignments.length) throw Errors.invalidState('Return the asset before changing its status');
+      if (existing.assignments.length)
+        throw Errors.invalidState('Return the asset before changing its status');
     }
 
-    const { assignments: _a, maintenance: _m, _count, assetType, location, department, purchase, vendor, warrantyProvider, createdBy, updatedBy, ...before } = existing;
+    const {
+      assignments: _a,
+      maintenance: _m,
+      _count,
+      assetType,
+      location,
+      department,
+      purchase,
+      vendor,
+      warrantyProvider,
+      createdBy,
+      updatedBy,
+      ...before
+    } = existing;
     const changes = diff(before as Record<string, unknown>, dto as Record<string, unknown>);
     if (!changes) return this.get(id, user);
 
@@ -250,7 +296,9 @@ export class AssetsService {
           performedById: user.id,
         });
       }
-      const otherFields = Object.keys(changes.newValues).filter((k) => k !== 'status' && k !== 'locationId');
+      const otherFields = Object.keys(changes.newValues).filter(
+        (k) => k !== 'status' && k !== 'locationId',
+      );
       if (otherFields.length) {
         await this.history.record(tx, {
           assetId: id,
@@ -271,11 +319,19 @@ export class AssetsService {
   /** Soft delete — only for assets that are not in use. Prefer retire/dispose for end of life. */
   async remove(id: string, user: AuthUser) {
     const asset = await this.findVisible(id, user);
-    if (asset.assignments.length || asset.maintenance.length || asset.status === 'ASSIGNED' || asset.status === 'IN_REPAIR') {
+    if (
+      asset.assignments.length ||
+      asset.maintenance.length ||
+      asset.status === 'ASSIGNED' ||
+      asset.status === 'IN_REPAIR'
+    ) {
       throw Errors.invalidState('Assets that are assigned or under maintenance cannot be deleted');
     }
     await this.prisma.$transaction(async (tx) => {
-      await tx.asset.update({ where: { id }, data: { deletedAt: new Date(), updatedById: user.id } });
+      await tx.asset.update({
+        where: { id },
+        data: { deletedAt: new Date(), updatedById: user.id },
+      });
       await this.history.record(tx, {
         assetId: id,
         action: 'UPDATED',
@@ -283,7 +339,13 @@ export class AssetsService {
         description: 'Deleted (archived)',
       });
       await this.activity.record(
-        { actorId: user.id, action: 'asset.delete', entityType: 'asset', entityId: id, oldValues: { assetTag: asset.assetTag, status: asset.status } },
+        {
+          actorId: user.id,
+          action: 'asset.delete',
+          entityType: 'asset',
+          entityId: id,
+          oldValues: { assetTag: asset.assetTag, status: asset.status },
+        },
         tx,
       );
     });
@@ -337,6 +399,10 @@ export class AssetsService {
       where: {
         deletedAt: null,
         OR: [{ assetId: id }, { assignment: { assetId: id } }, { maintenance: { assetId: id } }],
+        // Without document.view, only documents from the user's own assignments are listed.
+        ...(can(user, 'document.view')
+          ? {}
+          : { assignment: { employeeId: user.employeeId ?? NO_MATCH_ID } }),
       },
       select: documentSelect,
       orderBy: { createdAt: 'desc' },
@@ -365,10 +431,14 @@ export class AssetsService {
   async retire(id: string, dto: RetireAssetDto, user: AuthUser) {
     const asset = await this.findVisible(id, user);
     if (asset.assignments.length) throw Errors.invalidState('Return the asset before retiring it');
-    if (asset.maintenance.length) throw Errors.invalidState('Complete or cancel open maintenance first');
+    if (asset.maintenance.length)
+      throw Errors.invalidState('Complete or cancel open maintenance first');
     this.assertTransition(asset.status, 'RETIRED');
     await this.prisma.$transaction(async (tx) => {
-      await this.setStatus(tx, id, asset.status, 'RETIRED', { retiredAt: new Date(), updatedById: user.id });
+      await this.setStatus(tx, id, asset.status, 'RETIRED', {
+        retiredAt: new Date(),
+        updatedById: user.id,
+      });
       await this.history.record(tx, {
         assetId: id,
         action: 'RETIRED',
@@ -378,7 +448,14 @@ export class AssetsService {
         description: dto.reason,
       });
       await this.activity.record(
-        { actorId: user.id, action: 'asset.retire', entityType: 'asset', entityId: id, oldValues: { status: asset.status }, newValues: { status: 'RETIRED', reason: dto.reason } },
+        {
+          actorId: user.id,
+          action: 'asset.retire',
+          entityType: 'asset',
+          entityId: id,
+          oldValues: { status: asset.status },
+          newValues: { status: 'RETIRED', reason: dto.reason },
+        },
         tx,
       );
     });
@@ -404,7 +481,14 @@ export class AssetsService {
         description: `${dto.method}: ${dto.reason}`,
       });
       await this.activity.record(
-        { actorId: user.id, action: 'asset.dispose', entityType: 'asset', entityId: id, oldValues: { status: asset.status }, newValues: { status: 'DISPOSED', ...dto } },
+        {
+          actorId: user.id,
+          action: 'asset.dispose',
+          entityType: 'asset',
+          entityId: id,
+          oldValues: { status: asset.status },
+          newValues: { status: 'DISPOSED', ...dto },
+        },
         tx,
       );
     });
@@ -414,7 +498,10 @@ export class AssetsService {
   async reportLost(id: string, dto: ReportLostDto, user: AuthUser) {
     const asset = await this.findVisible(id, user);
     const active = asset.assignments[0];
-    if (dataScope(user, 'asset') !== 'all' && (!user.employeeId || active?.employeeId !== user.employeeId)) {
+    if (
+      dataScope(user, 'asset') !== 'all' &&
+      (!user.employeeId || active?.employeeId !== user.employeeId)
+    ) {
       throw Errors.forbidden('You can only report assets assigned to you as lost');
     }
     this.assertTransition(asset.status, 'LOST');
@@ -423,18 +510,35 @@ export class AssetsService {
       if (active) {
         await tx.assetAssignment.update({
           where: { id: active.id },
-          data: { status: 'RETURNED', returnedAt: new Date(), returnedById: user.id, returnNotes: `Reported lost: ${dto.notes}` },
+          data: {
+            status: 'RETURNED',
+            returnedAt: new Date(),
+            returnedById: user.id,
+            returnNotes: `Reported lost: ${dto.notes}`,
+          },
         });
         await tx.accessoryAssignment.updateMany({
           where: { assetAssignmentId: active.id, status: 'ACTIVE' },
-          data: { status: 'RETURNED', returnedAt: new Date(), returnedById: user.id, notes: 'Reported lost with asset' },
+          data: {
+            status: 'RETURNED',
+            returnedAt: new Date(),
+            returnedById: user.id,
+            notes: 'Reported lost with asset',
+          },
         });
       }
       await tx.maintenance.updateMany({
         where: { assetId: id, ...OPEN_MAINTENANCE },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), resolutionNotes: 'Cancelled: asset reported lost' },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          resolutionNotes: 'Cancelled: asset reported lost',
+        },
       });
-      await this.setStatus(tx, id, asset.status, 'LOST', { lostAt: new Date(), updatedById: user.id });
+      await this.setStatus(tx, id, asset.status, 'LOST', {
+        lostAt: new Date(),
+        updatedById: user.id,
+      });
       await this.history.record(tx, {
         assetId: id,
         action: 'REPORTED_LOST',
@@ -456,45 +560,102 @@ export class AssetsService {
         },
       });
       await this.activity.record(
-        { actorId: user.id, action: 'asset.report_lost', entityType: 'asset', entityId: id, oldValues: { status: asset.status }, newValues: { status: 'LOST', notes: dto.notes, ticketId: created.id } },
+        {
+          actorId: user.id,
+          action: 'asset.report_lost',
+          entityType: 'asset',
+          entityId: id,
+          oldValues: { status: asset.status },
+          newValues: { status: 'LOST', notes: dto.notes, ticketId: created.id },
+        },
         tx,
       );
       return created;
     });
-    return { asset: await this.prisma.asset.findUniqueOrThrow({ where: { id } }), ticketId: ticket.id, ticketNumber: ticket.number };
+    return {
+      asset: await this.prisma.asset.findUniqueOrThrow({ where: { id } }),
+      ticketId: ticket.id,
+      ticketNumber: ticket.number,
+    };
   }
 
   /** Conditional status update — fails if another request changed the status first. */
-  async setStatus(db: Db, id: string, from: AssetStatus, to: AssetStatus, data: Prisma.AssetUncheckedUpdateManyInput = {}) {
-    const result = await db.asset.updateMany({ where: { id, status: from, deletedAt: null }, data: { ...data, status: to } });
-    if (result.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'The asset was changed by someone else. Reload and try again.');
+  async setStatus(
+    db: Db,
+    id: string,
+    from: AssetStatus,
+    to: AssetStatus,
+    data: Prisma.AssetUncheckedUpdateManyInput = {},
+  ) {
+    const result = await db.asset.updateMany({
+      where: { id, status: from, deletedAt: null },
+      data: { ...data, status: to },
+    });
+    if (result.count !== 1)
+      throw Errors.conflict(
+        'CONCURRENT_UPDATE',
+        'The asset was changed by someone else. Reload and try again.',
+      );
   }
 
   assertTransition(from: AssetStatus, to: AssetStatus): void {
-    if (!canTransition(from, to)) throw Errors.invalidState(`An asset that is ${from} cannot become ${to}`);
+    if (!canTransition(from, to))
+      throw Errors.invalidState(`An asset that is ${from} cannot become ${to}`);
   }
 
   async nextAssetTag(db: Db, prefix: string): Promise<string> {
     for (let attempt = 0; attempt < 20; attempt++) {
-      const [{ nextval }] = await db.$queryRaw<{ nextval: bigint }[]>`SELECT nextval('asset_tag_seq')`;
+      const [{ nextval }] = await db.$queryRaw<
+        { nextval: bigint }[]
+      >`SELECT nextval('asset_tag_seq')`;
       const tag = `${prefix}-${String(nextval).padStart(6, '0')}`;
-      if (!(await db.asset.findUnique({ where: { assetTag: tag }, select: { id: true } }))) return tag;
+      if (!(await db.asset.findUnique({ where: { assetTag: tag }, select: { id: true } })))
+        return tag;
     }
     throw Errors.conflict('ASSET_TAG_EXHAUSTED', 'Could not generate a unique asset tag');
   }
 
   private assertWarrantyDates(start?: Date, end?: Date): void {
-    if (start && end && end < start) throw Errors.badRequest('Warranty end date must be after the start date', 'warrantyEndDate');
+    if (start && end && end < start)
+      throw Errors.badRequest('Warranty end date must be after the start date', 'warrantyEndDate');
   }
 
   private async assertReferences(dto: Partial<Omit<CreateAssetDto, 'status'>>): Promise<void> {
-    const checks: [string, keyof Omit<CreateAssetDto, 'status'>, (id: string) => Promise<unknown>][] = [
-      ['Asset type', 'assetTypeId', (id) => this.prisma.assetType.findFirst({ where: { id, isActive: true } })],
-      ['Location', 'locationId', (id) => this.prisma.location.findFirst({ where: { id, deletedAt: null } })],
-      ['Department', 'departmentId', (id) => this.prisma.department.findFirst({ where: { id, deletedAt: null } })],
-      ['Purchase', 'purchaseId', (id) => this.prisma.purchase.findFirst({ where: { id, deletedAt: null } })],
-      ['Vendor', 'vendorId', (id) => this.prisma.vendor.findFirst({ where: { id, deletedAt: null } })],
-      ['Warranty provider', 'warrantyProviderId', (id) => this.prisma.vendor.findFirst({ where: { id, deletedAt: null } })],
+    const checks: [
+      string,
+      keyof Omit<CreateAssetDto, 'status'>,
+      (id: string) => Promise<unknown>,
+    ][] = [
+      [
+        'Asset type',
+        'assetTypeId',
+        (id) => this.prisma.assetType.findFirst({ where: { id, isActive: true } }),
+      ],
+      [
+        'Location',
+        'locationId',
+        (id) => this.prisma.location.findFirst({ where: { id, deletedAt: null } }),
+      ],
+      [
+        'Department',
+        'departmentId',
+        (id) => this.prisma.department.findFirst({ where: { id, deletedAt: null } }),
+      ],
+      [
+        'Purchase',
+        'purchaseId',
+        (id) => this.prisma.purchase.findFirst({ where: { id, deletedAt: null } }),
+      ],
+      [
+        'Vendor',
+        'vendorId',
+        (id) => this.prisma.vendor.findFirst({ where: { id, deletedAt: null } }),
+      ],
+      [
+        'Warranty provider',
+        'warrantyProviderId',
+        (id) => this.prisma.vendor.findFirst({ where: { id, deletedAt: null } }),
+      ],
     ];
     for (const [name, field, find] of checks) {
       const id = dto[field] as string | undefined;

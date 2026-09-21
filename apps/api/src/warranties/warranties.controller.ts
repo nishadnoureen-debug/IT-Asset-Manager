@@ -2,7 +2,18 @@ import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Query } from '@nest
 import { ApiTags } from '@nestjs/swagger';
 import { Prisma } from '@prisma/client';
 import { Type } from 'class-transformer';
-import { IsDate, IsIn, IsInt, IsOptional, IsString, IsUUID, Max, MaxLength, Min, ValidateIf } from 'class-validator';
+import {
+  IsDate,
+  IsIn,
+  IsInt,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Max,
+  MaxLength,
+  Min,
+  ValidateIf,
+} from 'class-validator';
 import { ActivityLogService, diff } from '../activity-logs/activity-log.service';
 import { AssetHistoryService } from '../assets/asset-history.service';
 import { AssetsService } from '../assets/assets.service';
@@ -10,22 +21,35 @@ import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
-import { addDays, paginate, resolveOrderBy, searchFilter, startOfDay } from '../common/query/list-query';
+import {
+  addDays,
+  paginate,
+  resolveOrderBy,
+  searchFilter,
+  startOfDay,
+} from '../common/query/list-query';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
 class WarrantyQueryDto extends PaginationQueryDto {
-  @IsOptional() @IsIn(['all', 'active', 'expiring', 'expired']) state: 'all' | 'active' | 'expiring' | 'expired' = 'all';
+  @IsOptional() @IsIn(['all', 'active', 'expiring', 'expired']) state:
+    'all' | 'active' | 'expiring' | 'expired' = 'all';
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365) days?: number;
   @IsOptional() @IsUUID() providerId?: string;
 }
 
 class UpdateWarrantyDto {
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() providerId?: string | null;
-  @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Date) @IsDate() startDate?: Date | null;
+  @IsOptional()
+  @ValidateIf((_, v) => v !== null)
+  @Type(() => Date)
+  @IsDate()
+  startDate?: Date | null;
   @IsOptional() @ValidateIf((_, v) => v !== null) @Type(() => Date) @IsDate() endDate?: Date | null;
-  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(2000) coverage?: string | null;
-  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(128) reference?: string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(2000) coverage?:
+    string | null;
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsString() @MaxLength(128) reference?:
+    string | null;
 }
 
 const warrantySelect = {
@@ -84,7 +108,11 @@ export class WarrantiesController {
     };
     const [active, expiring, expired, none] = await Promise.all([
       this.prisma.asset.count({ where: { AND: [base, { warrantyEndDate: { gte: today } }] } }),
-      this.prisma.asset.count({ where: { AND: [base, { warrantyEndDate: { gte: today, lte: addDays(today, warrantyAlertDays) } }] } }),
+      this.prisma.asset.count({
+        where: {
+          AND: [base, { warrantyEndDate: { gte: today, lte: addDays(today, warrantyAlertDays) } }],
+        },
+      }),
       this.prisma.asset.count({ where: { AND: [base, { warrantyEndDate: { lt: today } }] } }),
       this.prisma.asset.count({ where: { AND: [base, { warrantyEndDate: null }] } }),
     ]);
@@ -92,7 +120,13 @@ export class WarrantiesController {
   }
 
   @Get('assets/:id/warranty')
-  @RequirePermissions('warranty.view', 'warranty.edit', 'asset.view', 'asset.view_department', 'asset.view_own')
+  @RequirePermissions(
+    'warranty.view',
+    'warranty.edit',
+    'asset.view',
+    'asset.view_department',
+    'asset.view_own',
+  )
   async get(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     await this.assets.findVisible(id, user);
     return this.prisma.asset.findUniqueOrThrow({ where: { id }, select: warrantySelect });
@@ -100,9 +134,16 @@ export class WarrantiesController {
 
   @Patch('assets/:id/warranty')
   @RequirePermissions('warranty.edit')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateWarrantyDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateWarrantyDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const asset = await this.assets.findVisible(id, user);
-    if (dto.providerId && !(await this.prisma.vendor.findFirst({ where: { id: dto.providerId, deletedAt: null } }))) {
+    if (
+      dto.providerId &&
+      !(await this.prisma.vendor.findFirst({ where: { id: dto.providerId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Warranty provider not found', 'providerId');
     }
     const next = {
@@ -112,9 +153,11 @@ export class WarrantiesController {
       warrantyCoverage: dto.coverage,
       warrantyReference: dto.reference,
     };
-    const start = next.warrantyStartDate === undefined ? asset.warrantyStartDate : next.warrantyStartDate;
+    const start =
+      next.warrantyStartDate === undefined ? asset.warrantyStartDate : next.warrantyStartDate;
     const end = next.warrantyEndDate === undefined ? asset.warrantyEndDate : next.warrantyEndDate;
-    if (start && end && end < start) throw Errors.badRequest('Warranty end date must be after the start date', 'endDate');
+    if (start && end && end < start)
+      throw Errors.badRequest('Warranty end date must be after the start date', 'endDate');
 
     const changes = diff(asset as unknown as Record<string, unknown>, next);
     if (changes) {
@@ -124,9 +167,20 @@ export class WarrantiesController {
           assetId: id,
           action: 'WARRANTY_UPDATED',
           performedById: user.id,
-          description: end ? `Warranty until ${end.toISOString().slice(0, 10)}` : 'Warranty cleared',
+          description: end
+            ? `Warranty until ${end.toISOString().slice(0, 10)}`
+            : 'Warranty cleared',
         });
-        await this.activity.record({ actorId: user.id, action: 'warranty.update', entityType: 'asset', entityId: id, ...changes }, tx);
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: 'warranty.update',
+            entityType: 'asset',
+            entityId: id,
+            ...changes,
+          },
+          tx,
+        );
       });
     }
     return this.get(id, user);
@@ -146,7 +200,11 @@ export class WarrantiesController {
         this.assets.scopeOrThrow(user),
         { deletedAt: null, status: { notIn: ['DISPOSED'] }, warrantyProviderId: q.providerId },
         state[q.state],
-        q.search ? { OR: searchFilter(q.search, ['assetTag', 'name', 'serialNumber', 'warrantyReference']) } : {},
+        q.search
+          ? {
+              OR: searchFilter(q.search, ['assetTag', 'name', 'serialNumber', 'warrantyReference']),
+            }
+          : {},
       ],
     };
     return paginate(
@@ -157,7 +215,10 @@ export class WarrantiesController {
           select: warrantySelect,
           orderBy: resolveOrderBy<Prisma.AssetOrderByWithRelationInput>(
             q,
-            { warrantyEndDate: (o) => ({ warrantyEndDate: o }), assetTag: (o) => ({ assetTag: o }) },
+            {
+              warrantyEndDate: (o) => ({ warrantyEndDate: o }),
+              assetTag: (o) => ({ assetTag: o }),
+            },
             { warrantyEndDate: q.state === 'expired' ? 'desc' : 'asc' },
           ),
           ...page,

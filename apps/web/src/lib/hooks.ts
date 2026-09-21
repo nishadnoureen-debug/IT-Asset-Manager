@@ -1,6 +1,12 @@
 'use client';
 
-import { keepPreviousData, useMutation, useQuery, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryOptions,
+} from '@tanstack/react-query';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, type ApiError, type ApiResult, type Query } from './api-client';
@@ -40,10 +46,14 @@ export function useApiMutation<TBody = unknown, TResult = unknown>(
     onSuccess: () => {
       for (const prefix of invalidate) {
         void qc.invalidateQueries({
-          predicate: (q) => typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith(prefix),
+          predicate: (q) =>
+            typeof q.queryKey[0] === 'string' && (q.queryKey[0] as string).startsWith(prefix),
         });
       }
-      void qc.invalidateQueries({ predicate: (q) => q.queryKey[0] === '/dashboard' || q.queryKey[0] === '/notifications/unread-count' });
+      void qc.invalidateQueries({
+        predicate: (q) =>
+          q.queryKey[0] === '/dashboard' || q.queryKey[0] === '/notifications/unread-count',
+      });
     },
   });
 }
@@ -66,7 +76,12 @@ export function useListParams<T extends Record<string, string>>(defaults: T) {
     (patch: Partial<Record<keyof T | 'page', string | undefined>>) => {
       const next = new URLSearchParams(searchParams.toString());
       for (const [key, value] of Object.entries(patch)) {
-        if (value === undefined || value === '' || value === (defaults as Record<string, string>)[key]) next.delete(key);
+        if (
+          value === undefined ||
+          value === '' ||
+          value === (defaults as Record<string, string>)[key]
+        )
+          next.delete(key);
         else next.set(key, value);
       }
       if (!('page' in patch)) next.delete('page');

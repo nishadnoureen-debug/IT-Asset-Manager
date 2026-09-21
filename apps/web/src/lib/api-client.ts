@@ -87,7 +87,16 @@ export const session = {
 };
 
 async function send(path: string, options: RequestOptions, isBinary: boolean): Promise<Response> {
-  const { query, body, baseUrl = API_BASE_URL, fetchImpl = fetch, headers, anonymous, allowErrorStatus: _a, ...init } = options;
+  const {
+    query,
+    body,
+    baseUrl = API_BASE_URL,
+    fetchImpl = fetch,
+    headers,
+    anonymous,
+    allowErrorStatus: _a,
+    ...init
+  } = options;
   const isForm = typeof FormData !== 'undefined' && body instanceof FormData;
   const token = anonymous ? null : accessToken;
   try {
@@ -110,14 +119,23 @@ async function send(path: string, options: RequestOptions, isBinary: boolean): P
 async function parseError(response: Response): Promise<ApiError> {
   try {
     const payload = (await response.json()) as ApiResponse<unknown>;
-    if (payload && payload.success === false) return ApiError.fromBody(response.status, payload.error);
+    if (payload && payload.success === false)
+      return ApiError.fromBody(response.status, payload.error);
   } catch {
     /* not JSON */
   }
-  return new ApiError(response.status, 'INVALID_RESPONSE', `Unexpected response (HTTP ${response.status})`);
+  return new ApiError(
+    response.status,
+    'INVALID_RESPONSE',
+    `Unexpected response (HTTP ${response.status})`,
+  );
 }
 
-async function withRefresh(path: string, options: RequestOptions, isBinary: boolean): Promise<Response> {
+async function withRefresh(
+  path: string,
+  options: RequestOptions,
+  isBinary: boolean,
+): Promise<Response> {
   let response = await send(path, options, isBinary);
   if (response.status === 401 && !options.anonymous && refreshHandler) {
     if (await session.refresh()) response = await send(path, options, isBinary);
@@ -129,7 +147,10 @@ async function withRefresh(path: string, options: RequestOptions, isBinary: bool
  * Fetch wrapper for /api/v1: attaches the access token, refreshes it once on 401, unwraps the response
  * envelope and throws `ApiError`.
  */
-export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<ApiResult<T>> {
+export async function apiRequest<T>(
+  path: string,
+  options: RequestOptions = {},
+): Promise<ApiResult<T>> {
   const response = await withRefresh(path, options, false);
 
   let payload: ApiResponse<T> | undefined;
@@ -143,13 +164,20 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     throw ApiError.fromBody(response.status, payload.error);
   }
   if (!payload || (!response.ok && !options.allowErrorStatus)) {
-    throw new ApiError(response.status, 'INVALID_RESPONSE', `Unexpected response (HTTP ${response.status})`);
+    throw new ApiError(
+      response.status,
+      'INVALID_RESPONSE',
+      `Unexpected response (HTTP ${response.status})`,
+    );
   }
   return { data: payload.data, meta: payload.meta, status: response.status };
 }
 
 /** Download a binary response (PDF/CSV/XLSX/PNG) and save it in the browser. */
-export async function downloadFile(path: string, options: RequestOptions & { fileName?: string } = {}): Promise<void> {
+export async function downloadFile(
+  path: string,
+  options: RequestOptions & { fileName?: string } = {},
+): Promise<void> {
   const response = await withRefresh(path, { ...options, method: options.method ?? 'GET' }, true);
   if (!response.ok) throw await parseError(response);
   const blob = await response.blob();
@@ -174,12 +202,14 @@ export async function fetchObjectUrl(path: string): Promise<string> {
 }
 
 export const api = {
-  get: <T>(path: string, options?: RequestOptions) => apiRequest<T>(path, { ...options, method: 'GET' }),
+  get: <T>(path: string, options?: RequestOptions) =>
+    apiRequest<T>(path, { ...options, method: 'GET' }),
   post: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: 'POST', body }),
   patch: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: 'PATCH', body }),
   put: <T>(path: string, body?: unknown, options?: RequestOptions) =>
     apiRequest<T>(path, { ...options, method: 'PUT', body }),
-  delete: <T>(path: string, options?: RequestOptions) => apiRequest<T>(path, { ...options, method: 'DELETE' }),
+  delete: <T>(path: string, options?: RequestOptions) =>
+    apiRequest<T>(path, { ...options, method: 'DELETE' }),
 };

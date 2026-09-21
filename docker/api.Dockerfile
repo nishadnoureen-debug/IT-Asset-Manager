@@ -1,5 +1,7 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
+# Prisma's query engine needs OpenSSL on Alpine.
+RUN apk add --no-cache openssl
 WORKDIR /repo
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
@@ -14,9 +16,11 @@ RUN npm run build -w @itam/shared \
  && npm run build -w @itam/api
 
 FROM node:22-alpine AS runtime
+RUN apk add --no-cache openssl
 ENV NODE_ENV=production
 WORKDIR /repo
-RUN addgroup -S app && adduser -S app -G app
+RUN addgroup -S app && adduser -S app -G app \
+ && mkdir -p /data/storage && chown app:app /data/storage
 COPY --from=build --chown=app:app /repo/node_modules ./node_modules
 COPY --from=build --chown=app:app /repo/packages/shared/package.json ./packages/shared/package.json
 COPY --from=build --chown=app:app /repo/packages/shared/dist ./packages/shared/dist
@@ -25,6 +29,8 @@ COPY --from=build --chown=app:app /repo/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=app:app /repo/apps/api/prisma ./apps/api/prisma
 USER app
 WORKDIR /repo/apps/api
+ENV STORAGE_LOCAL_DIR=/data/storage
+VOLUME ["/data/storage"]
 EXPOSE 4000
 HEALTHCHECK --interval=30s --timeout=5s CMD wget -qO- http://localhost:4000/api/v1/health || exit 1
 # Apply pending migrations, sync reference data (idempotent), then start.

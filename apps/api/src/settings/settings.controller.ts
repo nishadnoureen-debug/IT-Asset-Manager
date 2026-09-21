@@ -1,7 +1,16 @@
 import { Body, Controller, Get, Patch } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Matches, Max, MaxLength, Min, MinLength } from 'class-validator';
+import {
+  IsInt,
+  IsOptional,
+  IsString,
+  Matches,
+  Max,
+  MaxLength,
+  Min,
+  MinLength,
+} from 'class-validator';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { SettingsService } from './settings.service';
@@ -15,7 +24,9 @@ class UpdateSettingsDto {
   defaultCurrency?: string;
 
   @IsOptional()
-  @Matches(/^[A-Z0-9]{1,10}$/, { message: 'assetTagPrefix must be 1-10 uppercase letters or digits' })
+  @Matches(/^[A-Z0-9]{1,10}$/, {
+    message: 'assetTagPrefix must be 1-10 uppercase letters or digits',
+  })
   assetTagPrefix?: string;
 
   @IsOptional() @IsInt() @Min(1) @Max(365) warrantyAlertDays?: number;

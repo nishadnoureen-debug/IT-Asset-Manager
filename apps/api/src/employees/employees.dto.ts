@@ -1,15 +1,28 @@
 import { PartialType } from '@nestjs/swagger';
 import { EmployeeStatus } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsDate, IsEmail, IsEnum, IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import {
+  IsDate,
+  IsEmail,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Matches,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { trim } from '../assets/assets.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 
-const lower = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+const lower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class CreateEmployeeDto {
   @Transform(({ value }) => (typeof value === 'string' ? value.trim().toUpperCase() : value))
-  @Matches(/^[A-Z0-9][A-Z0-9-]{0,31}$/, { message: 'employeeNumber must be letters, digits or dashes' })
+  @Matches(/^[A-Z0-9][A-Z0-9-]{0,31}$/, {
+    message: 'employeeNumber must be letters, digits or dashes',
+  })
   employeeNumber!: string;
 
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(80) firstName!: string;

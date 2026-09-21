@@ -19,25 +19,39 @@ import {
 } from 'class-validator';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 
-export const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
+export const trim = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim() : value;
 export const upper = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toUpperCase() : value;
-export const emptyToUndefined = ({ value }: { value: unknown }) => (value === '' ? undefined : value);
+export const emptyToUndefined = ({ value }: { value: unknown }) =>
+  value === '' ? undefined : value;
 export const csv = ({ value }: { value: unknown }) =>
-  typeof value === 'string' ? value.split(',').map((v) => v.trim()).filter(Boolean) : value;
+  typeof value === 'string'
+    ? value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
+    : value;
 
 const INITIAL_STATUSES = ['PURCHASED', 'REGISTERED', 'IN_STOCK'] as const;
 
 export class CreateAssetDto {
   @IsOptional()
   @Transform(upper)
-  @Matches(/^[A-Z0-9][A-Z0-9-]{1,31}$/, { message: 'assetTag must be 2-32 letters, digits or dashes' })
+  @Matches(/^[A-Z0-9][A-Z0-9-]{1,31}$/, {
+    message: 'assetTag must be 2-32 letters, digits or dashes',
+  })
   assetTag?: string;
 
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) name!: string;
   @IsUUID() assetTypeId!: string;
 
-  @IsOptional() @Transform(trim) @Transform(emptyToUndefined) @IsString() @MaxLength(128) serialNumber?: string;
+  @IsOptional()
+  @Transform(trim)
+  @Transform(emptyToUndefined)
+  @IsString()
+  @MaxLength(128)
+  serialNumber?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(128) serviceTag?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(80) brand?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(120) model?: string;
@@ -51,7 +65,12 @@ export class CreateAssetDto {
   @IsOptional() @IsUUID() purchaseId?: string;
   @IsOptional() @IsUUID() vendorId?: string;
   @IsOptional() @Type(() => Date) @IsDate() purchaseDate?: Date;
-  @IsOptional() @Type(() => Number) @IsNumber({ maxDecimalPlaces: 2 }) @Min(0) @Max(999_999_999_999) purchaseCost?: number;
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @Min(0)
+  @Max(999_999_999_999)
+  purchaseCost?: number;
   @IsOptional() @Transform(upper) @Matches(/^[A-Z]{3}$/) currency?: string;
 
   @IsOptional() @IsUUID() warrantyProviderId?: string;
@@ -78,7 +97,8 @@ export class AssetQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() departmentId?: string;
   @IsOptional() @IsUUID() employeeId?: string;
   @IsOptional() @IsUUID() purchaseId?: string;
-  @IsOptional() @IsIn(['active', 'expiring', 'expired', 'none']) warranty?: 'active' | 'expiring' | 'expired' | 'none';
+  @IsOptional() @IsIn(['active', 'expiring', 'expired', 'none']) warranty?:
+    'active' | 'expiring' | 'expired' | 'none';
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(365) warrantyDays?: number;
 }
 

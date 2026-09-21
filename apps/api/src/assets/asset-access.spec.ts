@@ -23,8 +23,18 @@ describe('lifecycle transitions', () => {
   });
 
   it('follows the spec path Purchased → … → Disposed', () => {
-    const path = ['PURCHASED', 'REGISTERED', 'IN_STOCK', 'ASSIGNED', 'IN_REPAIR', 'AVAILABLE', 'RETIRED', 'DISPOSED'] as const;
-    for (let i = 0; i < path.length - 1; i++) expect(canTransition(path[i], path[i + 1])).toBe(true);
+    const path = [
+      'PURCHASED',
+      'REGISTERED',
+      'IN_STOCK',
+      'ASSIGNED',
+      'IN_REPAIR',
+      'AVAILABLE',
+      'RETIRED',
+      'DISPOSED',
+    ] as const;
+    for (let i = 0; i < path.length - 1; i++)
+      expect(canTransition(path[i], path[i + 1])).toBe(true);
   });
 
   it('requires retiring before disposal of a normal asset', () => {
@@ -71,12 +81,16 @@ describe('allowedAssetActions', () => {
 
   it('offers audit scanning only while an audit is running', () => {
     expect(allowedAssetActions(user('AUDITOR'), { status: 'IN_STOCK', ...idle })).toEqual(['view']);
-    expect(allowedAssetActions(user('AUDITOR'), { status: 'IN_STOCK', ...idle, auditInProgress: true })).toEqual(['view', 'audit']);
+    expect(
+      allowedAssetActions(user('AUDITOR'), { status: 'IN_STOCK', ...idle, auditInProgress: true }),
+    ).toEqual(['view', 'audit']);
   });
 
   it('blocks maintenance when one is already open or the asset is gone', () => {
     const tech = user('IT_TECHNICIAN');
-    expect(allowedAssetActions(tech, { status: 'IN_STOCK', ...idle, hasOpenMaintenance: true })).not.toContain('maintenance');
+    expect(
+      allowedAssetActions(tech, { status: 'IN_STOCK', ...idle, hasOpenMaintenance: true }),
+    ).not.toContain('maintenance');
     expect(allowedAssetActions(tech, { status: 'LOST', ...idle })).not.toContain('maintenance');
   });
 });

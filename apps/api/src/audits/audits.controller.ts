@@ -1,8 +1,27 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { AssetCondition, AuditItemResult, AuditSessionStatus, Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
-import { IsDate, IsEnum, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  IsDate,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import { ActivityLogService, diff } from '../activity-logs/activity-log.service';
 import { AssetHistoryService } from '../assets/asset-history.service';
 import { trim } from '../assets/assets.dto';
@@ -89,7 +108,10 @@ export class AuditsController {
   @Get()
   @RequirePermissions('audit.view')
   list(@Query() q: AuditQueryDto) {
-    const where: Prisma.AuditSessionWhereInput = { status: q.status, OR: searchFilter(q.search, ['name', 'notes']) };
+    const where: Prisma.AuditSessionWhereInput = {
+      status: q.status,
+      OR: searchFilter(q.search, ['name', 'notes']),
+    };
     return paginate(
       q,
       async (page) => {
@@ -98,7 +120,11 @@ export class AuditsController {
           include: sessionInclude,
           orderBy: resolveOrderBy<Prisma.AuditSessionOrderByWithRelationInput>(
             q,
-            { createdAt: (o) => ({ createdAt: o }), scheduledAt: (o) => ({ scheduledAt: { sort: o, nulls: 'last' } }), number: (o) => ({ number: o }) },
+            {
+              createdAt: (o) => ({ createdAt: o }),
+              scheduledAt: (o) => ({ scheduledAt: { sort: o, nulls: 'last' } }),
+              number: (o) => ({ number: o }),
+            },
             { createdAt: 'desc' },
           ),
           ...page,
@@ -113,7 +139,10 @@ export class AuditsController {
   @Get(':id')
   @RequirePermissions('audit.view')
   async get(@Param('id', ParseUUIDPipe) id: string) {
-    const session = await this.prisma.auditSession.findUnique({ where: { id }, include: sessionInclude });
+    const session = await this.prisma.auditSession.findUnique({
+      where: { id },
+      include: sessionInclude,
+    });
     if (!session) throw Errors.notFound('Audit');
     const summary = (await this.summaries([id])).get(id) ?? emptySummary();
     return { ...session, summary };
@@ -125,7 +154,16 @@ export class AuditsController {
     await this.assertScope(dto);
     const session = await this.prisma.$transaction(async (tx) => {
       const created = await tx.auditSession.create({ data: { ...dto, createdById: user.id } });
-      await this.activity.record({ actorId: user.id, action: 'audit.create', entityType: 'audit_session', entityId: created.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'audit.create',
+          entityType: 'audit_session',
+          entityId: created.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return created;
     });
     return this.get(session.id);
@@ -133,18 +171,36 @@ export class AuditsController {
 
   @Patch(':id')
   @RequirePermissions('audit.create')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAuditDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAuditDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.auditSession.findUnique({ where: { id } });
     if (!existing) throw Errors.notFound('Audit');
     const scopeChanged = dto.locationId !== undefined || dto.departmentId !== undefined;
-    if (existing.status !== 'DRAFT' && scopeChanged) throw Errors.invalidState('Scope can only be changed before the audit starts');
-    if (existing.status === 'CLOSED' || existing.status === 'CANCELLED') throw Errors.invalidState('Closed audits cannot be edited');
+    if (existing.status !== 'DRAFT' && scopeChanged)
+      throw Errors.invalidState('Scope can only be changed before the audit starts');
+    if (existing.status === 'CLOSED' || existing.status === 'CANCELLED')
+      throw Errors.invalidState('Closed audits cannot be edited');
     await this.assertScope(dto);
-    const changes = diff(existing as unknown as Record<string, unknown>, dto as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      dto as Record<string, unknown>,
+    );
     if (changes) {
       await this.prisma.$transaction(async (tx) => {
         await tx.auditSession.update({ where: { id }, data: dto });
-        await this.activity.record({ actorId: user.id, action: 'audit.update', entityType: 'audit_session', entityId: id, ...changes }, tx);
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: 'audit.update',
+            entityType: 'audit_session',
+            entityId: id,
+            ...changes,
+          },
+          tx,
+        );
       });
     }
     return this.get(id);
@@ -159,7 +215,9 @@ export class AuditsController {
     if (!session) throw Errors.notFound('Audit');
     if (session.status !== 'DRAFT') throw Errors.invalidState('Only draft audits can be started');
 
-    const locationIds = session.locationId ? await this.descendantLocations(session.locationId) : undefined;
+    const locationIds = session.locationId
+      ? await this.descendantLocations(session.locationId)
+      : undefined;
     const expected = await this.prisma.asset.findMany({
       where: {
         deletedAt: null,
@@ -175,14 +233,29 @@ export class AuditsController {
         where: { id, status: 'DRAFT' },
         data: { status: 'IN_PROGRESS', startedAt: new Date() },
       });
-      if (started.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'Audit was already started');
+      if (started.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'Audit was already started');
       if (expected.length) {
         await tx.auditItem.createMany({
-          data: expected.map((a) => ({ auditSessionId: id, assetId: a.id, expected: true, expectedLocationId: a.locationId })),
+          data: expected.map((a) => ({
+            auditSessionId: id,
+            assetId: a.id,
+            expected: true,
+            expectedLocationId: a.locationId,
+          })),
           skipDuplicates: true,
         });
       }
-      await this.activity.record({ actorId: user.id, action: 'audit.start', entityType: 'audit_session', entityId: id, newValues: { expectedAssets: expected.length } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'audit.start',
+          entityType: 'audit_session',
+          entityId: id,
+          newValues: { expectedAssets: expected.length },
+        },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -190,11 +263,21 @@ export class AuditsController {
   @Post(':id/scan')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('audit.perform')
-  async scan(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ScanDto, @CurrentUser() user: AuthUser) {
+  async scan(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ScanDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const session = await this.prisma.auditSession.findUnique({ where: { id } });
     if (!session) throw Errors.notFound('Audit');
-    if (session.status !== 'IN_PROGRESS') throw Errors.invalidState('Scanning is only possible while the audit is in progress');
-    if (dto.observedLocationId && !(await this.prisma.location.findFirst({ where: { id: dto.observedLocationId, deletedAt: null } }))) {
+    if (session.status !== 'IN_PROGRESS')
+      throw Errors.invalidState('Scanning is only possible while the audit is in progress');
+    if (
+      dto.observedLocationId &&
+      !(await this.prisma.location.findFirst({
+        where: { id: dto.observedLocationId, deletedAt: null },
+      }))
+    ) {
       throw Errors.badRequest('Location not found', 'observedLocationId');
     }
 
@@ -204,7 +287,12 @@ export class AuditsController {
         deletedAt: null,
         ...(token
           ? { qrToken: token }
-          : { OR: [{ assetTag: { equals: text, mode: 'insensitive' } }, { serialNumber: { equals: text, mode: 'insensitive' } }] }),
+          : {
+              OR: [
+                { assetTag: { equals: text, mode: 'insensitive' } },
+                { serialNumber: { equals: text, mode: 'insensitive' } },
+              ],
+            }),
       },
       select: { id: true, assetTag: true, locationId: true },
     });
@@ -228,10 +316,17 @@ export class AuditsController {
           include: itemInclude,
         });
       }
-      const existing = await tx.auditItem.findUnique({ where: { auditSessionId_assetId: { auditSessionId: id, assetId: asset.id } } });
+      const existing = await tx.auditItem.findUnique({
+        where: { auditSessionId_assetId: { auditSessionId: id, assetId: asset.id } },
+      });
       const expectedLocationId = existing?.expectedLocationId ?? null;
       let result: AuditItemResult = existing?.expected ? 'FOUND' : 'UNEXPECTED';
-      if (result === 'FOUND' && observedLocationId && expectedLocationId && observedLocationId !== expectedLocationId) {
+      if (
+        result === 'FOUND' &&
+        observedLocationId &&
+        expectedLocationId &&
+        observedLocationId !== expectedLocationId
+      ) {
         result = 'WRONG_LOCATION';
       }
       if (dto.condition === 'DAMAGED') result = 'DAMAGED';
@@ -247,7 +342,10 @@ export class AuditsController {
       };
       const saved = existing
         ? await tx.auditItem.update({ where: { id: existing.id }, data, include: itemInclude })
-        : await tx.auditItem.create({ data: { ...data, auditSessionId: id, assetId: asset.id, expected: false }, include: itemInclude });
+        : await tx.auditItem.create({
+            data: { ...data, auditSessionId: id, assetId: asset.id, expected: false },
+            include: itemInclude,
+          });
       await this.history.record(tx, {
         assetId: asset.id,
         action: 'AUDITED',
@@ -266,11 +364,27 @@ export class AuditsController {
   async complete(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const session = await this.prisma.auditSession.findUnique({ where: { id } });
     if (!session) throw Errors.notFound('Audit');
-    if (session.status !== 'IN_PROGRESS') throw Errors.invalidState('Only audits in progress can be completed');
+    if (session.status !== 'IN_PROGRESS')
+      throw Errors.invalidState('Only audits in progress can be completed');
     await this.prisma.$transaction(async (tx) => {
-      const missing = await tx.auditItem.updateMany({ where: { auditSessionId: id, result: 'PENDING' }, data: { result: 'MISSING' } });
-      await tx.auditSession.update({ where: { id }, data: { status: 'IN_REVIEW', completedAt: new Date(), completedById: user.id } });
-      await this.activity.record({ actorId: user.id, action: 'audit.complete', entityType: 'audit_session', entityId: id, newValues: { markedMissing: missing.count } }, tx);
+      const missing = await tx.auditItem.updateMany({
+        where: { auditSessionId: id, result: 'PENDING' },
+        data: { result: 'MISSING' },
+      });
+      await tx.auditSession.update({
+        where: { id },
+        data: { status: 'IN_REVIEW', completedAt: new Date(), completedById: user.id },
+      });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'audit.complete',
+          entityType: 'audit_session',
+          entityId: id,
+          newValues: { markedMissing: missing.count },
+        },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -283,17 +397,33 @@ export class AuditsController {
     @Body() dto: ReviewItemDto,
     @CurrentUser() user: AuthUser,
   ) {
-    const item = await this.prisma.auditItem.findFirst({ where: { id: itemId, auditSessionId: id }, include: { auditSession: true } });
+    const item = await this.prisma.auditItem.findFirst({
+      where: { id: itemId, auditSessionId: id },
+      include: { auditSession: true },
+    });
     if (!item) throw Errors.notFound('Audit item');
-    if (item.auditSession.status !== 'IN_REVIEW') throw Errors.invalidState('Items can be reviewed once the audit is completed');
+    if (item.auditSession.status !== 'IN_REVIEW')
+      throw Errors.invalidState('Items can be reviewed once the audit is completed');
     return this.prisma.$transaction(async (tx) => {
       const saved = await tx.auditItem.update({
         where: { id: itemId },
-        data: { result: dto.result, resolution: dto.resolution, reviewedAt: new Date(), reviewedById: user.id },
+        data: {
+          result: dto.result,
+          resolution: dto.resolution,
+          reviewedAt: new Date(),
+          reviewedById: user.id,
+        },
         include: itemInclude,
       });
       await this.activity.record(
-        { actorId: user.id, action: 'audit.review_item', entityType: 'audit_item', entityId: itemId, oldValues: { result: item.result }, newValues: dto },
+        {
+          actorId: user.id,
+          action: 'audit.review_item',
+          entityType: 'audit_item',
+          entityId: itemId,
+          oldValues: { result: item.result },
+          newValues: dto,
+        },
         tx,
       );
       return saved;
@@ -306,10 +436,17 @@ export class AuditsController {
   async close(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const session = await this.prisma.auditSession.findUnique({ where: { id } });
     if (!session) throw Errors.notFound('Audit');
-    if (session.status !== 'IN_REVIEW') throw Errors.invalidState('Complete the audit before closing it');
+    if (session.status !== 'IN_REVIEW')
+      throw Errors.invalidState('Complete the audit before closing it');
     await this.prisma.$transaction(async (tx) => {
-      await tx.auditSession.update({ where: { id }, data: { status: 'CLOSED', closedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'audit.close', entityType: 'audit_session', entityId: id }, tx);
+      await tx.auditSession.update({
+        where: { id },
+        data: { status: 'CLOSED', closedAt: new Date() },
+      });
+      await this.activity.record(
+        { actorId: user.id, action: 'audit.close', entityType: 'audit_session', entityId: id },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -320,10 +457,17 @@ export class AuditsController {
   async cancel(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const session = await this.prisma.auditSession.findUnique({ where: { id } });
     if (!session) throw Errors.notFound('Audit');
-    if (session.status === 'CLOSED' || session.status === 'CANCELLED') throw Errors.invalidState('Audit is already closed');
+    if (session.status === 'CLOSED' || session.status === 'CANCELLED')
+      throw Errors.invalidState('Audit is already closed');
     await this.prisma.$transaction(async (tx) => {
-      await tx.auditSession.update({ where: { id }, data: { status: 'CANCELLED', closedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'audit.cancel', entityType: 'audit_session', entityId: id }, tx);
+      await tx.auditSession.update({
+        where: { id },
+        data: { status: 'CANCELLED', closedAt: new Date() },
+      });
+      await this.activity.record(
+        { actorId: user.id, action: 'audit.cancel', entityType: 'audit_session', entityId: id },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -343,7 +487,10 @@ export class AuditsController {
   @RequirePermissions('audit.view')
   async missing(@Param('id', ParseUUIDPipe) id: string) {
     await this.get(id);
-    return this.prisma.auditItem.findMany({ where: { auditSessionId: id, result: 'MISSING' }, include: itemInclude });
+    return this.prisma.auditItem.findMany({
+      where: { auditSessionId: id, result: 'MISSING' },
+      include: itemInclude,
+    });
   }
 
   @Get(':id/discrepancies')
@@ -385,15 +532,31 @@ export class AuditsController {
   }
 
   private async assertScope(dto: { locationId?: string; departmentId?: string }) {
-    if (dto.locationId && !(await this.prisma.location.findFirst({ where: { id: dto.locationId, deletedAt: null } }))) {
+    if (
+      dto.locationId &&
+      !(await this.prisma.location.findFirst({ where: { id: dto.locationId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Location not found', 'locationId');
     }
-    if (dto.departmentId && !(await this.prisma.department.findFirst({ where: { id: dto.departmentId, deletedAt: null } }))) {
+    if (
+      dto.departmentId &&
+      !(await this.prisma.department.findFirst({
+        where: { id: dto.departmentId, deletedAt: null },
+      }))
+    ) {
       throw Errors.badRequest('Department not found', 'departmentId');
     }
   }
 }
 
 function emptySummary() {
-  return { total: 0, PENDING: 0, FOUND: 0, MISSING: 0, UNEXPECTED: 0, WRONG_LOCATION: 0, DAMAGED: 0 };
+  return {
+    total: 0,
+    PENDING: 0,
+    FOUND: 0,
+    MISSING: 0,
+    UNEXPECTED: 0,
+    WRONG_LOCATION: 0,
+    DAMAGED: 0,
+  };
 }

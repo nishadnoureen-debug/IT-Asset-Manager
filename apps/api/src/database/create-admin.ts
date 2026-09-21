@@ -32,7 +32,8 @@ async function main() {
   if (generated) password = generatePassword();
 
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) throw new Error('Provide --email <address>');
-  if (!PASSWORD_POLICY.pattern.test(password)) throw new Error(`Password policy: ${PASSWORD_POLICY.description}`);
+  if (!PASSWORD_POLICY.pattern.test(password))
+    throw new Error(`Password policy: ${PASSWORD_POLICY.description}`);
 
   const prisma = new PrismaClient();
   try {
@@ -49,7 +50,14 @@ async function main() {
     const user = existing
       ? await prisma.user.update({
           where: { id: existing.id },
-          data: { passwordHash, passwordChangedAt: new Date(), status: 'ACTIVE', failedLoginAttempts: 0, lockedUntil: null, deletedAt: null },
+          data: {
+            passwordHash,
+            passwordChangedAt: new Date(),
+            status: 'ACTIVE',
+            failedLoginAttempts: 0,
+            lockedUntil: null,
+            deletedAt: null,
+          },
         })
       : await prisma.user.create({
           data: { email, displayName, passwordHash, passwordChangedAt: new Date() },
@@ -59,9 +67,19 @@ async function main() {
       create: { userId: user.id, roleId: role.id },
       update: {},
     });
-    if (existing) await prisma.refreshToken.updateMany({ where: { userId: user.id, revokedAt: null }, data: { revokedAt: new Date() } });
+    if (existing)
+      await prisma.refreshToken.updateMany({
+        where: { userId: user.id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
     await prisma.activityLog.create({
-      data: { actorId: user.id, action: existing ? 'user.bootstrap_reset' : 'user.bootstrap_create', entityType: 'user', entityId: user.id, newValues: { email, via: 'cli' } },
+      data: {
+        actorId: user.id,
+        action: existing ? 'user.bootstrap_reset' : 'user.bootstrap_create',
+        entityType: 'user',
+        entityId: user.id,
+        newValues: { email, via: 'cli' },
+      },
     });
 
     console.log(`${existing ? 'Password reset for' : 'Created Super Admin'} ${email}`);

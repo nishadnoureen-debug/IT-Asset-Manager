@@ -38,14 +38,20 @@ export interface ReportFilters {
 }
 
 const MAX_ROWS = 20_000;
-const num = (v: Prisma.Decimal | number | null | undefined) => (v === null || v === undefined ? null : Number(v));
-const fullName = (e?: { firstName: string; lastName: string } | null) => (e ? `${e.firstName} ${e.lastName}` : null);
+const num = (v: Prisma.Decimal | number | null | undefined) =>
+  v === null || v === undefined ? null : Number(v);
+const fullName = (e?: { firstName: string; lastName: string } | null) =>
+  e ? `${e.firstName} ${e.lastName}` : null;
 
 interface Definition {
   title: string;
   permissions: PermissionKey[];
   columns: ReportColumn[];
-  build: (f: ReportFilters, user: AuthUser, take: number) => Promise<{ rows: Record<string, CellValue>[]; total: number }>;
+  build: (
+    f: ReportFilters,
+    user: AuthUser,
+    take: number,
+  ) => Promise<{ rows: Record<string, CellValue>[]; total: number }>;
 }
 
 @Injectable()
@@ -87,7 +93,10 @@ export class ReportsService {
                 assetType: true,
                 location: true,
                 department: true,
-                assignments: { where: { status: 'ACTIVE' }, include: { employee: true, location: true } },
+                assignments: {
+                  where: { status: 'ACTIVE' },
+                  include: { employee: true, location: true },
+                },
               },
             }),
             this.prisma.asset.count({ where }),
@@ -142,7 +151,14 @@ export class ReportsService {
             employee: f.departmentId ? { departmentId: f.departmentId } : undefined,
             AND:
               scope === 'department'
-                ? [{ OR: [{ employee: { departmentId: user.departmentId ?? NO_MATCH_ID } }, { asset: { departmentId: user.departmentId ?? NO_MATCH_ID } }] }]
+                ? [
+                    {
+                      OR: [
+                        { employee: { departmentId: user.departmentId ?? NO_MATCH_ID } },
+                        { asset: { departmentId: user.departmentId ?? NO_MATCH_ID } },
+                      ],
+                    },
+                  ]
                 : undefined,
           };
           const [items, total] = await Promise.all([
@@ -168,7 +184,9 @@ export class ReportsService {
               expectedReturnAt: a.expectedReturnAt,
               returnedAt: a.returnedAt,
               conditionOut: label('assetCondition', a.conditionAtAssignment),
-              conditionIn: a.conditionAtReturn ? label('assetCondition', a.conditionAtReturn) : null,
+              conditionIn: a.conditionAtReturn
+                ? label('assetCondition', a.conditionAtReturn)
+                : null,
               acknowledged: !!a.acknowledgedAt,
             })),
           };
@@ -196,7 +214,12 @@ export class ReportsService {
             purchaseDate: f.from || f.to ? { gte: f.from, lte: f.to } : undefined,
           };
           const [items, total] = await Promise.all([
-            this.prisma.purchase.findMany({ where, take, orderBy: { purchaseDate: 'desc' }, include: { vendor: true, _count: { select: { assets: true } } } }),
+            this.prisma.purchase.findMany({
+              where,
+              take,
+              orderBy: { purchaseDate: 'desc' },
+              include: { vendor: true, _count: { select: { assets: true } } },
+            }),
             this.prisma.purchase.count({ where }),
           ]);
           return {
@@ -242,7 +265,12 @@ export class ReportsService {
             createdAt: f.from || f.to ? { gte: f.from, lte: f.to } : undefined,
           };
           const [items, total] = await Promise.all([
-            this.prisma.maintenance.findMany({ where, take, orderBy: { createdAt: 'desc' }, include: { asset: true, technician: true, vendor: true } }),
+            this.prisma.maintenance.findMany({
+              where,
+              take,
+              orderBy: { createdAt: 'desc' },
+              include: { asset: true, technician: true, vendor: true },
+            }),
             this.prisma.maintenance.count({ where }),
           ]);
           return {
@@ -285,11 +313,20 @@ export class ReportsService {
           const where: Prisma.AssetWhereInput = {
             AND: [
               this.assetWhere({ ...f, status: undefined }, user),
-              { warrantyEndDate: f.days ? { gte: today, lte: addDays(today, f.days) } : { not: null } },
+              {
+                warrantyEndDate: f.days
+                  ? { gte: today, lte: addDays(today, f.days) }
+                  : { not: null },
+              },
             ],
           };
           const [items, total] = await Promise.all([
-            this.prisma.asset.findMany({ where, take, orderBy: { warrantyEndDate: 'asc' }, include: { warrantyProvider: true } }),
+            this.prisma.asset.findMany({
+              where,
+              take,
+              orderBy: { warrantyEndDate: 'asc' },
+              include: { warrantyProvider: true },
+            }),
             this.prisma.asset.count({ where }),
           ]);
           const { warrantyAlertDays } = await this.settings.get();
@@ -333,14 +370,20 @@ export class ReportsService {
           const where: Prisma.SoftwareLicenseWhereInput = {
             deletedAt: null,
             vendorId: f.vendorId,
-            expiryDate: f.days ? { gte: startOfDay(), lte: addDays(startOfDay(), f.days) } : undefined,
+            expiryDate: f.days
+              ? { gte: startOfDay(), lte: addDays(startOfDay(), f.days) }
+              : undefined,
           };
           const [items, total] = await Promise.all([
             this.prisma.softwareLicense.findMany({
               where,
               take,
               orderBy: [{ software: { name: 'asc' } }, { expiryDate: 'asc' }],
-              include: { software: true, vendor: true, _count: { select: { assignments: { where: { unassignedAt: null } } } } },
+              include: {
+                software: true,
+                vendor: true,
+                _count: { select: { assignments: { where: { unassignedAt: null } } } },
+              },
             }),
             this.prisma.softwareLicense.count({ where }),
           ]);
@@ -379,16 +422,25 @@ export class ReportsService {
           { key: 'resolution', label: 'Resolution', width: 1.5 },
         ],
         build: async (f, _user, take) => {
-          if (!f.auditId) throw Errors.badRequest('auditId is required for the audit report', 'auditId');
+          if (!f.auditId)
+            throw Errors.badRequest('auditId is required for the audit report', 'auditId');
           const session = await this.prisma.auditSession.findUnique({ where: { id: f.auditId } });
           if (!session) throw Errors.notFound('Audit');
-          const where: Prisma.AuditItemWhereInput = { auditSessionId: f.auditId, result: f.status as Prisma.AuditItemWhereInput['result'] };
+          const where: Prisma.AuditItemWhereInput = {
+            auditSessionId: f.auditId,
+            result: f.status as Prisma.AuditItemWhereInput['result'],
+          };
           const [items, total] = await Promise.all([
             this.prisma.auditItem.findMany({
               where,
               take,
               orderBy: [{ result: 'asc' }, { createdAt: 'asc' }],
-              include: { asset: true, expectedLocation: true, observedLocation: true, scannedBy: true },
+              include: {
+                asset: true,
+                expectedLocation: true,
+                observedLocation: true,
+                scannedBy: true,
+              },
             }),
             this.prisma.auditItem.count({ where }),
           ]);
@@ -417,12 +469,21 @@ export class ReportsService {
           { key: 'department', label: 'Department', width: 1.5 },
           { key: 'employees', label: 'Employees', type: 'number', width: 0.8 },
           { key: 'assets', label: 'Assets', type: 'number', width: 0.7 },
-          ...ASSET_STATUSES.map((s) => ({ key: s, label: label('assetStatus', s), type: 'number' as const, width: 0.7 })),
+          ...ASSET_STATUSES.map((s) => ({
+            key: s,
+            label: label('assetStatus', s),
+            type: 'number' as const,
+            width: 0.7,
+          })),
           { key: 'value', label: 'Purchase value', type: 'money' },
         ],
         build: async (_f, user) => {
           const departments = await this.prisma.department.findMany({
-            where: { deletedAt: null, id: dataScope(user, 'asset') === 'all' ? undefined : (user.departmentId ?? NO_MATCH_ID) },
+            where: {
+              deletedAt: null,
+              id:
+                dataScope(user, 'asset') === 'all' ? undefined : (user.departmentId ?? NO_MATCH_ID),
+            },
             orderBy: { name: 'asc' },
             include: { _count: { select: { employees: { where: { deletedAt: null } } } } },
           });
@@ -435,7 +496,12 @@ export class ReportsService {
           return {
             total: departments.length,
             rows: departments.map((d) => {
-              const row: Record<string, CellValue> = { department: d.name, employees: d._count.employees, assets: 0, value: 0 };
+              const row: Record<string, CellValue> = {
+                department: d.name,
+                employees: d._count.employees,
+                assets: 0,
+                value: 0,
+              };
               for (const s of ASSET_STATUSES) row[s] = 0;
               for (const g of grouped.filter((x) => x.departmentId === d.id)) {
                 row[g.status] = g._count._all;
@@ -456,10 +522,19 @@ export class ReportsService {
           { key: 'type', label: 'Type', width: 0.8 },
           { key: 'parent', label: 'Parent' },
           { key: 'assets', label: 'Assets', type: 'number', width: 0.7 },
-          ...ASSET_STATUSES.map((s) => ({ key: s, label: label('assetStatus', s), type: 'number' as const, width: 0.7 })),
+          ...ASSET_STATUSES.map((s) => ({
+            key: s,
+            label: label('assetStatus', s),
+            type: 'number' as const,
+            width: 0.7,
+          })),
         ],
         build: async () => {
-          const locations = await this.prisma.location.findMany({ where: { deletedAt: null }, orderBy: { name: 'asc' }, include: { parent: true } });
+          const locations = await this.prisma.location.findMany({
+            where: { deletedAt: null },
+            orderBy: { name: 'asc' },
+            include: { parent: true },
+          });
           const grouped = await this.prisma.asset.groupBy({
             by: ['locationId', 'status'],
             where: { deletedAt: null, locationId: { not: null } },
@@ -468,7 +543,12 @@ export class ReportsService {
           return {
             total: locations.length,
             rows: locations.map((l) => {
-              const row: Record<string, CellValue> = { location: l.name, type: label('locationType', l.type), parent: l.parent?.name, assets: 0 };
+              const row: Record<string, CellValue> = {
+                location: l.name,
+                type: label('locationType', l.type),
+                parent: l.parent?.name,
+                assets: 0,
+              };
               for (const s of ASSET_STATUSES) row[s] = 0;
               for (const g of grouped.filter((x) => x.locationId === l.id)) {
                 row[g.status] = g._count._all;
@@ -499,7 +579,12 @@ export class ReportsService {
             createdAt: f.from || f.to ? { gte: f.from, lte: f.to } : undefined,
           };
           const [items, total] = await Promise.all([
-            this.prisma.assetHistory.findMany({ where, take, orderBy: { createdAt: 'desc' }, include: { asset: true, performedBy: true } }),
+            this.prisma.assetHistory.findMany({
+              where,
+              take,
+              orderBy: { createdAt: 'desc' },
+              include: { asset: true, performedBy: true },
+            }),
             this.prisma.assetHistory.count({ where }),
           ]);
           return {
@@ -521,16 +606,24 @@ export class ReportsService {
   }
 
   catalogue(user: AuthUser) {
-    return REPORT_TYPES.filter((t) => can(user, ...this.definitions[t].permissions)).map((type) => ({
-      type,
-      title: this.definitions[type].title,
-      columns: this.definitions[type].columns,
-    }));
+    return REPORT_TYPES.filter((t) => can(user, ...this.definitions[t].permissions)).map(
+      (type) => ({
+        type,
+        title: this.definitions[type].title,
+        columns: this.definitions[type].columns,
+      }),
+    );
   }
 
-  async run(type: ReportType, filters: ReportFilters, user: AuthUser, maxRows = MAX_ROWS): Promise<ReportResult> {
+  async run(
+    type: ReportType,
+    filters: ReportFilters,
+    user: AuthUser,
+    maxRows = MAX_ROWS,
+  ): Promise<ReportResult> {
     const def = this.definitions[type];
-    if (!can(user, ...def.permissions)) throw Errors.forbidden('You do not have access to this report');
+    if (!can(user, ...def.permissions))
+      throw Errors.forbidden('You do not have access to this report');
     const { rows, total } = await def.build(filters, user, maxRows);
     return {
       type,
@@ -547,7 +640,9 @@ export class ReportsService {
   private assetWhere(f: ReportFilters, user: AuthUser): Prisma.AssetWhereInput {
     const scope = assetScopeWhere(user);
     if (!scope) throw Errors.forbidden();
-    const statuses = f.status?.split(',').filter((s): s is AssetStatus => (ASSET_STATUSES as readonly string[]).includes(s));
+    const statuses = f.status
+      ?.split(',')
+      .filter((s): s is AssetStatus => (ASSET_STATUSES as readonly string[]).includes(s));
     return {
       AND: [
         scope,
@@ -558,7 +653,9 @@ export class ReportsService {
           departmentId: f.departmentId,
           assetTypeId: f.assetTypeId,
           vendorId: f.vendorId,
-          assignments: f.employeeId ? { some: { status: 'ACTIVE', employeeId: f.employeeId } } : undefined,
+          assignments: f.employeeId
+            ? { some: { status: 'ACTIVE', employeeId: f.employeeId } }
+            : undefined,
         },
       ],
     };

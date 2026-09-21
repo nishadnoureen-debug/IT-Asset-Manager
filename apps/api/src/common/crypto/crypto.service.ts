@@ -20,7 +20,12 @@ export class CryptoService {
     const cipher = createCipheriv(ALGORITHM, this.key, iv);
     const ciphertext = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
     const tag = cipher.getAuthTag();
-    return [VERSION, iv.toString('base64'), tag.toString('base64'), ciphertext.toString('base64')].join(':');
+    return [
+      VERSION,
+      iv.toString('base64'),
+      tag.toString('base64'),
+      ciphertext.toString('base64'),
+    ].join(':');
   }
 
   decrypt(payload: string): string {
@@ -30,7 +35,10 @@ export class CryptoService {
     }
     const decipher = createDecipheriv(ALGORITHM, this.key, Buffer.from(iv, 'base64'));
     decipher.setAuthTag(Buffer.from(tag, 'base64'));
-    return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64')), decipher.final()]).toString('utf8');
+    return Buffer.concat([
+      decipher.update(Buffer.from(ciphertext, 'base64')),
+      decipher.final(),
+    ]).toString('utf8');
   }
 
   static sha256(value: string): string {

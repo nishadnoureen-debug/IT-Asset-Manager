@@ -21,7 +21,9 @@ export function assetScopeWhere(user: AuthUser): Prisma.AssetWhereInput | null {
     };
   }
   if (scope === 'own') {
-    return { assignments: { some: { status: 'ACTIVE', employeeId: user.employeeId ?? NO_MATCH_ID } } };
+    return {
+      assignments: { some: { status: 'ACTIVE', employeeId: user.employeeId ?? NO_MATCH_ID } },
+    };
   }
   return null;
 }
@@ -47,10 +49,16 @@ export function allowedAssetActions(user: AuthUser, s: AssetActionState): AssetA
     if (can(user, 'asset.return')) actions.push('return');
     if (can(user, 'asset.transfer')) actions.push('transfer');
   }
-  if (can(user, 'maintenance.create') && !endOfLife && s.status !== 'LOST' && !s.hasOpenMaintenance) {
+  if (
+    can(user, 'maintenance.create') &&
+    !endOfLife &&
+    s.status !== 'LOST' &&
+    !s.hasOpenMaintenance
+  ) {
     actions.push('maintenance');
   }
-  if (can(user, 'audit.perform') && s.auditInProgress && s.status !== 'DISPOSED') actions.push('audit');
+  if (can(user, 'audit.perform') && s.auditInProgress && s.status !== 'DISPOSED')
+    actions.push('audit');
   if (
     can(user, 'asset.report_lost') &&
     canTransition(s.status, 'LOST') &&
@@ -61,7 +69,12 @@ export function allowedAssetActions(user: AuthUser, s: AssetActionState): AssetA
   if (can(user, 'asset.acknowledge') && ownsAssignment && !s.activeAssignment?.acknowledgedAt) {
     actions.push('acknowledge');
   }
-  if (can(user, 'asset.retire') && canTransition(s.status, 'RETIRED') && !s.activeAssignment && !s.hasOpenMaintenance) {
+  if (
+    can(user, 'asset.retire') &&
+    canTransition(s.status, 'RETIRED') &&
+    !s.activeAssignment &&
+    !s.hasOpenMaintenance
+  ) {
     actions.push('retire');
   }
   if (can(user, 'asset.dispose') && canTransition(s.status, 'DISPOSED')) actions.push('dispose');

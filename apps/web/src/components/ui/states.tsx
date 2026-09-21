@@ -5,7 +5,13 @@ import { Button } from './button';
 
 export function Spinner({ className, label = 'Loading' }: { className?: string; label?: string }) {
   return (
-    <div role="status" className={clsx('flex items-center justify-center gap-2 py-10 text-sm text-slate-500', className)}>
+    <div
+      role="status"
+      className={clsx(
+        'flex items-center justify-center gap-2 py-10 text-sm text-slate-500',
+        className,
+      )}
+    >
       <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
       <span>{label}…</span>
     </div>
@@ -13,7 +19,9 @@ export function Spinner({ className, label = 'Loading' }: { className?: string; 
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={clsx('animate-pulse rounded-md bg-slate-200 dark:bg-slate-800', className)} />;
+  return (
+    <div className={clsx('animate-pulse rounded-md bg-slate-200 dark:bg-slate-800', className)} />
+  );
 }
 
 export function EmptyState({
@@ -29,15 +37,25 @@ export function EmptyState({
 }) {
   return (
     <div className="flex flex-col items-center justify-center px-6 py-12 text-center">
-      <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400 dark:bg-slate-800">{icon ?? <Inbox className="h-6 w-6" aria-hidden />}</div>
+      <div className="mb-3 rounded-full bg-slate-100 p-3 text-slate-400 dark:bg-slate-800">
+        {icon ?? <Inbox className="h-6 w-6" aria-hidden />}
+      </div>
       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-      {description && <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+      {description && (
+        <p className="mt-1 max-w-sm text-sm text-slate-500 dark:text-slate-400">{description}</p>
+      )}
       {action && <div className="mt-4">{action}</div>}
     </div>
   );
 }
 
-export function ErrorState({ error, onRetry }: { error: ApiError | Error | null | undefined; onRetry?: () => void }) {
+export function ErrorState({
+  error,
+  onRetry,
+}: {
+  error: ApiError | Error | null | undefined;
+  onRetry?: () => void;
+}) {
   const code = error && 'code' in error ? (error as ApiError).code : undefined;
   const message =
     code === 'NOT_FOUND'
@@ -51,11 +69,21 @@ export function ErrorState({ error, onRetry }: { error: ApiError | Error | null 
         <AlertTriangle className="h-6 w-6" aria-hidden />
       </div>
       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-        {code === 'NOT_FOUND' ? 'Not found' : code === 'FORBIDDEN' ? 'Access denied' : 'Could not load data'}
+        {code === 'NOT_FOUND'
+          ? 'Not found'
+          : code === 'FORBIDDEN'
+            ? 'Access denied'
+            : 'Could not load data'}
       </p>
       <p className="mt-1 max-w-md text-sm text-slate-500 dark:text-slate-400">{message}</p>
       {onRetry && code !== 'NOT_FOUND' && code !== 'FORBIDDEN' && (
-        <Button variant="secondary" size="sm" className="mt-4" icon={<RefreshCw className="h-4 w-4" />} onClick={onRetry}>
+        <Button
+          variant="secondary"
+          size="sm"
+          className="mt-4"
+          icon={<RefreshCw className="h-4 w-4" />}
+          onClick={onRetry}
+        >
           Try again
         </Button>
       )}

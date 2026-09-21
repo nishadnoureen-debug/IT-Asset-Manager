@@ -1,4 +1,16 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, PartialType } from '@nestjs/swagger';
 import { AccessoryCategory, AssetCondition, Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
@@ -44,7 +56,10 @@ class UpdateAccessoryDto extends PartialType(CreateAccessoryDto) {}
 class AccessoryQueryDto extends PaginationQueryDto {
   @IsOptional() @IsEnum(AccessoryCategory) category?: AccessoryCategory;
   @IsOptional() @IsUUID() locationId?: string;
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() lowStock?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  lowStock?: boolean;
 }
 
 class AssignAccessoryDto {
@@ -90,7 +105,11 @@ export class AccessoriesController {
           include: { location: { select: { id: true, name: true } } },
           orderBy: resolveOrderBy<Prisma.AccessoryOrderByWithRelationInput>(
             q,
-            { name: (o) => ({ name: o }), quantityAvailable: (o) => ({ quantityAvailable: o }), category: (o) => ({ category: o }) },
+            {
+              name: (o) => ({ name: o }),
+              quantityAvailable: (o) => ({ quantityAvailable: o }),
+              category: (o) => ({ category: o }),
+            },
             { name: 'asc' },
           ),
           ...page,
@@ -111,8 +130,12 @@ export class AccessoriesController {
           orderBy: { assignedAt: 'desc' },
           take: 100,
           include: {
-            employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
-            assetAssignment: { select: { id: true, asset: { select: { id: true, assetTag: true } } } },
+            employee: {
+              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+            },
+            assetAssignment: {
+              select: { id: true, asset: { select: { id: true, assetTag: true } } },
+            },
           },
         },
       },
@@ -128,7 +151,16 @@ export class AccessoriesController {
       const accessory = await tx.accessory.create({
         data: { ...dto, quantityAvailable: dto.quantityTotal ?? 0 },
       });
-      await this.activity.record({ actorId: user.id, action: 'accessory.create', entityType: 'accessory', entityId: accessory.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'accessory.create',
+          entityType: 'accessory',
+          entityId: accessory.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return accessory;
     });
   }
@@ -136,7 +168,11 @@ export class AccessoriesController {
   /** Changing quantityTotal adjusts available stock by the same delta (never below what is handed out). */
   @Patch('accessories/:id')
   @RequirePermissions('accessory.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateAccessoryDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccessoryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.prisma.accessory.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw Errors.notFound('Accessory');
     const data: Prisma.AccessoryUpdateInput = { ...dto };
@@ -147,10 +183,23 @@ export class AccessoriesController {
       }
       data.quantityAvailable = dto.quantityTotal - handedOut;
     }
-    const changes = diff(existing as unknown as Record<string, unknown>, dto as Record<string, unknown>);
+    const changes = diff(
+      existing as unknown as Record<string, unknown>,
+      dto as Record<string, unknown>,
+    );
     return this.prisma.$transaction(async (tx) => {
       const accessory = await tx.accessory.update({ where: { id }, data });
-      if (changes) await this.activity.record({ actorId: user.id, action: 'accessory.update', entityType: 'accessory', entityId: id, ...changes }, tx);
+      if (changes)
+        await this.activity.record(
+          {
+            actorId: user.id,
+            action: 'accessory.update',
+            entityType: 'accessory',
+            entityId: id,
+            ...changes,
+          },
+          tx,
+        );
       return accessory;
     });
   }
@@ -160,19 +209,36 @@ export class AccessoriesController {
   async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const existing = await this.prisma.accessory.findFirst({ where: { id, deletedAt: null } });
     if (!existing) throw Errors.notFound('Accessory');
-    if (existing.quantityAvailable < existing.quantityTotal) throw Errors.invalidState('Some items are still handed out');
+    if (existing.quantityAvailable < existing.quantityTotal)
+      throw Errors.invalidState('Some items are still handed out');
     await this.prisma.$transaction(async (tx) => {
       await tx.accessory.update({ where: { id }, data: { deletedAt: new Date() } });
-      await this.activity.record({ actorId: user.id, action: 'accessory.delete', entityType: 'accessory', entityId: id, oldValues: { name: existing.name } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'accessory.delete',
+          entityType: 'accessory',
+          entityId: id,
+          oldValues: { name: existing.name },
+        },
+        tx,
+      );
     });
     return { id, deleted: true };
   }
 
   @Post('accessories/:id/assign')
   @RequirePermissions('accessory.assign')
-  async assign(@Param('id', ParseUUIDPipe) id: string, @Body() dto: AssignAccessoryDto, @CurrentUser() user: AuthUser) {
-    const employee = await this.prisma.employee.findFirst({ where: { id: dto.employeeId, deletedAt: null } });
-    if (!employee || employee.status === 'TERMINATED') throw Errors.badRequest('Employee not found or terminated', 'employeeId');
+  async assign(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AssignAccessoryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: dto.employeeId, deletedAt: null },
+    });
+    if (!employee || employee.status === 'TERMINATED')
+      throw Errors.badRequest('Employee not found or terminated', 'employeeId');
     return this.prisma.$transaction(async (tx) => {
       const taken = await tx.accessory.updateMany({
         where: { id, deletedAt: null, quantityAvailable: { gte: dto.quantity } },
@@ -181,7 +247,10 @@ export class AccessoriesController {
       if (taken.count !== 1) {
         const accessory = await tx.accessory.findFirst({ where: { id, deletedAt: null } });
         if (!accessory) throw Errors.notFound('Accessory');
-        throw Errors.conflict('ACCESSORY_OUT_OF_STOCK', `Only ${accessory.quantityAvailable} available`);
+        throw Errors.conflict(
+          'ACCESSORY_OUT_OF_STOCK',
+          `Only ${accessory.quantityAvailable} available`,
+        );
       }
       const assignment = await tx.accessoryAssignment.create({
         data: {
@@ -194,21 +263,36 @@ export class AccessoriesController {
         },
         include: { accessory: { select: { id: true, name: true } } },
       });
-      await this.activity.record({ actorId: user.id, action: 'accessory.assign', entityType: 'accessory', entityId: id, newValues: { ...dto, accessoryAssignmentId: assignment.id } }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'accessory.assign',
+          entityType: 'accessory',
+          entityId: id,
+          newValues: { ...dto, accessoryAssignmentId: assignment.id },
+        },
+        tx,
+      );
       return assignment;
     });
   }
 
   @Get('accessory-assignments')
   @RequirePermissions('accessory.view', 'accessory.manage', 'asset.view_own')
-  listAssignments(@Query() q: PaginationQueryDto & { employeeId?: string }, @CurrentUser() user: AuthUser) {
+  listAssignments(
+    @Query() q: PaginationQueryDto & { employeeId?: string },
+    @CurrentUser() user: AuthUser,
+  ) {
     const where: Prisma.AccessoryAssignmentWhereInput = { status: 'ACTIVE' };
     if (dataScope(user, 'asset') !== 'all' && !user.permissions.has('accessory.view')) {
       where.employeeId = user.employeeId ?? NO_MATCH_ID;
     }
     return this.prisma.accessoryAssignment.findMany({
       where,
-      include: { accessory: { select: { id: true, name: true, category: true } }, employee: { select: { id: true, firstName: true, lastName: true } } },
+      include: {
+        accessory: { select: { id: true, name: true, category: true } },
+        employee: { select: { id: true, firstName: true, lastName: true } },
+      },
       orderBy: { assignedAt: 'desc' },
       take: 200,
     });
@@ -217,7 +301,11 @@ export class AccessoriesController {
   @Post('accessory-assignments/:id/return')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('accessory.assign', 'asset.return')
-  async returnAccessory(@Param('id', ParseUUIDPipe) id: string, @Body() dto: ReturnAccessoryDto, @CurrentUser() user: AuthUser) {
+  async returnAccessory(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ReturnAccessoryDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const assignment = await this.prisma.accessoryAssignment.findUnique({ where: { id } });
     if (!assignment) throw Errors.notFound('Accessory assignment');
     if (assignment.status !== 'ACTIVE') throw Errors.invalidState('Already returned');
@@ -225,15 +313,35 @@ export class AccessoriesController {
     return this.prisma.$transaction(async (tx) => {
       const closed = await tx.accessoryAssignment.updateMany({
         where: { id, status: 'ACTIVE' },
-        data: { status: 'RETURNED', returnedAt: new Date(), returnedById: user.id, conditionAtReturn: dto.condition, notes: dto.notes ?? (usable ? null : 'Returned damaged — written off') },
+        data: {
+          status: 'RETURNED',
+          returnedAt: new Date(),
+          returnedById: user.id,
+          conditionAtReturn: dto.condition,
+          notes: dto.notes ?? (usable ? null : 'Returned damaged — written off'),
+        },
       });
       if (closed.count !== 1) throw Errors.invalidState('Already returned');
       await tx.accessory.update({
         where: { id: assignment.accessoryId },
-        data: usable ? { quantityAvailable: { increment: assignment.quantity } } : { quantityTotal: { decrement: assignment.quantity } },
+        data: usable
+          ? { quantityAvailable: { increment: assignment.quantity } }
+          : { quantityTotal: { decrement: assignment.quantity } },
       });
-      await this.activity.record({ actorId: user.id, action: 'accessory.return', entityType: 'accessory', entityId: assignment.accessoryId, newValues: { accessoryAssignmentId: id, ...dto } }, tx);
-      return tx.accessoryAssignment.findUniqueOrThrow({ where: { id }, include: { accessory: { select: { id: true, name: true } } } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'accessory.return',
+          entityType: 'accessory',
+          entityId: assignment.accessoryId,
+          newValues: { accessoryAssignmentId: id, ...dto },
+        },
+        tx,
+      );
+      return tx.accessoryAssignment.findUniqueOrThrow({
+        where: { id },
+        include: { accessory: { select: { id: true, name: true } } },
+      });
     });
   }
 }

@@ -67,16 +67,25 @@ export function DataTable<T extends { id: string }>({
                       col.hideOnMobile && 'hidden md:table-cell',
                       col.className,
                     )}
-                    aria-sort={active ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined}
+                    aria-sort={
+                      active ? (sortOrder === 'asc' ? 'ascending' : 'descending') : undefined
+                    }
                   >
                     {col.sort && onSort ? (
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 uppercase hover:text-slate-900 dark:hover:text-slate-100"
-                        onClick={() => onSort(col.sort!, active && sortOrder === 'asc' ? 'desc' : 'asc')}
+                        onClick={() =>
+                          onSort(col.sort!, active && sortOrder === 'asc' ? 'desc' : 'asc')
+                        }
                       >
                         {col.header}
-                        {active && (sortOrder === 'asc' ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />)}
+                        {active &&
+                          (sortOrder === 'asc' ? (
+                            <ArrowUp className="h-3 w-3" />
+                          ) : (
+                            <ArrowDown className="h-3 w-3" />
+                          ))}
                       </button>
                     ) : (
                       col.header
@@ -91,7 +100,10 @@ export function DataTable<T extends { id: string }>({
               ? Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
                     {columns.map((col) => (
-                      <td key={col.key} className={clsx('px-4 py-3', col.hideOnMobile && 'hidden md:table-cell')}>
+                      <td
+                        key={col.key}
+                        className={clsx('px-4 py-3', col.hideOnMobile && 'hidden md:table-cell')}
+                      >
                         <Skeleton className="h-4 w-full max-w-[10rem]" />
                       </td>
                     ))}
@@ -101,12 +113,19 @@ export function DataTable<T extends { id: string }>({
                   <tr
                     key={row.id}
                     onClick={onRowClick ? () => onRowClick(row) : undefined}
-                    className={clsx(onRowClick && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60', loading && 'opacity-60')}
+                    className={clsx(
+                      onRowClick && 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60',
+                      loading && 'opacity-60',
+                    )}
                   >
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        className={clsx('px-4 py-3 align-middle text-slate-700 dark:text-slate-300', col.hideOnMobile && 'hidden md:table-cell', col.className)}
+                        className={clsx(
+                          'px-4 py-3 align-middle text-slate-700 dark:text-slate-300',
+                          col.hideOnMobile && 'hidden md:table-cell',
+                          col.className,
+                        )}
                       >
                         {col.cell(row)}
                       </td>
@@ -122,7 +141,13 @@ export function DataTable<T extends { id: string }>({
   );
 }
 
-export function Pagination({ meta, onPage }: { meta: PaginationMeta; onPage: (page: number) => void }) {
+export function Pagination({
+  meta,
+  onPage,
+}: {
+  meta: PaginationMeta;
+  onPage: (page: number) => void;
+}) {
   const from = (meta.page - 1) * meta.limit + 1;
   const to = Math.min(meta.page * meta.limit, meta.total);
   return (
@@ -131,8 +156,22 @@ export function Pagination({ meta, onPage }: { meta: PaginationMeta; onPage: (pa
         {from}–{to} of {meta.total}
       </span>
       <div className="flex gap-2">
-        <Button variant="secondary" size="sm" disabled={meta.page <= 1} onClick={() => onPage(meta.page - 1)} aria-label="Previous page" icon={<ChevronLeft className="h-4 w-4" />} />
-        <Button variant="secondary" size="sm" disabled={meta.page >= meta.totalPages} onClick={() => onPage(meta.page + 1)} aria-label="Next page" icon={<ChevronRight className="h-4 w-4" />} />
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={meta.page <= 1}
+          onClick={() => onPage(meta.page - 1)}
+          aria-label="Previous page"
+          icon={<ChevronLeft className="h-4 w-4" />}
+        />
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={meta.page >= meta.totalPages}
+          onClick={() => onPage(meta.page + 1)}
+          aria-label="Next page"
+          icon={<ChevronRight className="h-4 w-4" />}
+        />
       </div>
     </div>
   );

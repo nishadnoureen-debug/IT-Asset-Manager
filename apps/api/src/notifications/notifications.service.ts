@@ -32,7 +32,12 @@ export class NotificationsService {
     if (options.dedupeWithinHours && input.entityId) {
       const since = new Date(Date.now() - options.dedupeWithinHours * 3_600_000);
       const existing = await db.notification.findMany({
-        where: { userId: { in: recipients }, type: input.type, entityId: input.entityId, createdAt: { gte: since } },
+        where: {
+          userId: { in: recipients },
+          type: input.type,
+          entityId: input.entityId,
+          createdAt: { gte: since },
+        },
         select: { userId: true },
       });
       const skip = new Set(existing.map((n) => n.userId));
@@ -45,7 +50,12 @@ export class NotificationsService {
     return recipients.length;
   }
 
-  async notifyEmployee(db: Db, employeeId: string | null | undefined, input: NotificationInput, excludeUserId?: string) {
+  async notifyEmployee(
+    db: Db,
+    employeeId: string | null | undefined,
+    input: NotificationInput,
+    excludeUserId?: string,
+  ) {
     if (!employeeId) return 0;
     const user = await db.user.findFirst({
       where: { employeeId, deletedAt: null, status: 'ACTIVE' },
@@ -67,16 +77,22 @@ export class NotificationsService {
   }
 
   list(user: AuthUser, q: PaginationQueryDto & { unread?: boolean }) {
-    const where: Prisma.NotificationWhereInput = { userId: user.id, readAt: q.unread ? null : undefined };
+    const where: Prisma.NotificationWhereInput = {
+      userId: user.id,
+      readAt: q.unread ? null : undefined,
+    };
     return paginate(
       q,
-      (page) => this.prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, ...page }),
+      (page) =>
+        this.prisma.notification.findMany({ where, orderBy: { createdAt: 'desc' }, ...page }),
       () => this.prisma.notification.count({ where }),
     );
   }
 
   async unreadCount(user: AuthUser) {
-    return { unread: await this.prisma.notification.count({ where: { userId: user.id, readAt: null } }) };
+    return {
+      unread: await this.prisma.notification.count({ where: { userId: user.id, readAt: null } }),
+    };
   }
 
   async markRead(id: string, user: AuthUser) {

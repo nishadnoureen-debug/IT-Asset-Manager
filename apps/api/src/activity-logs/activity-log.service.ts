@@ -47,7 +47,12 @@ export function diff<T extends Record<string, unknown>>(
 
 function normalise(value: unknown): string {
   if (value instanceof Date) return value.toISOString();
-  if (value !== null && typeof value === 'object' && 'toString' in value && value.constructor?.name === 'Decimal') {
+  if (
+    value !== null &&
+    typeof value === 'object' &&
+    'toString' in value &&
+    value.constructor?.name === 'Decimal'
+  ) {
     return String(Number(value));
   }
   return JSON.stringify(value ?? null);

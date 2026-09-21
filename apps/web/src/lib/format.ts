@@ -1,6 +1,10 @@
 export { label, LABELS } from '@itam/shared';
 
-const dateFmt = new Intl.DateTimeFormat(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+const dateFmt = new Intl.DateTimeFormat(undefined, {
+  year: 'numeric',
+  month: 'short',
+  day: 'numeric',
+});
 const dateTimeFmt = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
   month: 'short',
@@ -21,12 +25,18 @@ export function formatDateTime(value: string | Date | null | undefined): string 
   return Number.isNaN(d.getTime()) ? '—' : dateTimeFmt.format(d);
 }
 
-export function formatMoney(value: string | number | null | undefined, currency?: string | null): string {
+export function formatMoney(
+  value: string | number | null | undefined,
+  currency?: string | null,
+): string {
   if (value === null || value === undefined || value === '') return '—';
   const n = Number(value);
   if (Number.isNaN(n)) return '—';
   try {
-    return new Intl.NumberFormat(undefined, { style: 'currency', currency: currency || 'USD' }).format(n);
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: currency || 'USD',
+    }).format(n);
   } catch {
     return `${n.toFixed(2)} ${currency ?? ''}`.trim();
   }

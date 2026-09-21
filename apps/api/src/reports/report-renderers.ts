@@ -25,7 +25,9 @@ export interface ReportResult {
 function formatCell(value: CellValue, column: ReportColumn): string {
   if (value === null || value === undefined) return '';
   if (value instanceof Date) {
-    return column.type === 'datetime' ? value.toISOString().replace('T', ' ').slice(0, 16) : value.toISOString().slice(0, 10);
+    return column.type === 'datetime'
+      ? value.toISOString().replace('T', ' ').slice(0, 16)
+      : value.toISOString().slice(0, 10);
   }
   if (typeof value === 'number' && column.type === 'money') return value.toFixed(2);
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
@@ -41,7 +43,9 @@ export function toCsv(report: ReportResult): Buffer {
   const escape = (v: string) => (/[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
   const lines = [
     report.columns.map((c) => escape(c.label)).join(','),
-    ...report.rows.map((row) => report.columns.map((c) => escape(csvSafe(formatCell(row[c.key], c)))).join(',')),
+    ...report.rows.map((row) =>
+      report.columns.map((c) => escape(csvSafe(formatCell(row[c.key], c)))).join(','),
+    ),
   ];
   // UTF-8 BOM so Excel opens non-ASCII text correctly.
   return Buffer.from('﻿' + lines.join('\r\n'), 'utf8');
@@ -70,7 +74,8 @@ export async function toXlsx(report: ReportResult): Promise<Buffer> {
         report.columns.map((c) => {
           const v = row[c.key];
           if (v === null || v === undefined) return [c.key, null];
-          if (v instanceof Date || typeof v === 'number' || typeof v === 'boolean') return [c.key, v];
+          if (v instanceof Date || typeof v === 'number' || typeof v === 'boolean')
+            return [c.key, v];
           return [c.key, csvSafe(String(v))];
         }),
       ),

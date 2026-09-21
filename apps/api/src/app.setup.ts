@@ -20,7 +20,10 @@ export function configureApp(app: INestApplication): void {
   const isProduction = config.get('NODE_ENV', { infer: true }) === 'production';
 
   const trustProxy = config.get('TRUST_PROXY', { infer: true });
-  (app as NestExpressApplication).set('trust proxy', /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy);
+  (app as NestExpressApplication).set(
+    'trust proxy',
+    /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy,
+  );
 
   app.setGlobalPrefix(API_PREFIX);
   app.use(helmet());

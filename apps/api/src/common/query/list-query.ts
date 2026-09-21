@@ -28,7 +28,10 @@ export async function paginate<T>(
   fetch: (args: { skip: number; take: number }) => Promise<T[]>,
   count: () => Promise<number>,
 ): Promise<PaginatedResult<T>> {
-  const [items, total] = await Promise.all([fetch({ skip: query.skip, take: query.limit }), count()]);
+  const [items, total] = await Promise.all([
+    fetch({ skip: query.skip, take: query.limit }),
+    count(),
+  ]);
   return new PaginatedResult(items, total, query.page, query.limit);
 }
 

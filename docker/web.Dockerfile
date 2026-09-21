@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS build
 WORKDIR /repo
-ARG NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
-ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL} NEXT_TELEMETRY_DISABLED=1
+# Browser calls /api/v1 on the web origin; the Next.js server proxies to API_INTERNAL_URL (baked in at build).
+ARG API_INTERNAL_URL=http://api:4000
+ENV API_INTERNAL_URL=${API_INTERNAL_URL} NEXT_PUBLIC_API_URL=/api/v1 NEXT_TELEMETRY_DISABLED=1
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY apps/api/package.json apps/api/

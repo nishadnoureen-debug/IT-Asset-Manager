@@ -49,7 +49,11 @@ export class QrService {
       assetTag: asset.assetTag,
       qrToken: asset.qrToken,
       payload,
-      dataUrl: await QRCode.toDataURL(payload, { margin: 1, width: 360, errorCorrectionLevel: 'M' }),
+      dataUrl: await QRCode.toDataURL(payload, {
+        margin: 1,
+        width: 360,
+        errorCorrectionLevel: 'M',
+      }),
     };
   }
 
@@ -58,9 +62,20 @@ export class QrService {
     const payload = this.payloadFor(asset.qrToken);
     const body =
       format === 'svg'
-        ? Buffer.from(await QRCode.toString(payload, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }))
-        : await QRCode.toBuffer(payload, { type: 'png', margin: 1, width: 600, errorCorrectionLevel: 'M' });
-    return { body, fileName: `${asset.assetTag}.${format}`, contentType: format === 'svg' ? 'image/svg+xml' : 'image/png' };
+        ? Buffer.from(
+            await QRCode.toString(payload, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }),
+          )
+        : await QRCode.toBuffer(payload, {
+            type: 'png',
+            margin: 1,
+            width: 600,
+            errorCorrectionLevel: 'M',
+          });
+    return {
+      body,
+      fileName: `${asset.assetTag}.${format}`,
+      contentType: format === 'svg' ? 'image/svg+xml' : 'image/png',
+    };
   }
 
   async regenerate(id: string, user: AuthUser) {
@@ -74,7 +89,10 @@ export class QrService {
         performedById: user.id,
         description: 'Previous QR labels are no longer valid',
       });
-      await this.activity.record({ actorId: user.id, action: 'qr.regenerate', entityType: 'asset', entityId: id }, tx);
+      await this.activity.record(
+        { actorId: user.id, action: 'qr.regenerate', entityType: 'asset', entityId: id },
+        tx,
+      );
     });
     return this.get(asset.id, user);
   }
@@ -105,11 +123,17 @@ export class QrService {
             assignedAt: true,
             acknowledgedAt: true,
             employeeId: true,
-            employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+            employee: {
+              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+            },
             location: { select: { id: true, name: true } },
           },
         },
-        maintenance: { where: OPEN_MAINTENANCE, take: 1, select: { id: true, number: true, status: true } },
+        maintenance: {
+          where: OPEN_MAINTENANCE,
+          take: 1,
+          select: { id: true, number: true, status: true },
+        },
       },
     });
     if (!asset) throw Errors.notFound('No asset matches this code');
@@ -138,7 +162,8 @@ export class QrService {
 
   /** A4 sheet of labels: 3 columns × 8 rows, QR + asset tag + name. */
   async labels(assetIds: string[], user: AuthUser) {
-    if (!assetIds.length || assetIds.length > 240) throw Errors.badRequest('Select between 1 and 240 assets', 'assetIds');
+    if (!assetIds.length || assetIds.length > 240)
+      throw Errors.badRequest('Select between 1 and 240 assets', 'assetIds');
     const assets = await this.prisma.asset.findMany({
       where: { AND: [{ id: { in: assetIds }, deletedAt: null }, this.assets.scopeOrThrow(user)] },
       select: { id: true, assetTag: true, name: true, serialNumber: true, qrToken: true },
@@ -147,7 +172,9 @@ export class QrService {
     if (!assets.length) throw Errors.notFound('Assets');
     const { companyName } = await this.settings.get();
     const images = await Promise.all(
-      assets.map((a) => QRCode.toBuffer(this.payloadFor(a.qrToken), { type: 'png', margin: 0, width: 300 })),
+      assets.map((a) =>
+        QRCode.toBuffer(this.payloadFor(a.qrToken), { type: 'png', margin: 0, width: 300 }),
+      ),
     );
     return this.pdf.render(
       (doc) => {
@@ -163,14 +190,33 @@ export class QrService {
           const x = marginX + (index % cols) * cellW;
           const y = marginY + Math.floor(index / cols) * cellH;
           const qr = cellH - 16;
-          doc.rect(x + 2, y + 2, cellW - 4, cellH - 4).lineWidth(0.3).strokeColor('#cbd5e1').stroke();
+          doc
+            .rect(x + 2, y + 2, cellW - 4, cellH - 4)
+            .lineWidth(0.3)
+            .strokeColor('#cbd5e1')
+            .stroke();
           doc.image(images[i], x + 8, y + 8, { width: qr - 8, height: qr - 8 });
           const textX = x + qr + 6;
           const textW = cellW - qr - 14;
-          doc.font('Helvetica-Bold').fontSize(10).fillColor('#0f172a').text(pdfSafe(asset.assetTag), textX, y + 14, { width: textW });
-          doc.font('Helvetica').fontSize(7.5).fillColor('#334155').text(pdfSafe(asset.name), { width: textW, height: 30, ellipsis: true });
-          if (asset.serialNumber) doc.fontSize(6.5).fillColor('#64748b').text(`S/N ${pdfSafe(asset.serialNumber)}`, { width: textW });
-          doc.fontSize(6.5).fillColor('#94a3b8').text(pdfSafe(companyName), textX, y + cellH - 20, { width: textW });
+          doc
+            .font('Helvetica-Bold')
+            .fontSize(10)
+            .fillColor('#0f172a')
+            .text(pdfSafe(asset.assetTag), textX, y + 14, { width: textW });
+          doc
+            .font('Helvetica')
+            .fontSize(7.5)
+            .fillColor('#334155')
+            .text(pdfSafe(asset.name), { width: textW, height: 30, ellipsis: true });
+          if (asset.serialNumber)
+            doc
+              .fontSize(6.5)
+              .fillColor('#64748b')
+              .text(`S/N ${pdfSafe(asset.serialNumber)}`, { width: textW });
+          doc
+            .fontSize(6.5)
+            .fillColor('#94a3b8')
+            .text(pdfSafe(companyName), textX, y + cellH - 20, { width: textW });
         });
       },
       { margin: 0 },

@@ -152,9 +152,14 @@ export class DocumentsService {
 
   async list(owner: DocumentOwner, user: AuthUser) {
     const where: Prisma.DocumentWhereInput = { deletedAt: null, ...owner };
-    if (!OWNER_FIELDS.some((f) => owner[f])) throw Errors.badRequest('Specify the record to list documents for');
+    if (!OWNER_FIELDS.some((f) => owner[f]))
+      throw Errors.badRequest('Specify the record to list documents for');
     if (!can(user, 'document.view')) Object.assign(where, this.ownDocumentsFilter(user));
-    return this.prisma.document.findMany({ where, select: documentSelect, orderBy: { createdAt: 'desc' } });
+    return this.prisma.document.findMany({
+      where,
+      select: documentSelect,
+      orderBy: { createdAt: 'desc' },
+    });
   }
 
   async download(id: string, user: AuthUser) {
@@ -170,12 +175,20 @@ export class DocumentsService {
     const doc = await this.prisma.document.findFirst({ where: { id, deletedAt: null } });
     if (!doc) throw Errors.notFound('Document');
     if (doc.type === 'HANDOVER_FORM' || doc.type === 'RETURN_FORM' || doc.type === 'SIGNATURE') {
-      throw Errors.invalidState('Handover/return forms and signatures are part of the audit trail and cannot be deleted');
+      throw Errors.invalidState(
+        'Handover/return forms and signatures are part of the audit trail and cannot be deleted',
+      );
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.document.update({ where: { id }, data: { deletedAt: new Date() } });
       await this.activity.record(
-        { actorId: user.id, action: 'document.delete', entityType: 'document', entityId: id, oldValues: { title: doc.title, type: doc.type } },
+        {
+          actorId: user.id,
+          action: 'document.delete',
+          entityType: 'document',
+          entityId: id,
+          oldValues: { title: doc.title, type: doc.type },
+        },
         tx,
       );
     });
@@ -196,14 +209,45 @@ export class DocumentsService {
 
   private async assertOwnersExist(owner: DocumentOwner): Promise<void> {
     const checks: [string, Promise<unknown>][] = [];
-    if (owner.assetId) checks.push(['Asset', this.prisma.asset.findFirst({ where: { id: owner.assetId, deletedAt: null } })]);
-    if (owner.assignmentId) checks.push(['Assignment', this.prisma.assetAssignment.findUnique({ where: { id: owner.assignmentId } })]);
-    if (owner.maintenanceId) checks.push(['Maintenance record', this.prisma.maintenance.findUnique({ where: { id: owner.maintenanceId } })]);
-    if (owner.purchaseId) checks.push(['Purchase', this.prisma.purchase.findFirst({ where: { id: owner.purchaseId, deletedAt: null } })]);
-    if (owner.softwareLicenseId) checks.push(['License', this.prisma.softwareLicense.findFirst({ where: { id: owner.softwareLicenseId, deletedAt: null } })]);
-    if (owner.ticketId) checks.push(['Ticket', this.prisma.ticket.findUnique({ where: { id: owner.ticketId } })]);
-    if (owner.auditSessionId) checks.push(['Audit', this.prisma.auditSession.findUnique({ where: { id: owner.auditSessionId } })]);
-    if (owner.employeeId) checks.push(['Employee', this.prisma.employee.findFirst({ where: { id: owner.employeeId, deletedAt: null } })]);
+    if (owner.assetId)
+      checks.push([
+        'Asset',
+        this.prisma.asset.findFirst({ where: { id: owner.assetId, deletedAt: null } }),
+      ]);
+    if (owner.assignmentId)
+      checks.push([
+        'Assignment',
+        this.prisma.assetAssignment.findUnique({ where: { id: owner.assignmentId } }),
+      ]);
+    if (owner.maintenanceId)
+      checks.push([
+        'Maintenance record',
+        this.prisma.maintenance.findUnique({ where: { id: owner.maintenanceId } }),
+      ]);
+    if (owner.purchaseId)
+      checks.push([
+        'Purchase',
+        this.prisma.purchase.findFirst({ where: { id: owner.purchaseId, deletedAt: null } }),
+      ]);
+    if (owner.softwareLicenseId)
+      checks.push([
+        'License',
+        this.prisma.softwareLicense.findFirst({
+          where: { id: owner.softwareLicenseId, deletedAt: null },
+        }),
+      ]);
+    if (owner.ticketId)
+      checks.push(['Ticket', this.prisma.ticket.findUnique({ where: { id: owner.ticketId } })]);
+    if (owner.auditSessionId)
+      checks.push([
+        'Audit',
+        this.prisma.auditSession.findUnique({ where: { id: owner.auditSessionId } }),
+      ]);
+    if (owner.employeeId)
+      checks.push([
+        'Employee',
+        this.prisma.employee.findFirst({ where: { id: owner.employeeId, deletedAt: null } }),
+      ]);
     for (const [name, promise] of checks) {
       if (!(await promise)) throw Errors.notFound(name);
     }

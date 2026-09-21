@@ -11,7 +11,10 @@ export class PermissionsGuard implements CanActivate {
     const targets = [context.getHandler(), context.getClass()];
     if (this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, targets)) return true;
 
-    const required = this.reflector.getAllAndOverride<string[] | undefined>(PERMISSIONS_KEY, targets);
+    const required = this.reflector.getAllAndOverride<string[] | undefined>(
+      PERMISSIONS_KEY,
+      targets,
+    );
     if (!required?.length) return true;
 
     const user = context.switchToHttp().getRequest<{ user?: AuthUser }>().user;

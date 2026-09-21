@@ -1,4 +1,16 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Put, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Put,
+  Query,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Prisma, UserStatus } from '@prisma/client';
 import { ROLES } from '@itam/shared';
@@ -28,7 +40,8 @@ import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { PrismaService } from '../prisma/prisma.service';
 
-const lower = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim().toLowerCase() : value);
+const lower = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 class CreateUserDto {
   @Transform(lower) @IsEmail() @MaxLength(254) email!: string;
@@ -42,7 +55,12 @@ class UpdateUserDto {
   @IsOptional() @Transform(lower) @IsEmail() @MaxLength(254) email?: string;
   @IsOptional() @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) displayName?: string;
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() employeeId?: string | null;
-  @IsOptional() @IsArray() @ArrayMinSize(1) @ArrayMaxSize(6) @IsUUID('all', { each: true }) roleIds?: string[];
+  @IsOptional()
+  @IsArray()
+  @ArrayMinSize(1)
+  @ArrayMaxSize(6)
+  @IsUUID('all', { each: true })
+  roleIds?: string[];
   /** Admin-set password (e.g. after a lockout). */
   @IsOptional() @IsString() @MaxLength(128) password?: string;
 }
@@ -77,7 +95,15 @@ const userSelect = {
   lastLoginAt: true,
   lockedUntil: true,
   createdAt: true,
-  employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true, department: { select: { name: true } } } },
+  employee: {
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      employeeNumber: true,
+      department: { select: { name: true } },
+    },
+  },
   roles: { select: { role: { select: { id: true, name: true, displayName: true } } } },
 } satisfies Prisma.UserSelect;
 
@@ -108,7 +134,12 @@ export class UsersController {
           select: userSelect,
           orderBy: resolveOrderBy<Prisma.UserOrderByWithRelationInput>(
             q,
-            { email: (o) => ({ email: o }), displayName: (o) => ({ displayName: o }), lastLoginAt: (o) => ({ lastLoginAt: { sort: o, nulls: 'last' } }), createdAt: (o) => ({ createdAt: o }) },
+            {
+              email: (o) => ({ email: o }),
+              displayName: (o) => ({ displayName: o }),
+              lastLoginAt: (o) => ({ lastLoginAt: { sort: o, nulls: 'last' } }),
+              createdAt: (o) => ({ createdAt: o }),
+            },
             { displayName: 'asc' },
           ),
           ...page,
@@ -125,7 +156,15 @@ export class UsersController {
       where: {
         deletedAt: null,
         status: 'ACTIVE',
-        roles: { some: { role: { permissions: { some: { permission: { key: { in: ['ticket.edit', 'maintenance.edit'] } } } } } } },
+        roles: {
+          some: {
+            role: {
+              permissions: {
+                some: { permission: { key: { in: ['ticket.edit', 'maintenance.edit'] } } },
+              },
+            },
+          },
+        },
       },
       select: { id: true, displayName: true, email: true },
       orderBy: { displayName: 'asc' },
@@ -135,7 +174,10 @@ export class UsersController {
   @Get(':id')
   @RequirePermissions('user.view')
   async get(@Param('id', ParseUUIDPipe) id: string) {
-    const user = await this.prisma.user.findFirst({ where: { id, deletedAt: null }, select: { ...userSelect, failedLoginAttempts: true, passwordChangedAt: true } });
+    const user = await this.prisma.user.findFirst({
+      where: { id, deletedAt: null },
+      select: { ...userSelect, failedLoginAttempts: true, passwordChangedAt: true },
+    });
     if (!user) throw Errors.notFound('User');
     return user;
   }
@@ -159,7 +201,18 @@ export class UsersController {
         },
       });
       await this.activity.record(
-        { actorId: actor.id, action: 'user.create', entityType: 'user', entityId: user.id, newValues: { email: dto.email, displayName: dto.displayName, employeeId: dto.employeeId, roleIds: dto.roleIds } },
+        {
+          actorId: actor.id,
+          action: 'user.create',
+          entityType: 'user',
+          entityId: user.id,
+          newValues: {
+            email: dto.email,
+            displayName: dto.displayName,
+            employeeId: dto.employeeId,
+            roleIds: dto.roleIds,
+          },
+        },
         tx,
       );
       return user;
@@ -169,7 +222,11 @@ export class UsersController {
 
   @Patch(':id')
   @RequirePermissions('user.edit')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateUserDto, @CurrentUser() actor: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateUserDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
     const existing = await this.get(id);
     const existingRoleNames = existing.roles.map((r) => r.role.name);
     if (existingRoleNames.includes(ROLES.SUPER_ADMIN) && !can(actor, 'role.manage')) {
@@ -178,8 +235,11 @@ export class UsersController {
     if (dto.roleIds) {
       await this.assertRoles(dto.roleIds, actor);
       if (id === actor.id && existingRoleNames.includes(ROLES.SUPER_ADMIN)) {
-        const superAdmin = await this.prisma.role.findUnique({ where: { name: ROLES.SUPER_ADMIN } });
-        if (superAdmin && !dto.roleIds.includes(superAdmin.id)) throw Errors.invalidState('You cannot remove your own Super Admin role');
+        const superAdmin = await this.prisma.role.findUnique({
+          where: { name: ROLES.SUPER_ADMIN },
+        });
+        if (superAdmin && !dto.roleIds.includes(superAdmin.id))
+          throw Errors.invalidState('You cannot remove your own Super Admin role');
       }
     }
     if (dto.employeeId) await this.assertEmployee(dto.employeeId, id);
@@ -193,16 +253,27 @@ export class UsersController {
           displayName: dto.displayName,
           employeeId: dto.employeeId,
           ...(dto.password
-            ? { passwordHash: await this.passwords.hash(dto.password), passwordChangedAt: new Date(), failedLoginAttempts: 0, lockedUntil: null }
+            ? {
+                passwordHash: await this.passwords.hash(dto.password),
+                passwordChangedAt: new Date(),
+                failedLoginAttempts: 0,
+                lockedUntil: null,
+              }
             : {}),
         },
       });
       if (dto.roleIds) {
         await tx.userRole.deleteMany({ where: { userId: id, roleId: { notIn: dto.roleIds } } });
-        await tx.userRole.createMany({ data: dto.roleIds.map((roleId) => ({ userId: id, roleId, assignedById: actor.id })), skipDuplicates: true });
+        await tx.userRole.createMany({
+          data: dto.roleIds.map((roleId) => ({ userId: id, roleId, assignedById: actor.id })),
+          skipDuplicates: true,
+        });
       }
       if (dto.password) {
-        await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
+        await tx.refreshToken.updateMany({
+          where: { userId: id, revokedAt: null },
+          data: { revokedAt: new Date() },
+        });
       }
       await this.activity.record(
         {
@@ -210,8 +281,19 @@ export class UsersController {
           action: 'user.update',
           entityType: 'user',
           entityId: id,
-          oldValues: { email: existing.email, displayName: existing.displayName, employeeId: existing.employee?.id, roles: existingRoleNames },
-          newValues: { email: dto.email, displayName: dto.displayName, employeeId: dto.employeeId, roleIds: dto.roleIds, passwordReset: !!dto.password },
+          oldValues: {
+            email: existing.email,
+            displayName: existing.displayName,
+            employeeId: existing.employee?.id,
+            roles: existingRoleNames,
+          },
+          newValues: {
+            email: dto.email,
+            displayName: dto.displayName,
+            employeeId: dto.employeeId,
+            roleIds: dto.roleIds,
+            passwordReset: !!dto.password,
+          },
         },
         tx,
       );
@@ -226,13 +308,29 @@ export class UsersController {
   async disable(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
     if (id === actor.id) throw Errors.invalidState('You cannot disable your own account');
     const existing = await this.get(id);
-    if (existing.roles.some((r) => r.role.name === ROLES.SUPER_ADMIN) && !can(actor, 'role.manage')) {
+    if (
+      existing.roles.some((r) => r.role.name === ROLES.SUPER_ADMIN) &&
+      !can(actor, 'role.manage')
+    ) {
       throw Errors.forbidden('Only a Super Admin can disable a Super Admin account');
     }
     await this.prisma.$transaction(async (tx) => {
       await tx.user.update({ where: { id }, data: { status: 'DISABLED' } });
-      await tx.refreshToken.updateMany({ where: { userId: id, revokedAt: null }, data: { revokedAt: new Date() } });
-      await this.activity.record({ actorId: actor.id, action: 'user.disable', entityType: 'user', entityId: id, oldValues: { status: existing.status }, newValues: { status: 'DISABLED' } }, tx);
+      await tx.refreshToken.updateMany({
+        where: { userId: id, revokedAt: null },
+        data: { revokedAt: new Date() },
+      });
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'user.disable',
+          entityType: 'user',
+          entityId: id,
+          oldValues: { status: existing.status },
+          newValues: { status: 'DISABLED' },
+        },
+        tx,
+      );
     });
     this.access.invalidate(id);
     return this.get(id);
@@ -244,8 +342,21 @@ export class UsersController {
   async enable(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
     const existing = await this.get(id);
     await this.prisma.$transaction(async (tx) => {
-      await tx.user.update({ where: { id }, data: { status: 'ACTIVE', failedLoginAttempts: 0, lockedUntil: null } });
-      await this.activity.record({ actorId: actor.id, action: 'user.enable', entityType: 'user', entityId: id, oldValues: { status: existing.status }, newValues: { status: 'ACTIVE' } }, tx);
+      await tx.user.update({
+        where: { id },
+        data: { status: 'ACTIVE', failedLoginAttempts: 0, lockedUntil: null },
+      });
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'user.enable',
+          entityType: 'user',
+          entityId: id,
+          oldValues: { status: existing.status },
+          newValues: { status: 'ACTIVE' },
+        },
+        tx,
+      );
     });
     this.access.invalidate(id);
     return this.get(id);
@@ -254,7 +365,8 @@ export class UsersController {
   /** Prevent privilege escalation: only Super Admins (role.manage) may grant the Super Admin role. */
   private async assertRoles(roleIds: string[], actor: AuthUser) {
     const roles = await this.prisma.role.findMany({ where: { id: { in: roleIds } } });
-    if (roles.length !== new Set(roleIds).size) throw Errors.badRequest('One or more roles do not exist', 'roleIds');
+    if (roles.length !== new Set(roleIds).size)
+      throw Errors.badRequest('One or more roles do not exist', 'roleIds');
     if (roles.some((r) => r.name === ROLES.SUPER_ADMIN) && !can(actor, 'role.manage')) {
       throw Errors.forbidden('Only a Super Admin can grant the Super Admin role');
     }
@@ -262,9 +374,13 @@ export class UsersController {
 
   private async assertEmployee(employeeId: string | undefined, userId?: string) {
     if (!employeeId) return;
-    const employee = await this.prisma.employee.findFirst({ where: { id: employeeId, deletedAt: null }, include: { user: true } });
+    const employee = await this.prisma.employee.findFirst({
+      where: { id: employeeId, deletedAt: null },
+      include: { user: true },
+    });
     if (!employee) throw Errors.badRequest('Employee not found', 'employeeId');
-    if (employee.user && employee.user.id !== userId) throw Errors.conflict('EMPLOYEE_ALREADY_LINKED', 'This employee already has a user account');
+    if (employee.user && employee.user.id !== userId)
+      throw Errors.conflict('EMPLOYEE_ALREADY_LINKED', 'This employee already has a user account');
   }
 }
 
@@ -292,7 +408,10 @@ export class RolesController {
   async get(@Param('id', ParseUUIDPipe) id: string) {
     const role = await this.prisma.role.findUnique({
       where: { id },
-      include: { permissions: { include: { permission: true } }, _count: { select: { users: true } } },
+      include: {
+        permissions: { include: { permission: true } },
+        _count: { select: { users: true } },
+      },
     });
     if (!role) throw Errors.notFound('Role');
     const { permissions, ...rest } = role;
@@ -304,7 +423,16 @@ export class RolesController {
   async create(@Body() dto: CreateRoleDto, @CurrentUser() actor: AuthUser) {
     const role = await this.prisma.$transaction(async (tx) => {
       const created = await tx.role.create({ data: { ...dto, isSystem: false } });
-      await this.activity.record({ actorId: actor.id, action: 'role.create', entityType: 'role', entityId: created.id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'role.create',
+          entityType: 'role',
+          entityId: created.id,
+          newValues: dto,
+        },
+        tx,
+      );
       return created;
     });
     return this.get(role.id);
@@ -312,11 +440,25 @@ export class RolesController {
 
   @Patch('roles/:id')
   @RequirePermissions('role.manage')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateRoleDto, @CurrentUser() actor: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateRoleDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
     const existing = await this.get(id);
     await this.prisma.$transaction(async (tx) => {
       await tx.role.update({ where: { id }, data: dto });
-      await this.activity.record({ actorId: actor.id, action: 'role.update', entityType: 'role', entityId: id, oldValues: { displayName: existing.displayName, description: existing.description }, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'role.update',
+          entityType: 'role',
+          entityId: id,
+          oldValues: { displayName: existing.displayName, description: existing.description },
+          newValues: dto,
+        },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -329,20 +471,40 @@ export class RolesController {
 
   @Put('roles/:id/permissions')
   @RequirePermissions('role.manage')
-  async setPermissions(@Param('id', ParseUUIDPipe) id: string, @Body() dto: RolePermissionsDto, @CurrentUser() actor: AuthUser) {
+  async setPermissions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: RolePermissionsDto,
+    @CurrentUser() actor: AuthUser,
+  ) {
     const role = await this.get(id);
-    if (role.name === ROLES.SUPER_ADMIN) throw Errors.invalidState('Super Admin always has every permission');
+    if (role.name === ROLES.SUPER_ADMIN)
+      throw Errors.invalidState('Super Admin always has every permission');
     const keys = [...new Set(dto.permissionKeys)];
     const permissions = await this.prisma.permission.findMany({ where: { key: { in: keys } } });
     if (permissions.length !== keys.length) {
       const known = new Set(permissions.map((p) => p.key));
-      throw Errors.badRequest(`Unknown permissions: ${keys.filter((k) => !known.has(k)).join(', ')}`, 'permissionKeys');
+      throw Errors.badRequest(
+        `Unknown permissions: ${keys.filter((k) => !known.has(k)).join(', ')}`,
+        'permissionKeys',
+      );
     }
     await this.prisma.$transaction(async (tx) => {
-      await tx.rolePermission.deleteMany({ where: { roleId: id, permissionId: { notIn: permissions.map((p) => p.id) } } });
-      await tx.rolePermission.createMany({ data: permissions.map((p) => ({ roleId: id, permissionId: p.id })), skipDuplicates: true });
+      await tx.rolePermission.deleteMany({
+        where: { roleId: id, permissionId: { notIn: permissions.map((p) => p.id) } },
+      });
+      await tx.rolePermission.createMany({
+        data: permissions.map((p) => ({ roleId: id, permissionId: p.id })),
+        skipDuplicates: true,
+      });
       await this.activity.record(
-        { actorId: actor.id, action: 'role.set_permissions', entityType: 'role', entityId: id, oldValues: { permissionKeys: role.permissionKeys }, newValues: { permissionKeys: keys.sort() } },
+        {
+          actorId: actor.id,
+          action: 'role.set_permissions',
+          entityType: 'role',
+          entityId: id,
+          oldValues: { permissionKeys: role.permissionKeys },
+          newValues: { permissionKeys: keys.sort() },
+        },
         tx,
       );
     });

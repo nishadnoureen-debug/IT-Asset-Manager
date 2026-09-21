@@ -1,7 +1,28 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Post, Query, Res, StreamableFile } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Query,
+  Res,
+  StreamableFile,
+} from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { ArrayMaxSize, IsArray, IsIn, IsOptional, IsString, IsUUID, MaxLength, MinLength } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsIn,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
 import type { Response } from 'express';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -54,7 +75,10 @@ export class QrController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const file = await this.qr.download(id, q.format, user);
-    res.set({ 'Content-Type': file.contentType, 'Content-Disposition': `attachment; filename="${file.fileName}"` });
+    res.set({
+      'Content-Type': file.contentType,
+      'Content-Disposition': `attachment; filename="${file.fileName}"`,
+    });
     return new StreamableFile(file.body);
   }
 
@@ -68,9 +92,16 @@ export class QrController {
   @Get('qr/labels')
   @SkipEnvelope()
   @RequirePermissions('qr.generate')
-  async labels(@Query() q: LabelsQueryDto, @CurrentUser() user: AuthUser, @Res({ passthrough: true }) res: Response) {
+  async labels(
+    @Query() q: LabelsQueryDto,
+    @CurrentUser() user: AuthUser,
+    @Res({ passthrough: true }) res: Response,
+  ) {
     const pdf = await this.qr.labels(q.assetIds, user);
-    res.set({ 'Content-Type': 'application/pdf', 'Content-Disposition': 'attachment; filename="asset-labels.pdf"' });
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="asset-labels.pdf"',
+    });
     return new StreamableFile(pdf);
   }
 }

@@ -63,7 +63,10 @@ export class AlertsScheduler implements OnApplicationBootstrap, OnApplicationShu
   }
 
   private enabled(): boolean {
-    return this.config.get('ENABLE_SCHEDULER', { infer: true }) && this.config.get('NODE_ENV', { infer: true }) !== 'test';
+    return (
+      this.config.get('ENABLE_SCHEDULER', { infer: true }) &&
+      this.config.get('NODE_ENV', { infer: true }) !== 'test'
+    );
   }
 
   async warrantyAlerts(): Promise<number> {
@@ -78,7 +81,11 @@ export class AlertsScheduler implements OnApplicationBootstrap, OnApplicationShu
       select: { id: true, assetTag: true, name: true, warrantyEndDate: true },
     });
     if (!assets.length) return 0;
-    const recipients = await this.notifications.usersWithPermission(this.prisma, 'warranty.edit', 'maintenance.create');
+    const recipients = await this.notifications.usersWithPermission(
+      this.prisma,
+      'warranty.edit',
+      'maintenance.create',
+    );
     let sent = 0;
     for (const asset of assets) {
       sent += await this.notifications.notifyUsers(
@@ -103,13 +110,19 @@ export class AlertsScheduler implements OnApplicationBootstrap, OnApplicationShu
     const today = startOfDay();
     const licenses = await this.prisma.softwareLicense.findMany({
       where: { deletedAt: null, expiryDate: { gte: today, lte: addDays(today, licenseAlertDays) } },
-      select: { id: true, name: true, expiryDate: true, software: { select: { name: true, version: true } } },
+      select: {
+        id: true,
+        name: true,
+        expiryDate: true,
+        software: { select: { name: true, version: true } },
+      },
     });
     if (!licenses.length) return 0;
     const recipients = await this.notifications.usersWithPermission(this.prisma, 'license.manage');
     let sent = 0;
     for (const license of licenses) {
-      const name = license.name ?? [license.software.name, license.software.version].filter(Boolean).join(' ');
+      const name =
+        license.name ?? [license.software.name, license.software.version].filter(Boolean).join(' ');
       sent += await this.notifications.notifyUsers(
         this.prisma,
         recipients,

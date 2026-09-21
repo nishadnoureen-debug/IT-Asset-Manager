@@ -1,6 +1,23 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, OmitType, PartialType } from '@nestjs/swagger';
-import { AssetCondition, MaintenanceStatus, MaintenanceType, Prisma, Priority } from '@prisma/client';
+import {
+  AssetCondition,
+  MaintenanceStatus,
+  MaintenanceType,
+  Prisma,
+  Priority,
+} from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -52,7 +69,9 @@ class CreateMaintenanceDto {
   @IsOptional() @IsBoolean() startNow?: boolean;
 }
 
-class UpdateMaintenanceDto extends PartialType(OmitType(CreateMaintenanceDto, ['assetId', 'startNow'] as const)) {
+class UpdateMaintenanceDto extends PartialType(
+  OmitType(CreateMaintenanceDto, ['assetId', 'startNow'] as const),
+) {
   @IsOptional() @money() laborCost?: number;
   @IsOptional() @money() partsCost?: number;
   @IsOptional() @Transform(upper) @Matches(/^[A-Z]{3}$/) currency?: string;
@@ -77,11 +96,22 @@ class MaintenanceQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() assetId?: string;
   @IsOptional() @IsUUID() technicianId?: string;
   @IsOptional() @IsUUID() vendorId?: string;
-  @IsOptional() @Transform(({ value }) => value === true || value === 'true') @IsBoolean() open?: boolean;
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  open?: boolean;
 }
 
 const include = {
-  asset: { select: { id: true, assetTag: true, name: true, status: true, assetType: { select: { name: true, category: true } } } },
+  asset: {
+    select: {
+      id: true,
+      assetTag: true,
+      name: true,
+      status: true,
+      assetType: { select: { name: true, category: true } },
+    },
+  },
   technician: { select: { id: true, displayName: true } },
   reportedBy: { select: { id: true, displayName: true } },
   vendor: { select: { id: true, name: true } },
@@ -151,9 +181,12 @@ export class MaintenanceController {
   async create(@Body() dto: CreateMaintenanceDto, @CurrentUser() user: AuthUser) {
     const asset = await this.assets.findVisible(dto.assetId, user);
     if (['RETIRED', 'DISPOSED', 'LOST'].includes(asset.status)) {
-      throw Errors.invalidState(`Maintenance cannot be logged for ${asset.status.toLowerCase()} assets`);
+      throw Errors.invalidState(
+        `Maintenance cannot be logged for ${asset.status.toLowerCase()} assets`,
+      );
     }
-    if (asset.maintenance.length) throw Errors.invalidState('This asset already has open maintenance');
+    if (asset.maintenance.length)
+      throw Errors.invalidState('This asset already has open maintenance');
     await this.assertRefs(dto);
     const { startNow, ...data } = dto;
 
@@ -167,9 +200,26 @@ export class MaintenanceController {
           assetStatusBefore: startNow ? asset.status : undefined,
         },
       });
-      if (startNow) await this.moveToRepair(tx, asset.id, asset.status, record.id, record.title, user.id);
-      await this.activity.record({ actorId: user.id, action: 'maintenance.create', entityType: 'maintenance', entityId: record.id, newValues: dto }, tx);
-      await this.notifyTechnician(tx, record.technicianId, record.id, asset.assetTag, record.title, user.id);
+      if (startNow)
+        await this.moveToRepair(tx, asset.id, asset.status, record.id, record.title, user.id);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'maintenance.create',
+          entityType: 'maintenance',
+          entityId: record.id,
+          newValues: dto,
+        },
+        tx,
+      );
+      await this.notifyTechnician(
+        tx,
+        record.technicianId,
+        record.id,
+        asset.assetTag,
+        record.title,
+        user.id,
+      );
       return record;
     });
     return this.get(created.id);
@@ -177,7 +227,11 @@ export class MaintenanceController {
 
   @Patch(':id')
   @RequirePermissions('maintenance.edit')
-  async update(@Param('id', ParseUUIDPipe) id: string, @Body() dto: UpdateMaintenanceDto, @CurrentUser() user: AuthUser) {
+  async update(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateMaintenanceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const existing = await this.get(id);
     if (existing.status === 'COMPLETED' || existing.status === 'CANCELLED') {
       throw Errors.invalidState('Closed maintenance records cannot be edited');
@@ -187,10 +241,35 @@ export class MaintenanceController {
     const changes = diff(before as Record<string, unknown>, dto as Record<string, unknown>);
     if (!changes) return existing;
     await this.prisma.$transaction(async (tx) => {
-      await tx.maintenance.update({ where: { id }, data: { ...dto, totalCost: this.total(dto.laborCost ?? before.laborCost, dto.partsCost ?? before.partsCost) } });
-      await this.activity.record({ actorId: user.id, action: 'maintenance.update', entityType: 'maintenance', entityId: id, ...changes }, tx);
+      await tx.maintenance.update({
+        where: { id },
+        data: {
+          ...dto,
+          totalCost: this.total(
+            dto.laborCost ?? before.laborCost,
+            dto.partsCost ?? before.partsCost,
+          ),
+        },
+      });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'maintenance.update',
+          entityType: 'maintenance',
+          entityId: id,
+          ...changes,
+        },
+        tx,
+      );
       if (dto.technicianId && dto.technicianId !== before.technicianId) {
-        await this.notifyTechnician(tx, dto.technicianId, id, asset.assetTag, dto.title ?? before.title, user.id);
+        await this.notifyTechnician(
+          tx,
+          dto.technicianId,
+          id,
+          asset.assetTag,
+          dto.title ?? before.title,
+          user.id,
+        );
       }
     });
     return this.get(id);
@@ -201,16 +280,21 @@ export class MaintenanceController {
   @RequirePermissions('maintenance.edit')
   async start(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const record = await this.get(id);
-    if (record.status !== 'SCHEDULED') throw Errors.invalidState('Only scheduled maintenance can be started');
+    if (record.status !== 'SCHEDULED')
+      throw Errors.invalidState('Only scheduled maintenance can be started');
     const asset = await this.assets.findVisible(record.assetId, user);
     await this.prisma.$transaction(async (tx) => {
       const started = await tx.maintenance.updateMany({
         where: { id, status: 'SCHEDULED' },
         data: { status: 'IN_PROGRESS', startedAt: new Date(), assetStatusBefore: asset.status },
       });
-      if (started.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already started');
+      if (started.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already started');
       await this.moveToRepair(tx, asset.id, asset.status, id, record.title, user.id);
-      await this.activity.record({ actorId: user.id, action: 'maintenance.start', entityType: 'maintenance', entityId: id }, tx);
+      await this.activity.record(
+        { actorId: user.id, action: 'maintenance.start', entityType: 'maintenance', entityId: id },
+        tx,
+      );
     });
     return this.get(id);
   }
@@ -218,9 +302,14 @@ export class MaintenanceController {
   @Post(':id/complete')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('maintenance.complete')
-  async complete(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CompleteMaintenanceDto, @CurrentUser() user: AuthUser) {
+  async complete(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CompleteMaintenanceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const record = await this.get(id);
-    if (record.status !== 'IN_PROGRESS') throw Errors.invalidState('Only maintenance in progress can be completed');
+    if (record.status !== 'IN_PROGRESS')
+      throw Errors.invalidState('Only maintenance in progress can be completed');
     const asset = await this.assets.findVisible(record.assetId, user);
     const { defaultCurrency } = await this.settings.get();
     const laborCost = dto.laborCost ?? record.laborCost;
@@ -239,11 +328,15 @@ export class MaintenanceController {
           resolutionNotes: dto.resolutionNotes,
         },
       });
-      if (done.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already closed');
+      if (done.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already closed');
       // Spec: Complete → Available / Assigned.
       if (asset.status === 'IN_REPAIR') {
         const next = asset.assignments.length ? 'ASSIGNED' : 'AVAILABLE';
-        await this.assets.setStatus(tx, asset.id, 'IN_REPAIR', next, { condition: dto.condition, updatedById: user.id });
+        await this.assets.setStatus(tx, asset.id, 'IN_REPAIR', next, {
+          condition: dto.condition,
+          updatedById: user.id,
+        });
         await this.history.record(tx, {
           assetId: asset.id,
           action: 'MAINTENANCE_COMPLETED',
@@ -255,7 +348,13 @@ export class MaintenanceController {
         });
       }
       await this.activity.record(
-        { actorId: user.id, action: 'maintenance.complete', entityType: 'maintenance', entityId: id, newValues: dto },
+        {
+          actorId: user.id,
+          action: 'maintenance.complete',
+          entityType: 'maintenance',
+          entityId: id,
+          newValues: dto,
+        },
         tx,
       );
       if (record.reportedBy && record.reportedBy.id !== user.id) {
@@ -275,18 +374,32 @@ export class MaintenanceController {
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('maintenance.edit')
-  async cancel(@Param('id', ParseUUIDPipe) id: string, @Body() dto: CancelMaintenanceDto, @CurrentUser() user: AuthUser) {
+  async cancel(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CancelMaintenanceDto,
+    @CurrentUser() user: AuthUser,
+  ) {
     const record = await this.get(id);
-    if (record.status === 'COMPLETED' || record.status === 'CANCELLED') throw Errors.invalidState('Maintenance is already closed');
+    if (record.status === 'COMPLETED' || record.status === 'CANCELLED')
+      throw Errors.invalidState('Maintenance is already closed');
     const asset = await this.assets.findVisible(record.assetId, user);
     await this.prisma.$transaction(async (tx) => {
       const cancelled = await tx.maintenance.updateMany({
         where: { id, status: { in: ['SCHEDULED', 'IN_PROGRESS'] } },
-        data: { status: 'CANCELLED', cancelledAt: new Date(), resolutionNotes: `Cancelled: ${dto.reason}` },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: new Date(),
+          resolutionNotes: `Cancelled: ${dto.reason}`,
+        },
       });
-      if (cancelled.count !== 1) throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already closed');
+      if (cancelled.count !== 1)
+        throw Errors.conflict('CONCURRENT_UPDATE', 'Maintenance was already closed');
       if (record.status === 'IN_PROGRESS' && asset.status === 'IN_REPAIR') {
-        const restore = asset.assignments.length ? 'ASSIGNED' : record.assetStatusBefore === 'IN_STOCK' ? 'IN_STOCK' : 'AVAILABLE';
+        const restore = asset.assignments.length
+          ? 'ASSIGNED'
+          : record.assetStatusBefore === 'IN_STOCK'
+            ? 'IN_STOCK'
+            : 'AVAILABLE';
         await this.assets.setStatus(tx, asset.id, 'IN_REPAIR', restore, { updatedById: user.id });
         await this.history.record(tx, {
           assetId: asset.id,
@@ -298,12 +411,28 @@ export class MaintenanceController {
           description: `Maintenance cancelled: ${dto.reason}`,
         });
       }
-      await this.activity.record({ actorId: user.id, action: 'maintenance.cancel', entityType: 'maintenance', entityId: id, newValues: dto }, tx);
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'maintenance.cancel',
+          entityType: 'maintenance',
+          entityId: id,
+          newValues: dto,
+        },
+        tx,
+      );
     });
     return this.get(id);
   }
 
-  private async moveToRepair(tx: Prisma.TransactionClient, assetId: string, from: Parameters<AssetsService['setStatus']>[2], maintenanceId: string, title: string, userId: string) {
+  private async moveToRepair(
+    tx: Prisma.TransactionClient,
+    assetId: string,
+    from: Parameters<AssetsService['setStatus']>[2],
+    maintenanceId: string,
+    title: string,
+    userId: string,
+  ) {
     this.assets.assertTransition(from, 'IN_REPAIR');
     await this.assets.setStatus(tx, assetId, from, 'IN_REPAIR', { updatedById: userId });
     await this.history.record(tx, {
@@ -317,7 +446,14 @@ export class MaintenanceController {
     });
   }
 
-  private async notifyTechnician(tx: Prisma.TransactionClient, technicianId: string | null | undefined, id: string, assetTag: string, title: string, actorId: string) {
+  private async notifyTechnician(
+    tx: Prisma.TransactionClient,
+    technicianId: string | null | undefined,
+    id: string,
+    assetTag: string,
+    title: string,
+    actorId: string,
+  ) {
     if (!technicianId) return;
     await this.notifications.notifyUsers(
       tx,
@@ -334,7 +470,10 @@ export class MaintenanceController {
     );
   }
 
-  private total(labor: Prisma.Decimal | number | null | undefined, parts: Prisma.Decimal | number | null | undefined) {
+  private total(
+    labor: Prisma.Decimal | number | null | undefined,
+    parts: Prisma.Decimal | number | null | undefined,
+  ) {
     if (labor == null && parts == null) return undefined;
     return Math.round((Number(labor ?? 0) + Number(parts ?? 0)) * 100) / 100;
   }
@@ -342,11 +481,25 @@ export class MaintenanceController {
   private async assertRefs(dto: { technicianId?: string; vendorId?: string; ticketId?: string }) {
     if (dto.technicianId) {
       const tech = await this.prisma.user.findFirst({
-        where: { id: dto.technicianId, deletedAt: null, status: 'ACTIVE', roles: { some: { role: { permissions: { some: { permission: { key: 'maintenance.edit' } } } } } } },
+        where: {
+          id: dto.technicianId,
+          deletedAt: null,
+          status: 'ACTIVE',
+          roles: {
+            some: { role: { permissions: { some: { permission: { key: 'maintenance.edit' } } } } },
+          },
+        },
       });
-      if (!tech) throw Errors.badRequest('Technician must be an active user who can work on maintenance', 'technicianId');
+      if (!tech)
+        throw Errors.badRequest(
+          'Technician must be an active user who can work on maintenance',
+          'technicianId',
+        );
     }
-    if (dto.vendorId && !(await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null } }))) {
+    if (
+      dto.vendorId &&
+      !(await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null } }))
+    ) {
       throw Errors.badRequest('Vendor not found', 'vendorId');
     }
     if (dto.ticketId && !(await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } }))) {

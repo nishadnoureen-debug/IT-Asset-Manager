@@ -53,12 +53,24 @@ export function Dialog({
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
             <div>
               <h2 className="text-base font-semibold">{title}</h2>
-              {description && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+              {description && (
+                <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>
+              )}
             </div>
-            <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close" icon={<X className="h-4 w-4" />} />
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={onClose}
+              aria-label="Close"
+              icon={<X className="h-4 w-4" />}
+            />
           </div>
           <div className="overflow-y-auto px-5 py-4">{children}</div>
-          {footer && <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3 dark:border-slate-800">{footer}</div>}
+          {footer && (
+            <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3 dark:border-slate-800">
+              {footer}
+            </div>
+          )}
         </div>
       )}
     </dialog>

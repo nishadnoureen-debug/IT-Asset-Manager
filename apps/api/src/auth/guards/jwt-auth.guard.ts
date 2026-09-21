@@ -42,10 +42,12 @@ export class JwtAuthGuard implements CanActivate {
         algorithms: ['HS256'],
       });
     } catch (error) {
-      if (error instanceof TokenExpiredError) throw unauthorized('TOKEN_EXPIRED', 'Access token expired');
+      if (error instanceof TokenExpiredError)
+        throw unauthorized('TOKEN_EXPIRED', 'Access token expired');
       throw unauthorized('UNAUTHORIZED', 'Invalid access token');
     }
-    if (payload.typ !== 'access' || !payload.sub) throw unauthorized('UNAUTHORIZED', 'Invalid access token');
+    if (payload.typ !== 'access' || !payload.sub)
+      throw unauthorized('UNAUTHORIZED', 'Invalid access token');
 
     const user = await this.access.get(payload.sub);
     if (!user) throw unauthorized('UNAUTHORIZED', 'Account is not active');
