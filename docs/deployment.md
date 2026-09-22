@@ -10,35 +10,52 @@ Browser ──HTTPS──▶ reverse proxy / load balancer ──▶ web (Next.j
 The browser only talks to the web origin. Next.js forwards `/api/v1/*` to the API (`API_INTERNAL_URL`), so the
 refresh cookie is first-party and the API does not need to be publicly reachable.
 
-## Render (managed hosting)
+## Render + Neon (free hosting)
 
-[`render.yaml`](../render.yaml) is a Render Blueprint that creates everything from this repository:
+[`render.yaml`](../render.yaml) is a Render Blueprint for a **free** setup:
 
-| Resource       | Type                      | Notes                                                                               |
-| -------------- | ------------------------- | ----------------------------------------------------------------------------------- |
-| `arc-itam`     | Web service (Docker)      | The site people open. HTTPS on `https://<name>.onrender.com`.                       |
-| `arc-itam-api` | Private service (Docker)  | Not reachable from the internet. Uploaded files on a 1 GB disk.                     |
-| `arc-itam-db`  | PostgreSQL 16, 0.1c-256mb | Private network only (`ipAllowList: []`); point-in-time recovery (3 days on Hobby). |
+| Part       | Where                              | Notes                                                                        |
+| ---------- | ---------------------------------- | ---------------------------------------------------------------------------- |
+| `arc-itam` | Render web service, `free` plan    | Web app and API in one container (`docker/app.Dockerfile`), HTTPS.           |
+| Database   | [Neon](https://neon.com) free plan | PostgreSQL. Uploaded files are stored in it too (`STORAGE_DRIVER=database`). |
 
-Approximate cost on a Hobby workspace: web $7 + API $7 + Postgres $6 + 5 GB database storage $1.50 + 1 GB disk
-$0.25 ≈ **US$22/month**. Free instances are not suitable: they have no disks and free databases expire.
+What "free" means here:
 
-1. Sign in at [dashboard.render.com](https://dashboard.render.com) with GitHub and add a payment method.
-2. **New → Blueprint**, pick this repository, keep `render.yaml` and the `main` branch.
-3. Render asks for two values:
-   - `PUBLIC_WEB_URL`: `https://arc-itam.onrender.com` (the address printed on QR labels).
+- The service **sleeps after 15 minutes without visits**; the next visit wakes it in about a minute.
+- Neon's free plan includes 0.5 GB of storage — enough for thousands of assets and a few hundred small
+  scanned documents. Keep uploads small (PDF or compressed photos).
+- Daily alerts (expiring warranties and licences, overdue returns) run each time the service wakes up.
+- To remove the sleep later, change `plan: free` to `plan: 0.5c-512mb` (US$7/month) in `render.yaml`.
+
+### 1. Create the database (Neon)
+
+1. Sign up at [neon.com](https://neon.com) (GitHub or Google sign-in works) and create a project. Pick the region
+   **AWS Europe Central 1 (Frankfurt)**, next to Render's Frankfurt region.
+2. Open **Connect**, and copy the connection string. It looks like
+   `postgresql://neondb_owner:…@ep-….eu-central-1.aws.neon.tech/neondb?sslmode=require`. Either the pooled
+   (`-pooler`) or direct string works: the app switches to the direct host for migrations.
+
+### 2. Deploy the app (Render)
+
+1. Sign in at [dashboard.render.com](https://dashboard.render.com) and open
+   `https://render.com/deploy?repo=https://github.com/nishadnoureen-debug/IT-Asset-Manager` (or **New → Blueprint**
+   and pick the repository). Do not use **New → Web Service**: that form ignores `render.yaml`.
+2. Render asks for two values:
+   - `DATABASE_URL`: the Neon connection string.
    - `BOOTSTRAP_ADMIN_EMAIL`: your email. Only this address can create the first account.
-4. Click **Deploy Blueprint**. The first build takes about 10 minutes.
-5. Open the `arc-itam` service. If its URL is not `https://arc-itam.onrender.com` (the name was taken), set
-   `PUBLIC_WEB_URL` on `arc-itam-api` → **Environment** to the real URL and save (it redeploys).
-6. Open the site, choose **Create an account** and register with the `BOOTSTRAP_ADMIN_EMAIL` address. You become
-   the Super Admin and registration closes automatically (reopen it in **Settings** if you ever need more users).
-7. Copy `ENCRYPTION_KEY` from `arc-itam-api` → **Environment** into your password manager. Without it, stored
-   licence keys cannot be decrypted after a restore.
+3. Click **Deploy Blueprint**. The first build takes about 10 minutes; the free plan needs no payment card.
+4. Open the service URL (`https://arc-itam.onrender.com` unless the name was taken), choose **Create an account**
+   and register with the `BOOTSTRAP_ADMIN_EMAIL` address. You become the Super Admin and registration closes
+   automatically (reopen it in **Settings** if you ever need more users).
+5. Copy `ENCRYPTION_KEY` from the service's **Environment** page into your password manager. Without it, stored
+   licence keys cannot be decrypted after moving the database.
 
-Every push to `main` redeploys both services once the GitHub CI checks pass (`autoDeployTrigger: checksPass`); the
-API applies database migrations before it starts. To use your
-own domain, add it under `arc-itam` → **Settings → Custom Domains**, then update `PUBLIC_WEB_URL`.
+The address printed on QR labels is the service's Render URL (`RENDER_EXTERNAL_URL`). With a custom domain, set
+`PUBLIC_WEB_URL` on the service. Every push to `main` redeploys once the GitHub CI checks pass
+(`autoDeployTrigger: checksPass`); database migrations run before the app starts.
+
+Backups: Neon keeps a short restore window on the free plan. Export your data regularly from **Reports**
+(Excel), or run `pg_dump` with the Neon connection string.
 
 ## Docker Compose (single host / staging)
 
@@ -69,7 +86,7 @@ Put a TLS-terminating reverse proxy (Caddy, nginx, Traefik, a cloud load balance
 | HTTPS everywhere | Required for `Secure` cookies and camera access for QR scanning.                                                                                                                                                                                                                                                                                          |
 | Secrets          | `JWT_ACCESS_SECRET` (≥ 32 chars) and `ENCRYPTION_KEY` (32 bytes, base64) from a secret manager. **Back up `ENCRYPTION_KEY`** — without it stored licence keys cannot be decrypted. Rotating the JWT secret signs everyone out (safe).                                                                                                                     |
 | Database         | Managed PostgreSQL 16 or a hardened instance; the app user needs DDL rights only for `migrate deploy` (or run migrations from CI with a separate role).                                                                                                                                                                                                   |
-| Storage          | `STORAGE_DRIVER=s3` with a private bucket (versioning on). The local driver is fine for a single host with a persistent volume.                                                                                                                                                                                                                           |
+| Storage          | `STORAGE_DRIVER=s3` with a private bucket (versioning on). The local driver is fine for a single host with a persistent volume; `database` stores files in PostgreSQL (hosts without a disk).                                                                                                                                                             |
 | `PUBLIC_WEB_URL` | The public URL — it is printed into QR labels. Changing it later requires reprinting labels (or a redirect from the old host).                                                                                                                                                                                                                            |
 | `TRUST_PROXY`    | Set so `req.ip` is the real client (rate limits, lockout and logs). Default `loopback`; in Compose `uniquelocal`.                                                                                                                                                                                                                                         |
 | Rate limits      | `THROTTLE_LIMIT` per `THROTTLE_TTL_MS` per client IP (default 600/min); auth routes have stricter fixed limits.                                                                                                                                                                                                                                           |

@@ -13,9 +13,12 @@ async function bootstrap(): Promise<void> {
 
   configureApp(app);
 
-  const port = app.get<ConfigService<Env, true>>(ConfigService).get('PORT', { infer: true });
-  await app.listen(port);
-  logger.log(`API listening on http://localhost:${port}/${API_PREFIX}`, 'Bootstrap');
+  const config = app.get<ConfigService<Env, true>>(ConfigService);
+  const port = config.get('PORT', { infer: true });
+  const host = config.get('HOST', { infer: true });
+  if (host) await app.listen(port, host);
+  else await app.listen(port);
+  logger.log(`API listening on http://${host ?? 'localhost'}:${port}/${API_PREFIX}`, 'Bootstrap');
 }
 
 void bootstrap();

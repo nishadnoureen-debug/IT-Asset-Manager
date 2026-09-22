@@ -1141,6 +1141,18 @@ model PasswordResetToken {
   @@map("password_reset_tokens")
 }
 
+/// File contents when STORAGE_DRIVER=database (hosting without a persistent disk or object store).
+/// Keys match documents.storage_key; the storage service is the only reader and writer.
+model StoredFile {
+  key         String   @id @db.VarChar(512)
+  contentType String   @map("content_type") @db.VarChar(127)
+  sizeBytes   Int      @map("size_bytes")
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("stored_files")
+}
+
 /// Application settings (company name, default currency, asset tag prefix, alert windows…).
 model Setting {
   key         String   @id @db.VarChar(64)

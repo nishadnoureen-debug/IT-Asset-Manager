@@ -118,8 +118,8 @@ API documentation (Swagger) is at http://localhost:4000/api/docs in development.
 - [Implementation plan & acceptance criteria](docs/implementation-plan.md)
 - [Database](docs/database.md): schema, integrity rules, roles and permissions
 - [Security](docs/security.md): authentication, authorization, data protection
-- [Deployment](docs/deployment.md): one-click Render Blueprint, Docker, staging/production, backups and
-  restore tests
+- [Deployment](docs/deployment.md): free hosting on Render + Neon, Docker, staging/production, backups
+  and restore tests
 
 ## Conventions
 

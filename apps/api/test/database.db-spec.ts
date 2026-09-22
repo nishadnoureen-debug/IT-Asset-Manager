@@ -45,6 +45,7 @@ const EXPECTED_TABLES = [
   'software',
   'software_assignments',
   'software_licenses',
+  'stored_files',
   'ticket_comments',
   'tickets',
   'user_roles',
@@ -97,7 +98,7 @@ beforeEach(async () => {
 });
 
 describe('migration', () => {
-  it('creates every table from spec §3 plus ticket_comments, auth tokens and settings', async () => {
+  it('creates every table from spec §3 plus ticket_comments, auth tokens, settings and file storage', async () => {
     const rows = await prisma.$queryRaw<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> '_prisma_migrations'

@@ -14,6 +14,8 @@ export const envSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PORT: z.coerce.number().int().min(1).max(65535).default(4000),
+    /** Interface to listen on; unset means all. 127.0.0.1 keeps the API private (single-container hosting). */
+    HOST: z.preprocess(blankToUndefined, z.string().optional()),
     DATABASE_URL: z
       .string({ required_error: 'DATABASE_URL is required' })
       .regex(/^postgres(ql)?:\/\//, 'DATABASE_URL must be a PostgreSQL connection string'),
@@ -51,7 +53,10 @@ export const envSchema = z
         'ENCRYPTION_KEY must be 32 bytes, base64',
       ),
 
-    /** Public URL of the web app — used in QR codes, reset links and PDFs. A bare host gets https://. */
+    /**
+     * Public URL of the web app — used in QR codes, reset links and PDFs. A bare host gets https://.
+     * Falls back to RENDER_EXTERNAL_URL on Render, where web app and API share a container.
+     */
     PUBLIC_WEB_URL: z.preprocess((value) => {
       const v = blankToUndefined(value);
       if (typeof v !== 'string') return v;
@@ -68,7 +73,8 @@ export const envSchema = z
     }, z.string().email('BOOTSTRAP_ADMIN_EMAIL must be an email address').optional()),
 
     // File storage
-    STORAGE_DRIVER: z.enum(['local', 's3']).default('local'),
+    /** local = files on disk; s3 = S3-compatible bucket; database = inside PostgreSQL (no disk needed). */
+    STORAGE_DRIVER: z.enum(['local', 's3', 'database']).default('local'),
     STORAGE_LOCAL_DIR: z.string().default('storage'),
     S3_BUCKET: z.string().optional(),
     S3_REGION: z.string().default('us-east-1'),
@@ -96,7 +102,11 @@ export type Env = z.infer<typeof envSchema>;
 
 /** Used by ConfigModule — fails fast at boot with every invalid variable listed. */
 export function validateEnv(raw: Record<string, unknown>): Env {
-  const result = envSchema.safeParse(raw);
+  const input = { ...raw };
+  if (blankToUndefined(input.PUBLIC_WEB_URL) === undefined && input.RENDER_EXTERNAL_URL) {
+    input.PUBLIC_WEB_URL = input.RENDER_EXTERNAL_URL;
+  }
+  const result = envSchema.safeParse(input);
   if (!result.success) {
     const issues = result.error.issues
       .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)

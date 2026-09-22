@@ -56,6 +56,17 @@ describe('validateEnv', () => {
     );
   });
 
+  it('uses the Render URL when PUBLIC_WEB_URL is not set, and accepts database storage', () => {
+    const render = { ...base, RENDER_EXTERNAL_URL: 'https://arc-itam.onrender.com' };
+    expect(validateEnv(render).PUBLIC_WEB_URL).toBe('https://arc-itam.onrender.com');
+    expect(validateEnv({ ...render, PUBLIC_WEB_URL: 'assets.example.com' }).PUBLIC_WEB_URL).toBe(
+      'https://assets.example.com',
+    );
+    expect(validateEnv({ ...base, STORAGE_DRIVER: 'database' }).STORAGE_DRIVER).toBe('database');
+    expect(validateEnv({ ...base, HOST: '127.0.0.1' }).HOST).toBe('127.0.0.1');
+    expect(validateEnv({ ...base, HOST: '' }).HOST).toBeUndefined();
+  });
+
   it('requires a bucket for s3 storage', () => {
     expect(() => validateEnv({ ...base, STORAGE_DRIVER: 's3' })).toThrow(/S3_BUCKET/);
   });

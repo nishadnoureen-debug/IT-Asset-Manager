@@ -1,82 +1,45 @@
-# Render Blueprint: web app + private API + PostgreSQL, deployed from this repository.
-# Setup steps: docs/deployment.md → "Render".
+# Render Blueprint — FREE setup: one free web service (web app + API in one container) and a free
+# PostgreSQL database from Neon (neon.com). Setup steps: docs/deployment.md → "Render (free)".
 #
-#   arc-itam      Next.js web app, public HTTPS URL (https://arc-itam.onrender.com if the name is free)
-#   arc-itam-api  NestJS API, private network only; uploaded files on a persistent disk
-#   arc-itam-db   PostgreSQL 16, reachable only from the private network
+#   arc-itam   https://arc-itam.onrender.com (a suffix is added if the name is taken)
 #
-# Every push to main redeploys both services once GitHub CI passes; the API applies pending migrations
-# before it starts.
-# Approximate cost (Hobby workspace): web $7 + API $7 + Postgres $6 + 5 GB database storage $1.50
-# + 1 GB disk $0.25 ≈ US$22/month.
-
-databases:
-  - name: arc-itam-db
-    plan: 0.1c-256mb
-    diskSizeGB: 5
-    region: frankfurt
-    postgresMajorVersion: '16'
-    databaseName: itam
-    user: itam
-    # No access from the internet; the API connects over Render's private network.
-    ipAllowList: []
+# Free-plan behaviour: the service sleeps after 15 minutes without visits; the next visit wakes it in
+# about a minute. Uploaded files are stored in the database (no disk on free plans). Daily alerts run
+# each time the service wakes. To remove the sleep, change `plan` to 0.5c-512mb (US$7/month).
+#
+# Every push to main redeploys once the GitHub CI checks pass; migrations run before the app starts.
 
 services:
-  - type: pserv
-    name: arc-itam-api
+  - type: web
+    name: arc-itam
     runtime: docker
-    plan: 0.5c-512mb
+    plan: free
     region: frankfurt
-    dockerfilePath: ./docker/api.Dockerfile
+    dockerfilePath: ./docker/app.Dockerfile
     dockerContext: .
     autoDeployTrigger: checksPass
-    disk:
-      name: storage
-      mountPath: /data/storage
-      sizeGB: 1
+    healthCheckPath: /api/v1/health
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: '4000'
+      # Asked for when the Blueprint is created:
+      # the Neon connection string (postgresql://…neon.tech/neondb?sslmode=require).
       - key: DATABASE_URL
-        fromDatabase:
-          name: arc-itam-db
-          property: connectionString
+        sync: false
+      # Your email: only this address can create the first (Super Admin) account.
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        sync: false
       # Random secrets generated once by Render. Keep a copy of ENCRYPTION_KEY somewhere safe:
       # without it, stored licence keys cannot be decrypted.
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: ENCRYPTION_KEY
         generateValue: true
-      # Asked for when the Blueprint is created.
-      # The web app's address, e.g. https://arc-itam.onrender.com (printed on QR labels).
-      - key: PUBLIC_WEB_URL
-        sync: false
-      # Your email: only this address can create the first (Super Admin) account.
-      - key: BOOTSTRAP_ADMIN_EMAIL
-        sync: false
-      # Requests arrive from the web service over the private network.
-      - key: TRUST_PROXY
-        value: uniquelocal
+      - key: NODE_ENV
+        value: production
+      # Uploaded files live in PostgreSQL: free services have no persistent disk.
       - key: STORAGE_DRIVER
-        value: local
-      - key: STORAGE_LOCAL_DIR
-        value: /data/storage
-
-  - type: web
-    name: arc-itam
-    runtime: docker
-    plan: 0.5c-512mb
-    region: frankfurt
-    dockerfilePath: ./docker/web.Dockerfile
-    dockerContext: .
-    autoDeployTrigger: checksPass
-    healthCheckPath: /login
-    envVars:
-      # Private hostname of the API (port 4000 is added by next.config.ts). Used at build time.
-      - key: API_INTERNAL_URL
-        fromService:
-          type: pserv
-          name: arc-itam-api
-          property: host
+        value: database
+      # The API sees requests from the web server (loopback) behind Render's proxy (private range).
+      - key: TRUST_PROXY
+        value: loopback, uniquelocal
+      # PUBLIC_WEB_URL (used in QR labels) defaults to this service's Render URL. Set it only if you
+      # add a custom domain.
