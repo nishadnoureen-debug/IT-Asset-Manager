@@ -36,7 +36,7 @@ export const FORM_SIGNATORIES_MAX = 9;
 
 export const DEFAULT_SETTINGS: AppSettings = {
   companyName: 'ARC Global',
-  defaultCurrency: 'USD',
+  defaultCurrency: 'AED',
   assetTagPrefix: 'AST',
   warrantyAlertDays: 30,
   licenseAlertDays: 30,

@@ -189,7 +189,7 @@ async function main() {
         invoiceNumber: 'INV-88121',
         vendorId: vendor.dell.id,
         purchaseDate: dateOnly(daysFromNow(-700)),
-        currency: 'USD',
+        currency: 'AED',
         subtotal: 16800,
         taxAmount: 840,
         totalAmount: 17640,
@@ -202,7 +202,7 @@ async function main() {
         invoiceNumber: 'LN-55310',
         vendorId: vendor.lenovo.id,
         purchaseDate: dateOnly(daysFromNow(-120)),
-        currency: 'USD',
+        currency: 'AED',
         subtotal: 9600,
         taxAmount: 480,
         totalAmount: 10080,
@@ -215,7 +215,7 @@ async function main() {
         invoiceNumber: 'GIS-2210',
         vendorId: vendor.service.id,
         purchaseDate: dateOnly(daysFromNow(-30)),
-        currency: 'USD',
+        currency: 'AED',
         subtotal: 2400,
         taxAmount: 120,
         totalAmount: 2520,
@@ -545,7 +545,7 @@ async function main() {
           model: a.model,
           serialNumber: a.serial,
           purchaseCost: a.cost,
-          currency: 'USD',
+          currency: 'AED',
           vendorId: vendorIds[a.vendor],
           purchaseId: a.purchase ? purchases[a.purchase] : undefined,
           purchaseDate: dateOnly(daysFromNow(a.bought)),
@@ -576,7 +576,7 @@ async function main() {
         minStockLevel: 5,
         locationId: loc.WH.id,
         unitCost: 39,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     const mouse = await prisma.accessory.create({
@@ -589,7 +589,7 @@ async function main() {
         minStockLevel: 8,
         locationId: loc.WH.id,
         unitCost: 25,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     const bag = await prisma.accessory.create({
@@ -602,7 +602,7 @@ async function main() {
         minStockLevel: 4,
         locationId: loc.WH.id,
         unitCost: 45,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     const dock = await prisma.accessory.create({
@@ -615,7 +615,7 @@ async function main() {
         minStockLevel: 3,
         locationId: loc.WH.id,
         unitCost: 220,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     await prisma.accessory.create({
@@ -628,7 +628,7 @@ async function main() {
         minStockLevel: 4,
         locationId: loc.WH.id,
         unitCost: 120,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
 
@@ -767,7 +767,7 @@ async function main() {
         laborCost: 40,
         partsCost: 110,
         totalCost: 150,
-        currency: 'USD',
+        currency: 'AED',
         resolutionNotes: 'Installed 2×16 GB DDR5, memtest passed.',
         reportedById: admin.id,
       },
@@ -814,7 +814,7 @@ async function main() {
         startDate: dateOnly(daysFromNow(-340)),
         expiryDate: dateOnly(daysFromNow(25)),
         cost: 21600,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     const acroLic = await prisma.softwareLicense.create({
@@ -827,7 +827,7 @@ async function main() {
         startDate: dateOnly(daysFromNow(-100)),
         expiryDate: dateOnly(daysFromNow(265)),
         cost: 720,
-        currency: 'USD',
+        currency: 'AED',
       },
     });
     const winLic = await prisma.softwareLicense.create({

@@ -83,6 +83,7 @@ export class ReportsService {
           { key: 'warrantyEndDate', label: 'Warranty end', type: 'date' },
         ],
         build: async (f, user, take) => {
+          const { defaultCurrency } = await this.settings.get();
           const where = this.assetWhere(f, user);
           const [items, total] = await Promise.all([
             this.prisma.asset.findMany({
@@ -116,7 +117,7 @@ export class ReportsService {
               assignedTo: fullName(a.assignments[0]?.employee) ?? a.assignments[0]?.location?.name,
               purchaseDate: a.purchaseDate,
               purchaseCost: num(a.purchaseCost),
-              currency: a.currency,
+              currency: a.currency ?? defaultCurrency,
               warrantyEndDate: a.warrantyEndDate,
             })),
           };
@@ -208,6 +209,7 @@ export class ReportsService {
           { key: 'assets', label: 'Assets', type: 'number', width: 0.6 },
         ],
         build: async (f, _user, take) => {
+          const { defaultCurrency } = await this.settings.get();
           const where: Prisma.PurchaseWhereInput = {
             deletedAt: null,
             vendorId: f.vendorId,
@@ -229,7 +231,7 @@ export class ReportsService {
               invoiceNumber: p.invoiceNumber,
               vendor: p.vendor.name,
               purchaseDate: p.purchaseDate,
-              currency: p.currency,
+              currency: p.currency ?? defaultCurrency,
               subtotal: num(p.subtotal),
               taxAmount: num(p.taxAmount),
               totalAmount: num(p.totalAmount),
@@ -258,6 +260,7 @@ export class ReportsService {
           { key: 'warrantyClaim', label: 'Warranty', width: 0.6 },
         ],
         build: async (f, _user, take) => {
+          const { defaultCurrency } = await this.settings.get();
           const where: Prisma.MaintenanceWhereInput = {
             status: f.status as Prisma.MaintenanceWhereInput['status'],
             vendorId: f.vendorId,
@@ -287,7 +290,7 @@ export class ReportsService {
               startedAt: m.startedAt,
               completedAt: m.completedAt,
               totalCost: num(m.totalCost),
-              currency: m.currency,
+              currency: m.currency ?? defaultCurrency,
               warrantyClaim: m.isWarrantyClaim,
             })),
           };
@@ -367,6 +370,7 @@ export class ReportsService {
           { key: 'currency', label: 'Cur.', width: 0.5 },
         ],
         build: async (f, _user, take) => {
+          const { defaultCurrency } = await this.settings.get();
           const where: Prisma.SoftwareLicenseWhereInput = {
             deletedAt: null,
             vendorId: f.vendorId,
@@ -400,7 +404,7 @@ export class ReportsService {
               expiryDate: l.expiryDate,
               vendor: l.vendor?.name,
               cost: num(l.cost),
-              currency: l.currency,
+              currency: l.currency ?? defaultCurrency,
             })),
           };
         },

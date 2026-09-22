@@ -1,4 +1,12 @@
+import { DEFAULT_SETTINGS } from '@itam/shared';
+
 export { label, LABELS } from '@itam/shared';
+
+/** Currency for amounts that have none of their own; kept in sync with Settings by the app shell. */
+let defaultCurrency: string = DEFAULT_SETTINGS.defaultCurrency;
+export function setDefaultCurrency(code: string | null | undefined): void {
+  if (code && /^[A-Z]{3}$/.test(code)) defaultCurrency = code;
+}
 
 const dateFmt = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
@@ -32,13 +40,16 @@ export function formatMoney(
   if (value === null || value === undefined || value === '') return '—';
   const n = Number(value);
   if (Number.isNaN(n)) return '—';
+  const code = currency || defaultCurrency;
   try {
-    return new Intl.NumberFormat(undefined, {
+    // Always the ISO code ("AED 1,250.00"), never a locale symbol such as "$" or "د.إ".
+    return new Intl.NumberFormat('en-AE', {
       style: 'currency',
-      currency: currency || 'USD',
+      currency: code,
+      currencyDisplay: 'code',
     }).format(n);
   } catch {
-    return `${n.toFixed(2)} ${currency ?? ''}`.trim();
+    return `${code} ${n.toFixed(2)}`;
   }
 }
 

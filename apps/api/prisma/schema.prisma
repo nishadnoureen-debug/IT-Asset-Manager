@@ -389,7 +389,7 @@ model Purchase {
   vendorId      String    @map("vendor_id") @db.Uuid
   purchaseDate  DateTime  @map("purchase_date") @db.Date
   invoiceDate   DateTime? @map("invoice_date") @db.Date
-  currency      String    @default("USD") @db.Char(3)
+  currency      String    @default("AED") @db.Char(3)
   subtotal      Decimal   @default(0) @db.Decimal(14, 2)
   taxAmount     Decimal   @default(0) @map("tax_amount") @db.Decimal(14, 2)
   totalAmount   Decimal   @default(0) @map("total_amount") @db.Decimal(14, 2)

@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import type { AppSettings } from '@itam/shared';
 import { useAuth } from '@/lib/auth';
+import { setDefaultCurrency } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import { NAV, SECTION_LABELS, type NavItem } from '@/lib/nav';
 import { Spinner } from './ui/states';
@@ -200,6 +201,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   const items = NAV.filter((item) => can(...item.anyOf));
   const companyName = settings.data?.data.companyName;
+  setDefaultCurrency(settings.data?.data.defaultCurrency);
 
   return (
     <div className="min-h-dvh">

@@ -36,6 +36,7 @@ import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { PrismaService } from '../prisma/prisma.service';
+import { SettingsService } from '../settings/settings.service';
 
 class CreateAccessoryDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) name!: string;
@@ -80,6 +81,7 @@ export class AccessoriesController {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityLogService,
+    private readonly settings: SettingsService,
   ) {}
 
   @Get('accessories')
@@ -146,10 +148,15 @@ export class AccessoriesController {
 
   @Post('accessories')
   @RequirePermissions('accessory.manage')
-  create(@Body() dto: CreateAccessoryDto, @CurrentUser() user: AuthUser) {
+  async create(@Body() dto: CreateAccessoryDto, @CurrentUser() user: AuthUser) {
+    const { defaultCurrency } = await this.settings.get();
     return this.prisma.$transaction(async (tx) => {
       const accessory = await tx.accessory.create({
-        data: { ...dto, quantityAvailable: dto.quantityTotal ?? 0 },
+        data: {
+          ...dto,
+          currency: dto.unitCost !== undefined ? (dto.currency ?? defaultCurrency) : dto.currency,
+          quantityAvailable: dto.quantityTotal ?? 0,
+        },
       });
       await this.activity.record(
         {

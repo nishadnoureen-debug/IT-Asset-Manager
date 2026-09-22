@@ -301,7 +301,7 @@ export function AssetForm({ asset }: { asset?: AssetDetail }) {
                     {...p}
                     maxLength={3}
                     className="uppercase"
-                    placeholder={settings.data?.data.defaultCurrency ?? 'USD'}
+                    placeholder={settings.data?.data.defaultCurrency ?? 'AED'}
                     {...register('currency', {
                       pattern: { value: /^[A-Za-z]{3}$/, message: '3 letters' },
                     })}

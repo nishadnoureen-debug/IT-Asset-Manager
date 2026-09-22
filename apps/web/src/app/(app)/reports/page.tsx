@@ -10,7 +10,7 @@ import { EmptyState, ErrorState, Spinner } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
 import { downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
-import { formatDate, formatDateTime } from '@/lib/format';
+import { formatDate, formatDateTime, formatMoney } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import type { AuditSession, ReportColumn, ReportResult } from '@/lib/types';
 
@@ -42,18 +42,24 @@ const FILTERS_BY_TYPE: Record<string, string[]> = {
   lifecycle: ['from', 'to'],
 };
 
-function Cell({ value, column }: { value: unknown; column: ReportColumn }) {
+function Cell({
+  value,
+  column,
+  currency,
+}: {
+  value: unknown;
+  column: ReportColumn;
+  /** The row's currency column, if the report has one; otherwise the default currency applies. */
+  currency?: unknown;
+}) {
   if (value === null || value === undefined || value === '')
     return <span className="text-slate-400">—</span>;
   if (column.type === 'date') return <>{formatDate(String(value))}</>;
   if (column.type === 'datetime') return <>{formatDateTime(String(value))}</>;
   if (column.type === 'money') {
     return (
-      <span className="tabular-nums">
-        {Number(value).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })}
+      <span className="whitespace-nowrap tabular-nums">
+        {formatMoney(value as number, typeof currency === 'string' ? currency : null)}
       </span>
     );
   }
@@ -371,7 +377,7 @@ export default function ReportsPage() {
                                 key={c.key}
                                 className="whitespace-nowrap px-4 py-2 text-slate-700 dark:text-slate-300"
                               >
-                                <Cell value={row[c.key]} column={c} />
+                                <Cell value={row[c.key]} column={c} currency={row.currency} />
                               </td>
                             ))}
                           </tr>

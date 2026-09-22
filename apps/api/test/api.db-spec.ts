@@ -366,9 +366,11 @@ describe('asset lifecycle', () => {
     const charger = await http()
       .post(api('/accessories'))
       .set(s.admin.auth)
-      .send({ name: 'USB-C charger', category: 'CHARGER', quantityTotal: 5 })
+      .send({ name: 'USB-C charger', category: 'CHARGER', quantityTotal: 5, unitCost: 95 })
       .expect(201);
     chargerId = charger.body.data.id;
+    // Priced records without a currency get the default (UAE dirhams).
+    expect(charger.body.data.currency).toBe('AED');
   });
 
   it('generates tags, records history and activity, and validates input', async () => {
@@ -385,7 +387,7 @@ describe('asset lifecycle', () => {
       .get(api(`/assets/${asset.id}`))
       .set(s.tech.auth)
       .expect(200);
-    expect(detail.body.data.currency).toBe('USD');
+    expect(detail.body.data.currency).toBe('AED');
     expect(detail.body.data.allowedActions).toEqual(
       expect.arrayContaining(['view', 'edit', 'assign', 'maintenance']),
     );

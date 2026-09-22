@@ -104,7 +104,7 @@ function GeneralSettings() {
                 <Field
                   label="Default currency"
                   error={errors.defaultCurrency?.message}
-                  hint="ISO code, e.g. USD or AED — used when a record has none"
+                  hint="ISO code, e.g. AED — used when a record has none"
                 >
                   {(p) => (
                     <Input
