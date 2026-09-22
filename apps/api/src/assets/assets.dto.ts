@@ -55,6 +55,7 @@ export class CreateAssetDto {
   @IsOptional() @Transform(trim) @IsString() @MaxLength(128) serviceTag?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(80) brand?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(120) model?: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(40) phoneNumber?: string;
   @IsOptional() @IsObject() specifications?: Record<string, unknown>;
 
   @IsOptional() @IsIn(INITIAL_STATUSES) status?: (typeof INITIAL_STATUSES)[number];

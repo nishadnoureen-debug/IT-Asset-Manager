@@ -28,6 +28,7 @@ export interface AssetFormValues {
   serviceTag: string;
   brand: string;
   model: string;
+  phoneNumber: string;
   status: string;
   condition: string;
   locationId: string;
@@ -55,6 +56,7 @@ function toValues(a?: AssetDetail): Partial<AssetFormValues> {
     serviceTag: a.serviceTag ?? '',
     brand: a.brand ?? '',
     model: a.model ?? '',
+    phoneNumber: a.phoneNumber ?? '',
     status: a.status,
     condition: a.condition,
     locationId: a.locationId ?? '',
@@ -187,6 +189,13 @@ export function AssetForm({ asset }: { asset?: AssetDetail }) {
             </Field>
             <Field label="Service tag" error={errors.serviceTag?.message}>
               {(p) => <Input {...p} {...register('serviceTag')} />}
+            </Field>
+            <Field
+              label="Phone number"
+              hint="SIM / line number for phones and tablets (printed on handover forms)"
+              error={errors.phoneNumber?.message}
+            >
+              {(p) => <Input {...p} type="tel" {...register('phoneNumber')} />}
             </Field>
             <Field label="Condition" error={errors.condition?.message}>
               {(p) => <EnumSelect {...p} group="assetCondition" {...register('condition')} />}

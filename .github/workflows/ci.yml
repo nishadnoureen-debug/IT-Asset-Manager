@@ -92,8 +92,9 @@ jobs:
           curl -fsS -o /dev/null http://localhost:3000/login
           curl -fsS http://localhost:3000/api/v1/auth/registration | grep -q '"enabled":true'
           echo "web, API and database are up"
-      - name: API is private (loopback only)
+      - name: API is private (loopback only) and the form letterhead is in the image
         run: |
+          docker exec app test -f /repo/apps/api/assets/forms/letterhead.jpg
           docker exec app sh -c 'netstat -tln | grep ":4000 "'
           docker exec app sh -c 'netstat -tln | grep ":4000 " | grep -q "127.0.0.1:4000"'
       - name: Logs

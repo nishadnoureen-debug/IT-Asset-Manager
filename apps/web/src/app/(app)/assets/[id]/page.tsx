@@ -90,6 +90,7 @@ function Overview({ a }: { a: AssetDetail }) {
                   value: a.serialNumber ? <span className="font-mono">{a.serialNumber}</span> : '—',
                 },
                 { label: 'Service tag', value: a.serviceTag ?? '—' },
+                ...(a.phoneNumber ? [{ label: 'Phone number', value: a.phoneNumber }] : []),
                 { label: 'Location', value: a.location?.name ?? '—' },
                 { label: 'Owning department', value: a.department?.name ?? '—' },
                 {

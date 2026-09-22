@@ -513,8 +513,18 @@ export class AssignmentsService {
     try {
       const assignment = await this.prisma.assetAssignment.findUniqueOrThrow({
         where: { id: assignmentId },
-        select: { assetId: true, asset: { select: { assetTag: true } } },
+        select: {
+          assetId: true,
+          previousAssignmentId: true,
+          asset: { select: { assetTag: true } },
+        },
       });
+      const form =
+        kind === 'RETURN'
+          ? { title: 'Return', file: 'return' }
+          : assignment.previousAssignmentId
+            ? { title: 'Transfer', file: 'transfer' }
+            : { title: 'Handover', file: 'handover' };
       const owner = {
         assignmentId,
         assetId: assignment.assetId,
@@ -529,7 +539,7 @@ export class AssignmentsService {
               buffer: signature,
               mimeType: 'image/png',
               type: 'SIGNATURE',
-              title: `${kind === 'RETURN' ? 'Return' : 'Handover'} signature — ${assignment.asset.assetTag}`,
+              title: `${form.title} signature — ${assignment.asset.assetTag}`,
               originalFileName: `signature-${assignment.asset.assetTag}.png`,
               owner: { assignmentId, employeeId: employeeId ?? undefined },
             },
@@ -542,8 +552,8 @@ export class AssignmentsService {
             buffer: pdf,
             mimeType: 'application/pdf',
             type: kind === 'RETURN' ? 'RETURN_FORM' : 'HANDOVER_FORM',
-            title: `${kind === 'RETURN' ? 'Return form' : 'Handover form'} — ${assignment.asset.assetTag}${signature ? ' (signed)' : ''}`,
-            originalFileName: `${kind === 'RETURN' ? 'return' : 'handover'}-${assignment.asset.assetTag}.pdf`,
+            title: `${form.title} form — ${assignment.asset.assetTag}${signature ? ' (signed)' : ''}`,
+            originalFileName: `${form.file}-${assignment.asset.assetTag}.pdf`,
             owner,
           },
           actorId,

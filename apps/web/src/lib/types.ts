@@ -140,6 +140,8 @@ export interface MaintenanceRecord {
 
 export interface AssetDetail extends Omit<AssetListItem, 'assignments'> {
   serviceTag: string | null;
+  /** SIM / line number for phones, tablets and routers. */
+  phoneNumber: string | null;
   qrToken: string;
   specifications: Record<string, unknown> | null;
   warrantyStartDate: string | null;
@@ -189,6 +191,7 @@ export interface Employee {
   email: string;
   phone: string | null;
   jobTitle: string | null;
+  nationality: string | null;
   status: 'ACTIVE' | 'ON_LEAVE' | 'TERMINATED';
   hireDate: string | null;
   terminationDate: string | null;

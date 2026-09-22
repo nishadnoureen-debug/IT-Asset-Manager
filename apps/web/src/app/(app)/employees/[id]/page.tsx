@@ -216,6 +216,7 @@ export default function EmployeeDetailPage() {
                         ),
                       },
                       { label: 'Phone', value: e.phone ?? '—' },
+                      { label: 'Nationality', value: e.nationality ?? '—' },
                       { label: 'Location', value: e.location?.name ?? '—' },
                       {
                         label: 'Manager',

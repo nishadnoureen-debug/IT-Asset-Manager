@@ -1,3 +1,10 @@
+/** A "Verified by" box on the handover, transfer and return forms. */
+export interface FormSignatory {
+  title: string;
+  /** Printed under the title; leave empty to write it by hand. */
+  name: string;
+}
+
 export interface AppSettings {
   companyName: string;
   /** ISO-4217 code used when a record does not specify one. */
@@ -17,10 +24,18 @@ export interface AppSettings {
    * When false (default) they can sign in immediately with the Employee role.
    */
   registrationRequiresApproval: boolean;
+  /** Footer lines printed on every page of the handover, transfer and return forms. */
+  formFooter: string;
+  /** Terms & Conditions on handover and transfer forms, one per line. {company} = company name. */
+  formTerms: string;
+  /** "Verified by" signature boxes, printed three per row. */
+  formSignatories: FormSignatory[];
 }
 
+export const FORM_SIGNATORIES_MAX = 9;
+
 export const DEFAULT_SETTINGS: AppSettings = {
-  companyName: 'My Company',
+  companyName: 'ARC Global',
   defaultCurrency: 'USD',
   assetTagPrefix: 'AST',
   warrantyAlertDays: 30,
@@ -28,6 +43,26 @@ export const DEFAULT_SETTINGS: AppSettings = {
   maintenanceDueDays: 3,
   allowSelfRegistration: true,
   registrationRequiresApproval: false,
+  formFooter: [
+    'ARC GLOBAL TECHNICAL SERVICES | Website: www.arcglobaluae.com | Dubai – UAE',
+    'Email: hr@arcgroup.ae | Contact: +97165323731 | P.O. Box: 4383',
+  ].join('\n'),
+  formTerms: [
+    'The company-issued device(s) remain the property of {company}.',
+    'The device(s) are provided strictly for official use unless otherwise approved.',
+    'The employee is responsible for the care, safety, and proper use of the device(s).',
+    'Any loss, damage, or misuse must be reported immediately to HR/IT.',
+    'The device(s) must be returned in good condition upon resignation, termination, or when requested by management.',
+    'The cost of repair or replacement may be recovered in case of negligence or misuse, as per company policy.',
+  ].join('\n'),
+  formSignatories: [
+    'HR Department',
+    'IT Support',
+    'Finance Manager',
+    'Commercial Manager',
+    'Operations Manager',
+    'Chief Operating Officer',
+  ].map((title) => ({ title, name: '' })),
 };
 
 export const PASSWORD_POLICY = {

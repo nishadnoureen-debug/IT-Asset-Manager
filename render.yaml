@@ -35,6 +35,9 @@ services:
         generateValue: true
       - key: NODE_ENV
         value: production
+      # Local time for dates on forms and the 7:00 daily alert run.
+      - key: TZ
+        value: Asia/Dubai
       # Uploaded files live in PostgreSQL: free services have no persistent disk.
       - key: STORAGE_DRIVER
         value: database

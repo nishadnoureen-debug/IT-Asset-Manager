@@ -320,6 +320,8 @@ model Employee {
   email           String         @unique @db.VarChar(254)
   phone           String?        @db.VarChar(40)
   jobTitle        String?        @map("job_title") @db.VarChar(120)
+  /// Printed on handover, transfer and return forms.
+  nationality     String?        @db.VarChar(80)
   departmentId    String?        @map("department_id") @db.Uuid
   locationId      String?        @map("location_id") @db.Uuid
   managerId       String?        @map("manager_id") @db.Uuid
@@ -441,6 +443,8 @@ model Asset {
   assetTypeId    String         @map("asset_type_id") @db.Uuid
   brand          String?        @db.VarChar(80)
   model          String?        @db.VarChar(120)
+  /// SIM / line number for phones, tablets and routers (printed on handover forms).
+  phoneNumber    String?        @map("phone_number") @db.VarChar(40)
   specifications Json?
   status         AssetStatus    @default(REGISTERED)
   condition      AssetCondition @default(NEW)

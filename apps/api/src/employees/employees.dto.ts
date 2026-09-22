@@ -30,6 +30,7 @@ export class CreateEmployeeDto {
   @Transform(lower) @IsEmail() @MaxLength(254) email!: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(40) phone?: string;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(120) jobTitle?: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(80) nationality?: string;
   @IsOptional() @IsUUID() departmentId?: string;
   @IsOptional() @IsUUID() locationId?: string;
   @IsOptional() @IsUUID() managerId?: string;

@@ -16,10 +16,11 @@ import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { label } from '@/lib/format';
+import { FormsSettings } from '@/features/settings/forms-settings';
 import { useApi, useApiMutation } from '@/lib/hooks';
 import type { AssetType, Department, Location } from '@/lib/types';
 
-type Tab = 'general' | 'departments' | 'locations' | 'types';
+type Tab = 'general' | 'forms' | 'departments' | 'locations' | 'types';
 
 interface SettingsForm {
   companyName: string;
@@ -580,6 +581,7 @@ export default function SettingsPage() {
           onChange={setTab}
           tabs={[
             { value: 'general', label: 'General', hidden: !can('settings.view') },
+            { value: 'forms', label: 'Forms', hidden: !can('settings.view') },
             { value: 'departments', label: 'Departments' },
             { value: 'locations', label: 'Locations' },
             { value: 'types', label: 'Asset types' },
@@ -587,6 +589,7 @@ export default function SettingsPage() {
         />
       </div>
       {tab === 'general' && <GeneralSettings />}
+      {tab === 'forms' && <FormsSettings />}
       {tab === 'departments' && (
         <RefList<Department>
           kind="department"

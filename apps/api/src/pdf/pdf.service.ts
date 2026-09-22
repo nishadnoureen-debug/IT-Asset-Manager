@@ -16,7 +16,13 @@ export class PdfService {
     options: PDFKit.PDFDocumentOptions = {},
   ): Promise<Buffer> {
     return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true, ...options });
+      // PDFKit ignores `margins` whenever `margin` is set, so only default it when none are given.
+      const doc = new PDFDocument({
+        size: 'A4',
+        bufferPages: true,
+        ...(options.margins ? {} : { margin: 48 }),
+        ...options,
+      });
       const chunks: Buffer[] = [];
       doc.on('data', (chunk: Buffer) => chunks.push(chunk));
       doc.on('end', () => resolve(Buffer.concat(chunks)));

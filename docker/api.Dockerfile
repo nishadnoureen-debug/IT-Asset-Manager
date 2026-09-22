@@ -27,6 +27,8 @@ COPY --from=build --chown=app:app /repo/packages/shared/dist ./packages/shared/d
 COPY --from=build --chown=app:app /repo/apps/api/package.json ./apps/api/package.json
 COPY --from=build --chown=app:app /repo/apps/api/dist ./apps/api/dist
 COPY --from=build --chown=app:app /repo/apps/api/prisma ./apps/api/prisma
+# Letterhead and watermark for the handover / transfer / return forms.
+COPY --from=build --chown=app:app /repo/apps/api/assets ./apps/api/assets
 COPY docker/api-entrypoint.sh /usr/local/bin/api-entrypoint
 RUN chmod 755 /usr/local/bin/api-entrypoint
 WORKDIR /repo/apps/api

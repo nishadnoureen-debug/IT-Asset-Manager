@@ -19,6 +19,7 @@ interface Values {
   email: string;
   phone: string;
   jobTitle: string;
+  nationality: string;
   departmentId: string;
   locationId: string;
   status: string;
@@ -32,6 +33,7 @@ const empty: Values = {
   email: '',
   phone: '',
   jobTitle: '',
+  nationality: '',
   departmentId: '',
   locationId: '',
   status: 'ACTIVE',
@@ -73,6 +75,7 @@ export function EmployeeDialog({
             email: employee.email,
             phone: employee.phone ?? '',
             jobTitle: employee.jobTitle ?? '',
+            nationality: employee.nationality ?? '',
             departmentId: employee.departmentId ?? '',
             locationId: employee.locationId ?? '',
             status: employee.status,
@@ -142,6 +145,9 @@ export function EmployeeDialog({
           </Field>
           <Field label="Job title" error={errors.jobTitle?.message}>
             {(p) => <Input {...p} {...register('jobTitle')} />}
+          </Field>
+          <Field label="Nationality" error={errors.nationality?.message}>
+            {(p) => <Input {...p} {...register('nationality')} />}
           </Field>
           <Field label="Phone" error={errors.phone?.message}>
             {(p) => <Input {...p} type="tel" {...register('phone')} />}
