@@ -71,10 +71,10 @@ describe('handover, transfer and return forms', () => {
       .send({
         companyName: 'ARC Global',
         formSignatories: [
-          { title: 'HR Department', name: 'Hr Person' },
-          { title: 'IT Support', name: 'It Person' },
-          { title: 'Finance Manager', name: '' },
+          { title: 'Finance Manager', name: 'Fin Person' },
           { title: 'Commercial Manager', name: 'Commercial Person' },
+          { title: 'Operations Manager', name: '' },
+          { title: 'Chief Operating Officer', name: 'Coo Person' },
         ],
       })
       .expect(200);
@@ -197,14 +197,14 @@ describe('handover, transfer and return forms', () => {
       'Declaration',
       'Employee Signature',
       'Verified by:',
-      'HR DEPARTMENT',
-      'HR PERSON',
-      'COMMERCIAL MANAGER',
+      'FINANCE MANAGER',
+      'FIN PERSON',
+      'CHIEF OPERATING OFFICER',
       'ARC GLOBAL TECHNICAL SERVICES',
     ])
       expect(h).toContain(text);
     // Signatories without a name leave the box empty for a handwritten name.
-    expect(h).toContain('FINANCE MANAGER');
+    expect(h).toContain('OPERATIONS MANAGER');
     // The signature image is embedded in the handover form.
     expect(handover.includes(Buffer.from('/Subtype /Image'))).toBe(true);
     expect(PNG_1PX.length).toBeGreaterThan(0);
@@ -293,7 +293,7 @@ describe('handover, transfer and return forms', () => {
     const after = pdfText(await download(admin.auth, forms[0].id));
     // (the text extractor drops em dashes, so match the words around them)
     expect(after).toContain('issue from stock');
-    expect(after).toContain('IT PERSON');
+    expect(after).toContain('FIN PERSON');
     if (process.env.FORMS_OUT)
       writeFileSync(
         join(process.env.FORMS_OUT, 'asset-request.pdf'),

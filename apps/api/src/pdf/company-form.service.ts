@@ -255,7 +255,8 @@ export class CompanyForm {
       const top = this.doc.y;
       const colWidth = CONTENT_WIDTH / 3;
       this.doc.save().lineWidth(0.75).strokeColor('#000000');
-      for (let col = 0; col < 3; col++) {
+      // Only as many boxes as there are people, so a short last row has no empty boxes.
+      for (let col = 0; col < group.length; col++) {
         let y = top;
         for (const h of rowHeights) {
           this.doc.rect(MARGINS.left + col * colWidth, y, colWidth, h).stroke();
