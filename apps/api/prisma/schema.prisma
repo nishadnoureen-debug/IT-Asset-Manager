@@ -174,26 +174,27 @@ enum LicenseType {
   @@map("license_type")
 }
 
-enum TicketCategory {
-  HARDWARE
+enum RequestType {
+  NEW_ASSET
+  REPLACEMENT
+  ACCESSORY
   SOFTWARE
-  NETWORK
-  ACCESS
-  ASSET_REQUEST
-  LOSS_REPORT
+  REPAIR
   OTHER
 
-  @@map("ticket_category")
+  @@map("request_type")
 }
 
-enum TicketStatus {
-  OPEN
-  IN_PROGRESS
-  ON_HOLD
-  RESOLVED
-  CLOSED
+enum RequestStatus {
+  /// Waiting for an approver.
+  SUBMITTED
+  APPROVED
+  REJECTED
+  /// Approved and the asset has been handed over.
+  FULFILLED
+  CANCELLED
 
-  @@map("ticket_status")
+  @@map("request_status")
 }
 
 enum DocumentType {
@@ -201,6 +202,7 @@ enum DocumentType {
   WARRANTY
   HANDOVER_FORM
   RETURN_FORM
+  REQUEST_FORM
   SIGNATURE
   REPAIR_RECEIPT
   DISPOSAL_CERTIFICATE
@@ -249,7 +251,7 @@ enum NotificationType {
   OVERDUE_RETURN
   MAINTENANCE_DUE
   MAINTENANCE_UPDATE
-  TICKET_UPDATE
+  REQUEST_UPDATE
   AUDIT_ASSIGNED
   ASSIGNMENT_ACKNOWLEDGEMENT
   SYSTEM
@@ -341,7 +343,7 @@ model Employee {
   assignments          AssetAssignment[]
   accessoryAssignments AccessoryAssignment[]
   softwareAssignments  SoftwareAssignment[]
-  tickets              Ticket[]              @relation("TicketRequester")
+  requests             AssetRequest[]        @relation("RequestEmployee")
   documents            Document[]
 
   @@index([departmentId])
@@ -426,7 +428,8 @@ model AssetType {
   createdAt          DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  assets Asset[]
+  assets   Asset[]
+  requests AssetRequest[]
 
   @@index([category])
   @@map("asset_types")
@@ -492,7 +495,7 @@ model Asset {
   history             AssetHistory[]
   maintenance         Maintenance[]
   softwareAssignments SoftwareAssignment[]
-  tickets             Ticket[]
+  requests            AssetRequest[]
   documents           Document[]
   auditItems          AuditItem[]
 
@@ -656,7 +659,6 @@ model Maintenance {
   reportedById      String?           @map("reported_by_id") @db.Uuid
   technicianId      String?           @map("technician_id") @db.Uuid
   vendorId          String?           @map("vendor_id") @db.Uuid
-  ticketId          String?           @map("ticket_id") @db.Uuid
   isWarrantyClaim   Boolean           @default(false) @map("is_warranty_claim")
   /// Asset status before the repair, so completion can restore AVAILABLE/ASSIGNED correctly.
   assetStatusBefore AssetStatus?      @map("asset_status_before")
@@ -676,7 +678,6 @@ model Maintenance {
   reportedBy User?          @relation("MaintenanceReportedBy", fields: [reportedById], references: [id], onDelete: SetNull)
   technician User?          @relation("MaintenanceTechnician", fields: [technicianId], references: [id], onDelete: SetNull)
   vendor     Vendor?        @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  ticket     Ticket?        @relation(fields: [ticketId], references: [id], onDelete: SetNull)
   history    AssetHistory[]
   documents  Document[]
 
@@ -684,7 +685,6 @@ model Maintenance {
   @@index([status])
   @@index([technicianId, status])
   @@index([vendorId])
-  @@index([ticketId])
   @@map("maintenance")
 }
 
@@ -776,58 +776,47 @@ model SoftwareAssignment {
 // Helpdesk
 // ─────────────────────────────────────────────────────────────────────────────
 
-model Ticket {
-  id          String         @id @default(uuid()) @db.Uuid
-  /// Human-friendly reference (TCK-000123).
-  number      Int            @unique @default(autoincrement())
-  title       String         @db.VarChar(200)
-  description String
-  category    TicketCategory @default(OTHER)
-  priority    Priority       @default(MEDIUM)
-  status      TicketStatus   @default(OPEN)
-  requesterId String?        @map("requester_id") @db.Uuid
-  createdById String?        @map("created_by_id") @db.Uuid
-  assigneeId  String?        @map("assignee_id") @db.Uuid
-  assetId     String?        @map("asset_id") @db.Uuid
-  dueAt       DateTime?      @map("due_at") @db.Timestamptz(6)
-  resolvedAt  DateTime?      @map("resolved_at") @db.Timestamptz(6)
-  closedAt    DateTime?      @map("closed_at") @db.Timestamptz(6)
-  resolution  String?
-  createdAt   DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+model AssetRequest {
+  id            String        @id @default(uuid()) @db.Uuid
+  /// Human-friendly reference (REQ-000123).
+  number        Int           @unique @default(autoincrement())
+  title         String        @db.VarChar(200)
+  type          RequestType   @default(NEW_ASSET)
+  priority      Priority      @default(MEDIUM)
+  status        RequestStatus @default(SUBMITTED)
+  /// Employee the asset is requested for.
+  employeeId    String?       @map("employee_id") @db.Uuid
+  createdById   String?       @map("created_by_id") @db.Uuid
+  /// What is being asked for; free text when no catalogue type fits.
+  assetTypeId   String?       @map("asset_type_id") @db.Uuid
+  quantity      Int           @default(1)
+  justification String
+  neededBy      DateTime?     @map("needed_by") @db.Date
+  decisionById  String?       @map("decision_by_id") @db.Uuid
+  decisionAt    DateTime?     @map("decision_at") @db.Timestamptz(6)
+  decisionNotes String?       @map("decision_notes")
+  /// Asset handed over when the request was fulfilled.
+  assetId       String?       @map("asset_id") @db.Uuid
+  fulfilledById String?       @map("fulfilled_by_id") @db.Uuid
+  fulfilledAt   DateTime?     @map("fulfilled_at") @db.Timestamptz(6)
+  cancelledAt   DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  requester   Employee?       @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: SetNull)
-  createdBy   User?           @relation("TicketCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  assignee    User?           @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  asset       Asset?          @relation(fields: [assetId], references: [id], onDelete: SetNull)
-  comments    TicketComment[]
-  maintenance Maintenance[]
+  employee    Employee?  @relation("RequestEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
+  createdBy   User?      @relation("RequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  assetType   AssetType? @relation(fields: [assetTypeId], references: [id], onDelete: SetNull)
+  decisionBy  User?      @relation("RequestDecidedBy", fields: [decisionById], references: [id], onDelete: SetNull)
+  asset       Asset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  fulfilledBy User?      @relation("RequestFulfilledBy", fields: [fulfilledById], references: [id], onDelete: SetNull)
   documents   Document[]
 
   @@index([status, priority])
-  @@index([requesterId])
-  @@index([assigneeId, status])
+  @@index([employeeId])
+  @@index([createdById])
   @@index([assetId])
   @@index([createdAt(sort: Desc)])
-  @@map("tickets")
-}
-
-/// Required by POST /tickets/:id/comments (spec §5).
-model TicketComment {
-  id         String   @id @default(uuid()) @db.Uuid
-  ticketId   String   @map("ticket_id") @db.Uuid
-  authorId   String?  @map("author_id") @db.Uuid
-  body       String
-  /// Internal notes are hidden from the requesting employee.
-  isInternal Boolean  @default(false) @map("is_internal")
-  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
-
-  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
-  author User?  @relation("TicketCommentAuthor", fields: [authorId], references: [id], onDelete: SetNull)
-
-  @@index([ticketId, createdAt])
-  @@map("ticket_comments")
+  @@map("asset_requests")
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -849,7 +838,7 @@ model Document {
   maintenanceId     String?      @map("maintenance_id") @db.Uuid
   purchaseId        String?      @map("purchase_id") @db.Uuid
   softwareLicenseId String?      @map("software_license_id") @db.Uuid
-  ticketId          String?      @map("ticket_id") @db.Uuid
+  assetRequestId    String?      @map("asset_request_id") @db.Uuid
   auditSessionId    String?      @map("audit_session_id") @db.Uuid
   employeeId        String?      @map("employee_id") @db.Uuid
   uploadedById      String?      @map("uploaded_by_id") @db.Uuid
@@ -861,7 +850,7 @@ model Document {
   maintenance     Maintenance?     @relation(fields: [maintenanceId], references: [id], onDelete: Restrict)
   purchase        Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
   softwareLicense SoftwareLicense? @relation(fields: [softwareLicenseId], references: [id], onDelete: Restrict)
-  ticket          Ticket?          @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  assetRequest    AssetRequest?    @relation(fields: [assetRequestId], references: [id], onDelete: Restrict)
   auditSession    AuditSession?    @relation(fields: [auditSessionId], references: [id], onDelete: Restrict)
   employee        Employee?        @relation(fields: [employeeId], references: [id], onDelete: Restrict)
   uploadedBy      User?            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
@@ -871,7 +860,7 @@ model Document {
   @@index([maintenanceId])
   @@index([purchaseId])
   @@index([softwareLicenseId])
-  @@index([ticketId])
+  @@index([assetRequestId])
   @@index([auditSessionId])
   @@index([employeeId])
   @@index([type])
@@ -983,9 +972,9 @@ model User {
   maintenanceAssigned       Maintenance[]         @relation("MaintenanceTechnician")
   softwareAssignmentsMade   SoftwareAssignment[]  @relation("SoftwareAssignedBy")
   softwareUnassignmentsMade SoftwareAssignment[]  @relation("SoftwareUnassignedBy")
-  ticketsCreated            Ticket[]              @relation("TicketCreatedBy")
-  ticketsAssigned           Ticket[]              @relation("TicketAssignee")
-  ticketComments            TicketComment[]       @relation("TicketCommentAuthor")
+  requestsCreated           AssetRequest[]        @relation("RequestCreatedBy")
+  requestsDecided           AssetRequest[]        @relation("RequestDecidedBy")
+  requestsFulfilled         AssetRequest[]        @relation("RequestFulfilledBy")
   documentsUploaded         Document[]            @relation("DocumentUploadedBy")
   auditSessionsCreated      AuditSession[]        @relation("AuditSessionCreatedBy")
   auditSessionsCompleted    AuditSession[]        @relation("AuditSessionCompletedBy")

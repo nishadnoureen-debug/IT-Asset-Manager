@@ -134,7 +134,6 @@ export interface MaintenanceRecord {
   technician?: UserRef | null;
   reportedBy?: UserRef | null;
   vendor?: Ref | null;
-  ticket?: { id: Id; number: number; title: string; status: string } | null;
   documents?: DocumentItem[];
 }
 
@@ -202,7 +201,7 @@ export interface Employee {
   location: Ref | null;
   manager?: { id: Id; firstName: string; lastName: string } | null;
   user: { id: Id; email?: string; status: string; lastLoginAt?: string | null } | null;
-  _count: { assignments: number; tickets?: number; accessoryAssignments?: number };
+  _count: { assignments: number; requests?: number; accessoryAssignments?: number };
 }
 
 export interface Department {
@@ -337,34 +336,30 @@ export interface License {
   documents?: DocumentItem[];
 }
 
-export interface Ticket {
+export interface AssetRequest {
   id: Id;
   number: number;
   title: string;
-  description: string;
-  category: string;
+  justification: string;
+  type: string;
   priority: string;
-  status: string;
-  dueAt: string | null;
-  resolvedAt: string | null;
-  closedAt: string | null;
-  resolution: string | null;
+  status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'FULFILLED' | 'CANCELLED';
+  quantity: number;
+  neededBy: string | null;
+  decisionNotes: string | null;
+  decisionAt: string | null;
+  fulfilledAt: string | null;
+  cancelledAt: string | null;
   createdAt: string;
   updatedAt: string;
-  assigneeId: Id | null;
-  requester: EmployeeRef | null;
-  assignee: UserRef | null;
+  createdById: Id | null;
+  employeeId: Id | null;
+  employee: (EmployeeRef & { jobTitle?: string | null; department?: Ref | null }) | null;
+  assetType: Ref | null;
+  createdBy: UserRef | null;
+  decisionBy: UserRef | null;
+  fulfilledBy?: UserRef | null;
   asset: { id: Id; assetTag: string; name: string } | null;
-  createdBy?: UserRef | null;
-  _count?: { comments: number };
-  comments?: {
-    id: Id;
-    body: string;
-    isInternal: boolean;
-    createdAt: string;
-    author: UserRef | null;
-  }[];
-  maintenance?: { id: Id; number: number; title: string; status: string }[];
   documents?: DocumentItem[];
 }
 

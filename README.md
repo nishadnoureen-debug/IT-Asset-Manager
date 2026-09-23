@@ -11,11 +11,11 @@ tokens · S3-compatible storage · Docker · GitHub Actions
 
 | Area                  | Highlights                                                                                                                                                                                                                                                                         |
 | --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Authentication & RBAC | Argon2id passwords, short-lived access tokens, rotating httpOnly refresh cookies with reuse detection, lockout, password reset, self-registration (optionally with admin approval), 6 system roles + custom roles, 73 granular permissions with own / department / all data scopes |
+| Authentication & RBAC | Argon2id passwords, short-lived access tokens, rotating httpOnly refresh cookies with reuse detection, lockout, password reset, self-registration (optionally with admin approval), 6 system roles + custom roles, 72 granular permissions with own / department / all data scopes |
 | Assets                | CRUD, auto-generated asset tags, lifecycle transitions, history timeline, documents, retire / dispose / report lost                                                                                                                                                                |
 | Assignments           | Assign, return (to stock or repair) and transfer in one transaction each; accessories, condition, e-signature, handover / transfer / return forms on the company letterhead (terms and signatories set in Settings → Forms), employee acknowledgement                              |
 | QR codes              | Per-asset QR, printable A4 label sheets, phone camera scanning, scan result shows only the actions your role allows                                                                                                                                                                |
-| Operations            | Accessories stock, maintenance & repairs with costs, warranty tracking, purchases & vendors, software licences with seat limits and encrypted keys, helpdesk tickets, inventory audits with discrepancy review                                                                     |
+| Operations            | Accessories stock, maintenance & repairs with costs, warranty tracking, purchases & vendors, software licences with seat limits and encrypted keys, asset requests with approval and a printable request form, inventory audits with discrepancy review                            |
 | Insight               | Role-aware dashboard, 10 reports exportable to CSV / Excel / PDF, notifications with daily expiry & overdue checks, append-only activity log                                                                                                                                       |
 
 The screens are responsive; scanning, assigning and returning are designed phone-first.
@@ -78,7 +78,7 @@ first person to register becomes Super Admin. Everyone after that can sign in st
 an administrator gives them more access on **Users & roles**. **Settings** can require approval for new accounts or
 turn registration off.
 
-Optionally load demo data (employees, assets, assignments, tickets, licences, audits and one account per role;
+Optionally load demo data (employees, assets, assignments, asset requests, licences, audits and one account per role;
 the demo password is printed at the end):
 
 ```bash

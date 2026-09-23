@@ -16,7 +16,7 @@ import { QueryState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
-import { formatDateTime, formatMoney, label, maintenanceRef, ticketRef } from '@/lib/format';
+import { formatDateTime, formatMoney, label, maintenanceRef } from '@/lib/format';
 import { useApi, useApiMutation } from '@/lib/hooks';
 import type { MaintenanceRecord } from '@/lib/types';
 
@@ -142,19 +142,6 @@ export default function MaintenanceDetailPage() {
                           value: m.isWarrantyClaim ? <Badge tone="blue">Yes</Badge> : 'No',
                         },
                         { label: 'Reported by', value: m.reportedBy?.displayName ?? '—' },
-                        {
-                          label: 'Related ticket',
-                          value: m.ticket ? (
-                            <Link
-                              href={`/tickets/${m.ticket.id}`}
-                              className="text-blue-600 hover:underline dark:text-blue-400"
-                            >
-                              {ticketRef(m.ticket.number)}
-                            </Link>
-                          ) : (
-                            '—'
-                          ),
-                        },
                         { label: 'Scheduled', value: formatDateTime(m.scheduledAt) },
                         { label: 'Started', value: formatDateTime(m.startedAt) },
                         {

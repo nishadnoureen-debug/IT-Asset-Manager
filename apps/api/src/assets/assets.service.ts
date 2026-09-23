@@ -12,6 +12,7 @@ import {
   startOfDay,
 } from '../common/query/list-query';
 import { documentSelect } from '../documents/documents.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 import { allowedAssetActions, assetScopeWhere, employeeSummarySelect } from './asset-access';
@@ -93,6 +94,7 @@ export class AssetsService {
     private readonly history: AssetHistoryService,
     private readonly activity: ActivityLogService,
     private readonly settings: SettingsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   scopeOrThrow(user: AuthUser): Prisma.AssetWhereInput {
@@ -506,7 +508,7 @@ export class AssetsService {
     }
     this.assertTransition(asset.status, 'LOST');
 
-    const ticket = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       if (active) {
         await tx.assetAssignment.update({
           where: { id: active.id },
@@ -548,17 +550,6 @@ export class AssetsService {
         performedById: user.id,
         description: dto.notes,
       });
-      const created = await tx.ticket.create({
-        data: {
-          title: `Lost asset: ${asset.assetTag} ${asset.name}`.slice(0, 200),
-          description: dto.notes,
-          category: 'LOSS_REPORT',
-          priority: 'HIGH',
-          requesterId: active?.employeeId ?? user.employeeId,
-          createdById: user.id,
-          assetId: id,
-        },
-      });
       await this.activity.record(
         {
           actorId: user.id,
@@ -566,17 +557,27 @@ export class AssetsService {
           entityType: 'asset',
           entityId: id,
           oldValues: { status: asset.status },
-          newValues: { status: 'LOST', notes: dto.notes, ticketId: created.id },
+          newValues: { status: 'LOST', notes: dto.notes },
         },
         tx,
       );
-      return created;
+      // IT needs to know even when the loss is reported by the employee holding the asset.
+      const itStaff = await this.notifications.usersWithPermission(tx, 'asset.edit');
+      await this.notifications.notifyUsers(
+        tx,
+        itStaff,
+        {
+          type: 'SYSTEM',
+          title: `Asset reported lost: ${asset.assetTag}`,
+          message: dto.notes,
+          entityType: 'asset',
+          entityId: id,
+          link: `/assets/${id}`,
+        },
+        { excludeUserId: user.id },
+      );
     });
-    return {
-      asset: await this.prisma.asset.findUniqueOrThrow({ where: { id } }),
-      ticketId: ticket.id,
-      ticketNumber: ticket.number,
-    };
+    return { asset: await this.prisma.asset.findUniqueOrThrow({ where: { id } }) };
   }
 
   /** Conditional status update — fails if another request changed the status first. */

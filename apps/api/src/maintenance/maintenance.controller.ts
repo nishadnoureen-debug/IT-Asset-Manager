@@ -62,7 +62,6 @@ class CreateMaintenanceDto {
   @IsOptional() @IsString() @MaxLength(5000) description?: string;
   @IsOptional() @IsUUID() technicianId?: string;
   @IsOptional() @IsUUID() vendorId?: string;
-  @IsOptional() @IsUUID() ticketId?: string;
   @IsOptional() @IsBoolean() isWarrantyClaim?: boolean;
   @IsOptional() @Type(() => Date) @IsDate() scheduledAt?: Date;
   /** Start work immediately (asset moves to In repair). */
@@ -115,7 +114,6 @@ const include = {
   technician: { select: { id: true, displayName: true } },
   reportedBy: { select: { id: true, displayName: true } },
   vendor: { select: { id: true, name: true } },
-  ticket: { select: { id: true, number: true, title: true, status: true } },
 } satisfies Prisma.MaintenanceInclude;
 
 @ApiTags('Maintenance')
@@ -237,7 +235,7 @@ export class MaintenanceController {
       throw Errors.invalidState('Closed maintenance records cannot be edited');
     }
     await this.assertRefs(dto);
-    const { asset, technician, reportedBy, vendor, ticket, documents, ...before } = existing;
+    const { asset, technician, reportedBy, vendor, documents, ...before } = existing;
     const changes = diff(before as Record<string, unknown>, dto as Record<string, unknown>);
     if (!changes) return existing;
     await this.prisma.$transaction(async (tx) => {
@@ -478,7 +476,7 @@ export class MaintenanceController {
     return Math.round((Number(labor ?? 0) + Number(parts ?? 0)) * 100) / 100;
   }
 
-  private async assertRefs(dto: { technicianId?: string; vendorId?: string; ticketId?: string }) {
+  private async assertRefs(dto: { technicianId?: string; vendorId?: string }) {
     if (dto.technicianId) {
       const tech = await this.prisma.user.findFirst({
         where: {
@@ -501,9 +499,6 @@ export class MaintenanceController {
       !(await this.prisma.vendor.findFirst({ where: { id: dto.vendorId, deletedAt: null } }))
     ) {
       throw Errors.badRequest('Vendor not found', 'vendorId');
-    }
-    if (dto.ticketId && !(await this.prisma.ticket.findUnique({ where: { id: dto.ticketId } }))) {
-      throw Errors.badRequest('Ticket not found', 'ticketId');
     }
   }
 }

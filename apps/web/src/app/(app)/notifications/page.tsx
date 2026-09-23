@@ -40,7 +40,7 @@ export default function NotificationsPage() {
     <div className="mx-auto max-w-3xl">
       <PageHeader
         title="Notifications"
-        description="Warranty and licence expiry, overdue returns, maintenance and ticket updates."
+        description="Warranty and licence expiry, overdue returns, maintenance and request updates."
         actions={
           <Button
             variant="secondary"

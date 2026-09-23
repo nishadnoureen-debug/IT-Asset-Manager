@@ -153,9 +153,9 @@ export class UsersController {
     );
   }
 
-  /** Lightweight list of active staff for assignee pickers (ticket/maintenance). */
+  /** Lightweight list of active staff for assignee pickers (maintenance, repairs). */
   @Get('staff')
-  @RequirePermissions('ticket.assign', 'maintenance.create', 'maintenance.edit', 'user.view')
+  @RequirePermissions('maintenance.create', 'maintenance.edit', 'user.view')
   staff() {
     return this.prisma.user.findMany({
       where: {
@@ -165,7 +165,7 @@ export class UsersController {
           some: {
             role: {
               permissions: {
-                some: { permission: { key: { in: ['ticket.edit', 'maintenance.edit'] } } },
+                some: { permission: { key: { in: ['maintenance.edit', 'request.fulfil'] } } },
               },
             },
           },

@@ -21,7 +21,7 @@ export const ROLE_DETAILS: Record<RoleName, { displayName: string; description: 
   },
   IT_TECHNICIAN: {
     displayName: 'IT Technician',
-    description: 'Assets, assignments/returns, QR, maintenance, tickets and audits.',
+    description: 'Assets, assignments/returns, QR, maintenance, asset requests and audits.',
   },
   DEPARTMENT_MANAGER: {
     displayName: 'Department Manager',
@@ -29,7 +29,7 @@ export const ROLE_DETAILS: Record<RoleName, { displayName: string; description: 
   },
   EMPLOYEE: {
     displayName: 'Employee',
-    description: 'Own profile and assets, acknowledgements, issue/loss reports and own tickets.',
+    description: 'Own profile and assets, acknowledgements, loss reports and own asset requests.',
   },
   AUDITOR: {
     displayName: 'Auditor',

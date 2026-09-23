@@ -95,6 +95,6 @@ export function toDateInput(value: string | null | undefined): string {
   return value ? value.slice(0, 10) : '';
 }
 
-export const ticketRef = (n: number) => `TCK-${String(n).padStart(5, '0')}`;
+export const requestRef = (n: number) => `REQ-${String(n).padStart(6, '0')}`;
 export const maintenanceRef = (n: number) => `MNT-${String(n).padStart(5, '0')}`;
 export const auditRef = (n: number) => `AUD-${String(n).padStart(4, '0')}`;

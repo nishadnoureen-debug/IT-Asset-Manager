@@ -662,7 +662,7 @@ describe('asset lifecycle', () => {
     ).toBe(1);
   });
 
-  it('lets an employee report their own asset lost, creating a loss ticket', async () => {
+  it('lets an employee report their own asset lost and alerts IT', async () => {
     const lost = await createAsset(s.admin);
     await http()
       .post(api(`/assets/${lost.id}/assign`))
@@ -680,8 +680,12 @@ describe('asset lifecycle', () => {
       .send({ notes: 'Left in a taxi' })
       .expect(200);
     expect(res.body.data.asset.status).toBe('LOST');
-    const ticket = await prisma.ticket.findUniqueOrThrow({ where: { id: res.body.data.ticketId } });
-    expect(ticket).toMatchObject({ category: 'LOSS_REPORT', requesterId: ids.alice });
+    expect(
+      await prisma.activityLog.count({ where: { action: 'asset.report_lost', entityId: lost.id } }),
+    ).toBe(1);
+    expect(
+      await prisma.notification.count({ where: { userId: u.admin, entityId: lost.id } }),
+    ).toBeGreaterThan(0);
   });
 });
 
@@ -746,66 +750,101 @@ describe('software licences', () => {
   });
 });
 
-describe('helpdesk', () => {
-  it('runs the ticket lifecycle with internal comments hidden from requesters', async () => {
+describe('asset requests', () => {
+  it('runs request -> approve -> fulfil, with a signed-off form and scope checks', async () => {
+    const laptopType = await prisma.assetType.findUniqueOrThrow({ where: { name: 'Laptop' } });
     const created = await http()
-      .post(api('/tickets'))
+      .post(api('/requests'))
       .set(s.employee.auth)
-      .send({ title: 'Laptop is slow', description: 'Takes 5 minutes to boot' })
+      .send({
+        title: 'Laptop for site work',
+        justification: 'Current laptop cannot run the site survey software.',
+        assetTypeId: laptopType.id,
+        priority: 'HIGH',
+      })
       .expect(201);
-    const id = created.body.data.id;
-    expect(created.body.data.requester.id).toBe(ids.alice);
+    const id = created.body.data.id as string;
+    expect(created.body.data.status).toBe('SUBMITTED');
+    expect(created.body.data.employee.id).toBe(ids.alice);
+    // The printable form is generated with the request.
+    expect(created.body.data.documents.map((d: { type: string }) => d.type)).toEqual([
+      'REQUEST_FORM',
+    ]);
 
+    // Another employee cannot see it, and cannot approve it.
     await http()
-      .get(api(`/tickets/${id}`))
+      .get(api(`/requests/${id}`))
       .set(s.otherEmployee.auth)
       .expect(404);
     await http()
-      .post(api(`/tickets/${id}/assign`))
-      .set(s.tech.auth)
-      .send({ assigneeId: u.tech })
-      .expect(200);
-    await http()
-      .post(api(`/tickets/${id}/comments`))
-      .set(s.tech.auth)
-      .send({ body: 'Internal: check SSD health', isInternal: true })
-      .expect(201);
-    await http()
-      .post(api(`/tickets/${id}/comments`))
-      .set(s.tech.auth)
-      .send({ body: 'We will reimage it tomorrow' })
-      .expect(201);
-
-    const asEmployee = await http()
-      .get(api(`/tickets/${id}`))
+      .post(api(`/requests/${id}/approve`))
       .set(s.employee.auth)
-      .expect(200);
-    expect(asEmployee.body.data.comments.map((c: { body: string }) => c.body)).toEqual([
-      'We will reimage it tomorrow',
-    ]);
-    const asTech = await http()
-      .get(api(`/tickets/${id}`))
-      .set(s.tech.auth)
-      .expect(200);
-    expect(asTech.body.data.comments).toHaveLength(2);
-
-    await http()
-      .post(api(`/tickets/${id}/close`))
-      .set(s.employee.auth)
+      .send({})
       .expect(403);
+
+    const approved = await http()
+      .post(api(`/requests/${id}/approve`))
+      .set(s.admin.auth)
+      .send({ notes: 'Approved, issue from stock' })
+      .expect(200);
+    expect(approved.body.data.status).toBe('APPROVED');
+    expect(approved.body.data.decisionBy.id).toBe(u.admin);
+    // Deciding twice is refused.
     await http()
-      .post(api(`/tickets/${id}/resolve`))
+      .post(api(`/requests/${id}/reject`))
+      .set(s.admin.auth)
+      .send({ notes: 'Changed my mind' })
+      .expect(422);
+
+    const asset = await createAsset(s.admin);
+    const fulfilled = await http()
+      .post(api(`/requests/${id}/fulfil`))
       .set(s.tech.auth)
-      .send({ resolution: 'Reimaged and replaced SSD' })
+      .send({ assetId: asset.id })
       .expect(200);
-    const closed = await http()
-      .post(api(`/tickets/${id}/close`))
-      .set(s.employee.auth)
-      .expect(200);
-    expect(closed.body.data.status).toBe('CLOSED');
+    expect(fulfilled.body.data.status).toBe('FULFILLED');
+    expect(fulfilled.body.data.asset.assetTag).toBe(asset.assetTag);
+    // One current form, replaced at each decision, and the requester was told.
+    const forms = fulfilled.body.data.documents.filter(
+      (d: { type: string }) => d.type === 'REQUEST_FORM',
+    );
+    expect(forms).toHaveLength(1);
     expect(
-      await prisma.notification.count({ where: { userId: u.employee, type: 'TICKET_UPDATE' } }),
+      await prisma.notification.count({ where: { userId: u.employee, type: 'REQUEST_UPDATE' } }),
     ).toBeGreaterThan(0);
+  });
+
+  it('lets a requester withdraw a request and an approver reject one', async () => {
+    const mine = await http()
+      .post(api('/requests'))
+      .set(s.employee.auth)
+      .send({ title: 'Docking station', justification: 'Two monitors at the desk.' })
+      .expect(201);
+    const cancelled = await http()
+      .post(api(`/requests/${mine.body.data.id}/cancel`))
+      .set(s.employee.auth)
+      .send({ notes: 'No longer needed' })
+      .expect(200);
+    expect(cancelled.body.data.status).toBe('CANCELLED');
+
+    const other = await http()
+      .post(api('/requests'))
+      .set(s.employee.auth)
+      .send({ title: 'Tablet', justification: 'For site photos.' })
+      .expect(201);
+    const rejected = await http()
+      .post(api(`/requests/${other.body.data.id}/reject`))
+      .set(s.admin.auth)
+      .send({ notes: 'Use the site camera instead' })
+      .expect(200);
+    expect(rejected.body.data.status).toBe('REJECTED');
+    expect(rejected.body.data.decisionNotes).toBe('Use the site camera instead');
+    // A decided request can no longer be fulfilled.
+    await http()
+      .post(api(`/requests/${other.body.data.id}/fulfil`))
+      .set(s.tech.auth)
+      .send({})
+      .expect(422);
   });
 });
 

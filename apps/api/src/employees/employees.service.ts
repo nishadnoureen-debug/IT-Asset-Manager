@@ -81,7 +81,7 @@ export class EmployeesService {
         _count: {
           select: {
             assignments: { where: { status: 'ACTIVE' } },
-            tickets: true,
+            requests: true,
             accessoryAssignments: { where: { status: 'ACTIVE' } },
           },
         },
@@ -204,10 +204,10 @@ export class EmployeesService {
     return { active, history, accessories };
   }
 
-  async tickets(id: string, user: AuthUser) {
+  async requests(id: string, user: AuthUser) {
     await this.get(id, user);
-    return this.prisma.ticket.findMany({
-      where: { requesterId: id },
+    return this.prisma.assetRequest.findMany({
+      where: { employeeId: id },
       orderBy: { createdAt: 'desc' },
       take: 100,
       select: {
@@ -216,7 +216,8 @@ export class EmployeesService {
         title: true,
         status: true,
         priority: true,
-        category: true,
+        type: true,
+        neededBy: true,
         createdAt: true,
       },
     });

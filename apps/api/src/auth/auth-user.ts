@@ -23,7 +23,7 @@ export type DataScope = 'all' | 'department' | 'own';
  */
 export function dataScope(
   user: AuthUser,
-  resource: 'asset' | 'employee' | 'ticket',
+  resource: 'asset' | 'employee' | 'request',
 ): DataScope | null {
   if (user.permissions.has(`${resource}.view`)) return 'all';
   if (user.permissions.has(`${resource}.view_department`)) return 'department';

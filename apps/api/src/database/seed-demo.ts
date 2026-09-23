@@ -860,70 +860,51 @@ async function main() {
       });
     }
 
-    // ── Tickets ─────────────────────────────────────────────────────────────
-    const t1 = await prisma.ticket.create({
-      data: {
-        title: 'Laptop fan very loud',
-        description: 'Fan runs at full speed even when idle.',
-        category: 'HARDWARE',
-        priority: 'MEDIUM',
-        status: 'IN_PROGRESS',
-        requesterId: emp.E1004.id,
-        createdById: userIds[ROLES.EMPLOYEE],
-        assigneeId: tech,
-        assetId: created.L2,
-      },
+    // ── Asset requests ──────────────────────────────────────────────────────
+    const monitorType = await prisma.assetType.findUniqueOrThrow({ where: { name: 'Monitor' } });
+    const laptopRequestType = await prisma.assetType.findUniqueOrThrow({
+      where: { name: 'Laptop' },
     });
-    await prisma.ticketComment.create({
+    await prisma.assetRequest.create({
       data: {
-        ticketId: t1.id,
-        authorId: tech,
-        body: 'Scheduled a clean-out for Thursday morning.',
-      },
-    });
-    await prisma.ticketComment.create({
-      data: {
-        ticketId: t1.id,
-        authorId: tech,
-        body: 'Check BIOS fan profile first.',
-        isInternal: true,
-      },
-    });
-    await prisma.ticket.create({
-      data: {
-        title: 'VPN access for new hire',
-        description: 'Please enable VPN for Fatima Ali.',
-        category: 'ACCESS',
-        priority: 'HIGH',
-        status: 'OPEN',
-        requesterId: emp.E1006.id,
-        createdById: admin.id,
-      },
-    });
-    await prisma.ticket.create({
-      data: {
-        title: 'Request second monitor',
-        description: 'Would like a second 27" monitor.',
-        category: 'ASSET_REQUEST',
+        title: 'Second monitor for design work',
+        justification: 'Working across two documents all day; a second screen would save time.',
+        type: 'NEW_ASSET',
         priority: 'LOW',
-        status: 'OPEN',
-        requesterId: emp.E1003.id,
+        assetTypeId: monitorType.id,
+        employeeId: emp.E1003.id,
         createdById: userIds[ROLES.DEPARTMENT_MANAGER],
+        neededBy: daysFromNow(21),
       },
     });
-    await prisma.ticket.create({
+    await prisma.assetRequest.create({
       data: {
-        title: 'Printer paper jam',
-        description: 'Floor 2 printer jams on duplex.',
-        category: 'HARDWARE',
-        priority: 'LOW',
-        status: 'RESOLVED',
-        requesterId: emp.E1005.id,
+        title: 'Laptop for new joiner',
+        justification: 'Fatima Ali starts next week and needs a standard laptop.',
+        type: 'NEW_ASSET',
+        priority: 'HIGH',
+        assetTypeId: laptopRequestType.id,
+        employeeId: emp.E1006.id,
         createdById: admin.id,
-        assigneeId: tech,
-        resolution: 'Replaced pickup roller.',
-        resolvedAt: daysFromNow(-2),
-        assetId: created.PR1,
+        neededBy: daysFromNow(7),
+        status: 'APPROVED',
+        decisionById: admin.id,
+        decisionAt: daysFromNow(-1),
+        decisionNotes: 'Approved — issue from stock.',
+      },
+    });
+    await prisma.assetRequest.create({
+      data: {
+        title: 'Replacement keyboard',
+        justification: 'Keys sticking after a coffee spill.',
+        type: 'ACCESSORY',
+        priority: 'MEDIUM',
+        employeeId: emp.E1005.id,
+        createdById: admin.id,
+        status: 'REJECTED',
+        decisionById: admin.id,
+        decisionAt: daysFromNow(-3),
+        decisionNotes: 'Spare keyboards are in the store room — collect one from IT.',
       },
     });
 

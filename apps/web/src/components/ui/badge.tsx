@@ -57,12 +57,12 @@ const TONE_MAP: Partial<Record<LabelGroup, Record<string, Tone>>> = {
     CANCELLED: 'gray',
   },
   priority: { LOW: 'gray', MEDIUM: 'blue', HIGH: 'amber', CRITICAL: 'red' },
-  ticketStatus: {
-    OPEN: 'blue',
-    IN_PROGRESS: 'amber',
-    ON_HOLD: 'violet',
-    RESOLVED: 'green',
-    CLOSED: 'gray',
+  requestStatus: {
+    SUBMITTED: 'amber',
+    APPROVED: 'green',
+    REJECTED: 'red',
+    FULFILLED: 'blue',
+    CANCELLED: 'gray',
   },
   auditStatus: {
     DRAFT: 'gray',

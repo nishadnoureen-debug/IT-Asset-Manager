@@ -7,6 +7,7 @@ import { UserAccessService } from '../auth/user-access.service';
 import { CryptoService } from '../common/crypto/crypto.service';
 import { DocumentsService } from '../documents/documents.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CompanyFormService } from '../pdf/company-form.service';
 import { PdfService } from '../pdf/pdf.service';
 import { SettingsService } from '../settings/settings.service';
 import { StorageService } from '../storage/storage.service';
@@ -18,6 +19,7 @@ const services = [
   DocumentsService,
   NotificationsService,
   PasswordService,
+  CompanyFormService,
   PdfService,
   SettingsService,
   StorageService,

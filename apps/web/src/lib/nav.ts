@@ -4,7 +4,6 @@ import {
   Boxes,
   ClipboardCheck,
   FileClock,
-  Headphones,
   KeyRound,
   LayoutDashboard,
   Laptop,
@@ -51,10 +50,10 @@ export const NAV: NavItem[] = [
     section: 'main',
   },
   {
-    href: '/tickets',
-    label: 'Helpdesk',
-    icon: Headphones,
-    anyOf: ['ticket.view', 'ticket.view_department', 'ticket.view_own'],
+    href: '/requests',
+    label: 'Asset requests',
+    icon: ClipboardCheck,
+    anyOf: ['request.view', 'request.view_department', 'request.view_own'],
     section: 'main',
   },
   {

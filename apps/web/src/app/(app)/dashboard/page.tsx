@@ -3,7 +3,7 @@
 import {
   AlertTriangle,
   CalendarClock,
-  Headphones,
+  ClipboardCheck,
   KeyRound,
   Laptop,
   PackageCheck,
@@ -69,7 +69,12 @@ interface Dashboard {
     completedThisMonth: number;
     costThisMonth: number;
   } | null;
-  tickets: { open: number; inProgress: number; highPriority: number; assignedToMe: number } | null;
+  requests: {
+    awaitingApproval: number;
+    approved: number;
+    highPriority: number;
+    mine: number;
+  } | null;
   audits: { inProgress: number } | null;
   mine: {
     assets: {
@@ -86,7 +91,7 @@ interface Dashboard {
       };
     }[];
     accessories: { id: string; quantity: number; accessory: { id: string; name: string } }[];
-    openTickets: number;
+    openRequests: number;
   } | null;
 }
 
@@ -235,9 +240,9 @@ export default function DashboardPage() {
                 Add asset
               </ButtonLink>
             )}
-            {!can('asset.create') && can('ticket.create') && (
-              <ButtonLink href="/tickets?new=1" icon={<Plus className="h-4 w-4" />}>
-                Raise a ticket
+            {!can('asset.create') && can('request.create') && (
+              <ButtonLink href="/requests?new=1" icon={<Plus className="h-4 w-4" />}>
+                Request an asset
               </ButtonLink>
             )}
           </>
@@ -294,20 +299,18 @@ export default function DashboardPage() {
                     href="/maintenance?open=true"
                   />
                 )}
-                {d.tickets && (
+                {d.requests && (
                   <StatCard
-                    label="Open tickets"
-                    value={d.tickets.open + d.tickets.inProgress}
-                    tone={d.tickets.highPriority ? 'warning' : 'default'}
-                    icon={<Headphones className="h-4 w-4" />}
+                    label="Requests to approve"
+                    value={d.requests.awaitingApproval}
+                    tone={d.requests.awaitingApproval ? 'warning' : 'default'}
+                    icon={<ClipboardCheck className="h-4 w-4" />}
                     hint={
-                      d.tickets.highPriority
-                        ? `${d.tickets.highPriority} high priority`
-                        : staff
-                          ? `${d.tickets.assignedToMe} assigned to you`
-                          : undefined
+                      d.requests.highPriority
+                        ? `${d.requests.highPriority} high priority`
+                        : `${d.requests.approved} approved, waiting for handover`
                     }
-                    href="/tickets?open=true"
+                    href="/requests?status=SUBMITTED"
                   />
                 )}
                 {staff && (

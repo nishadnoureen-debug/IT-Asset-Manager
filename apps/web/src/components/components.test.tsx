@@ -112,7 +112,7 @@ describe('navigation', () => {
   };
 
   it('shows employees only their workspace items', () => {
-    expect(visibleFor('EMPLOYEE')).toEqual(['/dashboard', '/assets', '/tickets']);
+    expect(visibleFor('EMPLOYEE')).toEqual(['/dashboard', '/assets', '/requests']);
   });
 
   it('keeps administration out of the technician menu', () => {

@@ -216,39 +216,35 @@ export class DashboardController {
         })()
       : null;
 
-    const ticketScope = dataScope(user, 'ticket');
-    const tickets = ticketScope
+    const requestScope = dataScope(user, 'request');
+    const requests = requestScope
       ? await (async () => {
-          const where: Prisma.TicketWhereInput =
-            ticketScope === 'all'
+          const where: Prisma.AssetRequestWhereInput =
+            requestScope === 'all'
               ? {}
-              : ticketScope === 'department'
-                ? { requester: { departmentId: user.departmentId ?? NO_MATCH_ID } }
+              : requestScope === 'department'
+                ? { employee: { departmentId: user.departmentId ?? NO_MATCH_ID } }
                 : {
-                    OR: [{ requesterId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }],
+                    OR: [{ employeeId: user.employeeId ?? NO_MATCH_ID }, { createdById: user.id }],
                   };
-          const [open, inProgress, highPriority, assignedToMe] = await Promise.all([
-            this.prisma.ticket.count({ where: { ...where, status: 'OPEN' } }),
-            this.prisma.ticket.count({
-              where: { ...where, status: { in: ['IN_PROGRESS', 'ON_HOLD'] } },
-            }),
-            this.prisma.ticket.count({
+          const [awaitingApproval, approved, highPriority, mine] = await Promise.all([
+            this.prisma.assetRequest.count({ where: { ...where, status: 'SUBMITTED' } }),
+            this.prisma.assetRequest.count({ where: { ...where, status: 'APPROVED' } }),
+            this.prisma.assetRequest.count({
               where: {
                 ...where,
-                status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
+                status: { in: ['SUBMITTED', 'APPROVED'] },
                 priority: { in: ['HIGH', 'CRITICAL'] },
               },
             }),
-            staff
-              ? this.prisma.ticket.count({
-                  where: {
-                    assigneeId: user.id,
-                    status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD'] },
-                  },
-                })
-              : Promise.resolve(0),
+            this.prisma.assetRequest.count({
+              where: {
+                status: { in: ['SUBMITTED', 'APPROVED'] },
+                OR: [{ createdById: user.id }, { employeeId: user.employeeId ?? NO_MATCH_ID }],
+              },
+            }),
           ]);
-          return { open, inProgress, highPriority, assignedToMe };
+          return { awaitingApproval, approved, highPriority, mine };
         })()
       : null;
 
@@ -260,13 +256,13 @@ export class DashboardController {
         }
       : null;
 
-    return { assignments, maintenance, tickets, audits };
+    return { assignments, maintenance, requests, audits };
   }
 
   /** "My assets" for every user linked to an employee record. */
   private async personal(user: AuthUser) {
     if (!user.employeeId) return null;
-    const [assets, accessories, openTickets] = await Promise.all([
+    const [assets, accessories, openRequests] = await Promise.all([
       this.prisma.assetAssignment.findMany({
         where: { employeeId: user.employeeId, status: 'ACTIVE' },
         orderBy: { assignedAt: 'desc' },
@@ -290,13 +286,10 @@ export class DashboardController {
         where: { employeeId: user.employeeId, status: 'ACTIVE' },
         select: { id: true, quantity: true, accessory: { select: { id: true, name: true } } },
       }),
-      this.prisma.ticket.count({
-        where: {
-          requesterId: user.employeeId,
-          status: { in: ['OPEN', 'IN_PROGRESS', 'ON_HOLD', 'RESOLVED'] },
-        },
+      this.prisma.assetRequest.count({
+        where: { employeeId: user.employeeId, status: { in: ['SUBMITTED', 'APPROVED'] } },
       }),
     ]);
-    return { assets, accessories, openTickets };
+    return { assets, accessories, openRequests };
   }
 }

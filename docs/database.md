@@ -31,7 +31,7 @@ The Docker API image runs `migrate deploy` and then the compiled seed on every s
 
 ## Conventions
 
-- **Keys:** UUID primary keys. Tickets, maintenance and audit sessions also get a sequential `number` for
+- **Keys:** UUID primary keys. Asset requests, maintenance and audit sessions also get a sequential `number` for
   human-readable references such as TCK-000042.
 - **Naming:** models use camelCase in Prisma and map to `snake_case` tables and columns.
 - **Types:** `timestamptz` for instants, `date` for calendar dates (purchase and warranty), `numeric(14,2)` for
@@ -70,8 +70,7 @@ erDiagram
   accessories ||--o{ accessory_assignments : ""
 
   assets ||--o{ maintenance : repaired_in
-  tickets ||--o{ maintenance : raises
-  tickets ||--o{ ticket_comments : ""
+  employees ||--o{ asset_requests : raises
   software ||--o{ software_licenses : ""
   software_licenses ||--o{ software_assignments : seats
   audit_sessions ||--o{ audit_items : ""
@@ -91,14 +90,15 @@ erDiagram
 | Accessories  | `accessories` (quantity-tracked), `accessory_assignments`         |
 | Maintenance  | `maintenance`                                                     |
 | Software     | `software`, `software_licenses`, `software_assignments`           |
-| Helpdesk     | `tickets`, `ticket_comments`                                      |
+| Requests     | `asset_requests`                                                  |
 | Documents    | `documents` (file metadata; files go to S3-compatible storage)    |
 | Audits       | `audit_sessions`, `audit_items`                                   |
 | Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
 | System       | `notifications`, `activity_logs`, `settings`                      |
 | Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)    |
 
-`ticket_comments` is not in the table list in spec §3, but `POST /tickets/:id/comments` in spec §5 needs it.
+`asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
+then handed over, with a printable form attached to the request.
 `refresh_tokens`, `password_reset_tokens` and `settings` were added with authentication and the Settings screen
 (migration `auth_and_settings`, which also creates the `asset_tag_seq` sequence used for generated tags).
 
@@ -138,7 +138,7 @@ assignment transaction, because it depends on a count across rows.
 
 ## Roles and permissions
 
-The catalogue of 73 permission keys and the role-to-permission mapping live in
+The catalogue of 72 permission keys and the role-to-permission mapping live in
 [`packages/shared/src/constants/permissions.ts`](../packages/shared/src/constants/permissions.ts), shared by the
 API, the web app and the seed. Where spec §4 limits a role's data scope, the scope is part of the key:
 `asset.view` (all), `asset.view_department` or `asset.view_own`.

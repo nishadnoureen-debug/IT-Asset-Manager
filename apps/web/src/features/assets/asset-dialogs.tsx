@@ -31,14 +31,10 @@ export function AssetActionDialog({
   const [signature, setSignature] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const invalidate = ['/assets', '/assignments', '/tickets'];
+  const invalidate = ['/assets', '/assignments', '/requests'];
   const retire = useApiMutation('post', `/assets/${asset.id}/retire`, invalidate);
   const dispose = useApiMutation('post', `/assets/${asset.id}/dispose`, invalidate);
-  const lost = useApiMutation<unknown, { ticketId: string; ticketNumber: number }>(
-    'post',
-    `/assets/${asset.id}/report-lost`,
-    invalidate,
-  );
+  const lost = useApiMutation('post', `/assets/${asset.id}/report-lost`, invalidate);
   const ack = useApiMutation('post', `/assignments/${assignmentId}/acknowledge`, invalidate);
   const pending = retire.isPending || dispose.isPending || lost.isPending || ack.isPending;
 
@@ -59,11 +55,8 @@ export function AssetActionDialog({
         await dispose.mutateAsync({ method, reason });
         toast.success(`${asset.assetTag} disposed`);
       } else if (kind === 'report_lost') {
-        const { data } = await lost.mutateAsync({ notes: reason });
-        toast.success(`Reported lost — ticket TCK-${data.ticketNumber} created`);
-        close();
-        router.push(`/tickets/${data.ticketId}`);
-        return;
+        await lost.mutateAsync({ notes: reason });
+        toast.success(`${asset.assetTag} reported lost — IT has been notified`);
       } else if (kind === 'acknowledge') {
         await ack.mutateAsync({ signature: signature ?? undefined });
         toast.success('Thank you — receipt acknowledged');
@@ -89,7 +82,7 @@ export function AssetActionDialog({
     },
     report_lost: {
       title: `Report ${asset.assetTag} lost`,
-      description: 'The assignment is closed and a high-priority loss ticket is raised for IT.',
+      description: 'The assignment is closed, the asset is marked lost and IT is notified.',
       button: 'Report lost',
       danger: true,
     },

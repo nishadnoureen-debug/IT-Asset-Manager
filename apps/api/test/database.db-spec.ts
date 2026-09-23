@@ -25,6 +25,7 @@ const EXPECTED_TABLES = [
   'activity_logs',
   'asset_assignments',
   'asset_history',
+  'asset_requests',
   'asset_types',
   'assets',
   'audit_items',
@@ -46,8 +47,6 @@ const EXPECTED_TABLES = [
   'software_assignments',
   'software_licenses',
   'stored_files',
-  'ticket_comments',
-  'tickets',
   'user_roles',
   'users',
   'vendors',
@@ -98,7 +97,7 @@ beforeEach(async () => {
 });
 
 describe('migration', () => {
-  it('creates every table from spec §3 plus ticket_comments, auth tokens, settings and file storage', async () => {
+  it('creates every table from spec §3 plus asset requests, auth tokens, settings and file storage', async () => {
     const rows = await prisma.$queryRaw<{ table_name: string }[]>`
       SELECT table_name FROM information_schema.tables
       WHERE table_schema = 'public' AND table_type = 'BASE TABLE' AND table_name <> '_prisma_migrations'
@@ -167,11 +166,11 @@ describe('seed', () => {
   it('preserves admin customisations of system roles and custom asset types across re-seeds', async () => {
     await seedDatabase(prisma);
     const employeeRole = await prisma.role.findUniqueOrThrow({ where: { name: ROLES.EMPLOYEE } });
-    const ticketCreate = await prisma.permission.findUniqueOrThrow({
-      where: { key: 'ticket.create' },
+    const requestCreate = await prisma.permission.findUniqueOrThrow({
+      where: { key: 'request.create' },
     });
     await prisma.rolePermission.delete({
-      where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: ticketCreate.id } },
+      where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: requestCreate.id } },
     });
     await prisma.assetType.update({ where: { name: 'Laptop' }, data: { depreciationMonths: 48 } });
 
@@ -179,7 +178,7 @@ describe('seed', () => {
 
     expect(
       await prisma.rolePermission.findUnique({
-        where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: ticketCreate.id } },
+        where: { roleId_permissionId: { roleId: employeeRole.id, permissionId: requestCreate.id } },
       }),
     ).toBeNull();
     expect(
@@ -189,14 +188,14 @@ describe('seed', () => {
 
   it('grants permissions newly added to the catalogue to existing system roles', async () => {
     await seedDatabase(prisma);
-    await prisma.permission.delete({ where: { key: 'ticket.assign' } }); // simulate an older catalogue
+    await prisma.permission.delete({ where: { key: 'request.fulfil' } }); // simulate an older catalogue
     const summary = await seedDatabase(prisma);
     expect(summary.newPermissions).toBe(1);
     const tech = await prisma.role.findUniqueOrThrow({
       where: { name: ROLES.IT_TECHNICIAN },
       include: { permissions: { include: { permission: true } } },
     });
-    expect(tech.permissions.map((p) => p.permission.key)).toContain('ticket.assign');
+    expect(tech.permissions.map((p) => p.permission.key)).toContain('request.fulfil');
   });
 
   it('never grants Super-Admin-only permissions to other roles', () => {
@@ -460,17 +459,15 @@ describe('users and helpdesk', () => {
     ).rejects.toThrow(/users_email_lowercase/);
   });
 
-  it('numbers tickets sequentially and cascades comments with the ticket', async () => {
-    const t1 = await prisma.ticket.create({
-      data: { title: 'Laptop fan noise', description: 'Loud fan' },
+  it('numbers asset requests sequentially', async () => {
+    const r1 = await prisma.assetRequest.create({
+      data: { title: 'Laptop', justification: 'New starter' },
     });
-    const t2 = await prisma.ticket.create({
-      data: { title: 'VPN access', description: 'Need VPN' },
+    const r2 = await prisma.assetRequest.create({
+      data: { title: 'Monitor', justification: 'Second screen' },
     });
-    expect(t2.number).toBe(t1.number + 1);
-
-    await prisma.ticketComment.create({ data: { ticketId: t1.id, body: 'Looking into it' } });
-    await prisma.ticket.delete({ where: { id: t1.id } });
-    expect(await prisma.ticketComment.count()).toBe(0);
+    expect(r2.number).toBe(r1.number + 1);
+    expect(r1.status).toBe('SUBMITTED');
+    expect(r1.quantity).toBe(1);
   });
 });

@@ -237,4 +237,67 @@ describe('handover, transfer and return forms', () => {
       expect(r).toContain(text);
     expect(r).not.toContain('Terms & Conditions');
   });
+  it('prints the asset request form with the approval boxes and signature lines', async () => {
+    const admin = await login(app, 'it@example.com');
+    const omar = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP101' } });
+    const laptopType = await prisma.assetType.findUniqueOrThrow({ where: { name: 'Laptop' } });
+    const created = await http()
+      .post(api('/requests'))
+      .set(admin.auth)
+      .send({
+        title: 'Laptop for site survey',
+        justification: 'The current laptop cannot run the survey software.',
+        assetTypeId: laptopType.id,
+        employeeId: omar.id,
+        quantity: 2,
+        priority: 'HIGH',
+      })
+      .expect(201);
+    const id = created.body.data.id as string;
+
+    const before = pdfText(await download(admin.auth, created.body.data.documents[0].id));
+    for (const text of [
+      'ASSET REQUEST FORM',
+      'Requested For',
+      'OMAR HADDAD',
+      'EMP101',
+      'Request Details',
+      'Laptop for site survey',
+      'New asset',
+      'Justification',
+      'The current laptop cannot run the survey software.',
+      'Approval',
+      'Approved',
+      'Rejected',
+      'Requested By (signature)',
+      'Approved By (signature)',
+      'Verified by:',
+      'ARC GLOBAL TECHNICAL SERVICES',
+    ])
+      expect(before).toContain(text);
+
+    await http()
+      .post(api(`/requests/${id}/approve`))
+      .set(admin.auth)
+      .send({ notes: 'Approved, issue from stock' })
+      .expect(200);
+    const approved = await http()
+      .get(api(`/requests/${id}`))
+      .set(admin.auth)
+      .expect(200);
+    // The form is replaced, so the printed copy shows the decision.
+    const forms = approved.body.data.documents.filter(
+      (d: { type: string }) => d.type === 'REQUEST_FORM',
+    );
+    expect(forms).toHaveLength(1);
+    const after = pdfText(await download(admin.auth, forms[0].id));
+    // (the text extractor drops em dashes, so match the words around them)
+    expect(after).toContain('issue from stock');
+    expect(after).toContain('IT PERSON');
+    if (process.env.FORMS_OUT)
+      writeFileSync(
+        join(process.env.FORMS_OUT, 'asset-request.pdf'),
+        await download(admin.auth, forms[0].id),
+      );
+  });
 });

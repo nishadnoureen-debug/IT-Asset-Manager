@@ -95,21 +95,20 @@ export const LABELS = {
     OPEN_SOURCE: 'Open source',
     TRIAL: 'Trial',
   },
-  ticketCategory: {
-    HARDWARE: 'Hardware',
+  requestType: {
+    NEW_ASSET: 'New asset',
+    REPLACEMENT: 'Replacement',
+    ACCESSORY: 'Accessory',
     SOFTWARE: 'Software',
-    NETWORK: 'Network',
-    ACCESS: 'Access',
-    ASSET_REQUEST: 'Asset request',
-    LOSS_REPORT: 'Loss report',
+    REPAIR: 'Repair',
     OTHER: 'Other',
   },
-  ticketStatus: {
-    OPEN: 'Open',
-    IN_PROGRESS: 'In progress',
-    ON_HOLD: 'On hold',
-    RESOLVED: 'Resolved',
-    CLOSED: 'Closed',
+  requestStatus: {
+    SUBMITTED: 'Awaiting approval',
+    APPROVED: 'Approved',
+    REJECTED: 'Rejected',
+    FULFILLED: 'Fulfilled',
+    CANCELLED: 'Cancelled',
   },
   documentType: {
     INVOICE: 'Invoice',

@@ -17,7 +17,7 @@ export type DocumentOwner = Partial<
     | 'maintenanceId'
     | 'purchaseId'
     | 'softwareLicenseId'
-    | 'ticketId'
+    | 'assetRequestId'
     | 'auditSessionId'
     | 'employeeId'
   >
@@ -29,7 +29,7 @@ export const OWNER_FIELDS = [
   'maintenanceId',
   'purchaseId',
   'softwareLicenseId',
-  'ticketId',
+  'assetRequestId',
   'auditSessionId',
   'employeeId',
 ] as const;
@@ -47,7 +47,7 @@ export const documentSelect = {
   maintenanceId: true,
   purchaseId: true,
   softwareLicenseId: true,
-  ticketId: true,
+  assetRequestId: true,
   auditSessionId: true,
   employeeId: true,
   uploadedBy: { select: { id: true, displayName: true } },
@@ -202,7 +202,7 @@ export class DocumentsService {
       OR: [
         { employeeId: user.employeeId },
         { assignment: { employeeId: user.employeeId } },
-        { ticket: { requesterId: user.employeeId } },
+        { assetRequest: { employeeId: user.employeeId } },
       ],
     };
   }
@@ -236,8 +236,11 @@ export class DocumentsService {
           where: { id: owner.softwareLicenseId, deletedAt: null },
         }),
       ]);
-    if (owner.ticketId)
-      checks.push(['Ticket', this.prisma.ticket.findUnique({ where: { id: owner.ticketId } })]);
+    if (owner.assetRequestId)
+      checks.push([
+        'Request',
+        this.prisma.assetRequest.findUnique({ where: { id: owner.assetRequestId } }),
+      ]);
     if (owner.auditSessionId)
       checks.push([
         'Audit',

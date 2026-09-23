@@ -62,9 +62,9 @@ export class EmployeesController {
     return this.employees.assets(id, user);
   }
 
-  @Get(':id/tickets')
+  @Get(':id/requests')
   @RequirePermissions(...VIEW)
-  tickets(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    return this.employees.tickets(id, user);
+  requests(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.employees.requests(id, user);
   }
 }

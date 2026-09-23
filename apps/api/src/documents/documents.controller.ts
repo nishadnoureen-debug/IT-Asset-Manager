@@ -29,7 +29,7 @@ class DocumentOwnerDto {
   @IsOptional() @IsUUID() maintenanceId?: string;
   @IsOptional() @IsUUID() purchaseId?: string;
   @IsOptional() @IsUUID() softwareLicenseId?: string;
-  @IsOptional() @IsUUID() ticketId?: string;
+  @IsOptional() @IsUUID() assetRequestId?: string;
   @IsOptional() @IsUUID() auditSessionId?: string;
   @IsOptional() @IsUUID() employeeId?: string;
 }

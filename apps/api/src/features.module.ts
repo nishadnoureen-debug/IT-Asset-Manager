@@ -28,7 +28,8 @@ import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { SettingsController } from './settings/settings.controller';
 import { LicensesController, SoftwareController } from './software/software.controllers';
-import { TicketsController } from './tickets/tickets.controller';
+import { RequestPdfService } from './requests/request-pdf.service';
+import { RequestsController } from './requests/requests.controller';
 import { RolesController, UsersController } from './users/users.controller';
 import { WarrantiesController } from './warranties/warranties.controller';
 
@@ -73,8 +74,8 @@ export class MaintenanceModule {}
 @Module({ controllers: [SoftwareController, LicensesController] })
 export class SoftwareModule {}
 
-@Module({ controllers: [TicketsController] })
-export class HelpdeskModule {}
+@Module({ controllers: [RequestsController], providers: [RequestPdfService] })
+export class RequestsModule {}
 
 @Module({ controllers: [AuditsController] })
 export class AuditsModule {}
@@ -95,7 +96,7 @@ export const FEATURE_MODULES = [
   ProcurementModule,
   MaintenanceModule,
   SoftwareModule,
-  HelpdeskModule,
+  RequestsModule,
   AuditsModule,
   ReportsModule,
   NotificationsModule,

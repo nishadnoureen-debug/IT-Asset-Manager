@@ -14,7 +14,7 @@ import { useToast } from '@/components/ui/toast';
 import { EmployeeDialog } from '@/features/employees/employee-dialog';
 import { api } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
-import { formatDate, formatDateTime, label, ticketRef } from '@/lib/format';
+import { formatDate, formatDateTime, label, requestRef } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
 import type { Employee } from '@/lib/types';
 
@@ -57,7 +57,7 @@ export default function EmployeeDetailPage() {
   const [deleting, setDeleting] = useState(false);
   const query = useApi<Employee>(`/employees/${id}`, undefined, { placeholderData: undefined });
   const assets = useApi<EmployeeAssets>(`/employees/${id}/assets`);
-  const tickets = useApi<
+  const requests = useApi<
     {
       id: string;
       number: number;
@@ -66,7 +66,7 @@ export default function EmployeeDetailPage() {
       priority: string;
       createdAt: string;
     }[]
-  >(`/employees/${id}/tickets`);
+  >(`/employees/${id}/requests`);
 
   return (
     <QueryState query={query}>
@@ -237,25 +237,25 @@ export default function EmployeeDetailPage() {
                 </CardBody>
               </Card>
               <Card>
-                <CardHeader title="Tickets" />
-                {tickets.data?.data.length ? (
+                <CardHeader title="Asset requests" />
+                {requests.data?.data.length ? (
                   <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {tickets.data.data.slice(0, 10).map((t) => (
-                      <li key={t.id}>
+                    {requests.data.data.slice(0, 10).map((r) => (
+                      <li key={r.id}>
                         <Link
-                          href={`/tickets/${t.id}`}
+                          href={`/requests/${r.id}`}
                           className="flex items-center justify-between gap-2 px-5 py-2.5 text-sm hover:bg-slate-50 dark:hover:bg-slate-800/50"
                         >
                           <span className="min-w-0 truncate">
-                            <span className="text-slate-500">{ticketRef(t.number)}</span> {t.title}
+                            <span className="text-slate-500">{requestRef(r.number)}</span> {r.title}
                           </span>
-                          <StatusBadge group="ticketStatus" value={t.status} />
+                          <StatusBadge group="requestStatus" value={r.status} />
                         </Link>
                       </li>
                     ))}
                   </ul>
                 ) : (
-                  <p className="px-5 py-6 text-center text-sm text-slate-500">No tickets</p>
+                  <p className="px-5 py-6 text-center text-sm text-slate-500">No asset requests</p>
                 )}
               </Card>
             </div>
