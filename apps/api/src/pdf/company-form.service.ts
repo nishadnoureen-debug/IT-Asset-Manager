@@ -254,18 +254,19 @@ export class CompanyForm {
       this.pdf.ensureSpace(this.doc, tableHeight + 12);
       const top = this.doc.y;
       const colWidth = CONTENT_WIDTH / 3;
+      // Only as many boxes as there are people, and a short last row is centred on the page.
+      const rowLeft = MARGINS.left + (CONTENT_WIDTH - group.length * colWidth) / 2;
       this.doc.save().lineWidth(0.75).strokeColor('#000000');
-      // Only as many boxes as there are people, so a short last row has no empty boxes.
       for (let col = 0; col < group.length; col++) {
         let y = top;
         for (const h of rowHeights) {
-          this.doc.rect(MARGINS.left + col * colWidth, y, colWidth, h).stroke();
+          this.doc.rect(rowLeft + col * colWidth, y, colWidth, h).stroke();
           y += h;
         }
       }
       this.doc.restore();
       group.forEach((person, col) => {
-        const x = MARGINS.left + col * colWidth + 4;
+        const x = rowLeft + col * colWidth + 4;
         const width = colWidth - 8;
         this.doc
           .font('Times-Roman')
