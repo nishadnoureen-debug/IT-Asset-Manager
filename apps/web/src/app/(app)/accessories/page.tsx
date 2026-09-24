@@ -363,7 +363,7 @@ export default function AccessoriesPage() {
     <>
       <PageHeader
         title="Accessories"
-        description="Chargers, mice, keyboards, bags, docks and headsets — tracked by quantity."
+        description="Chargers, mice, keyboards, bags, docks and headsets - tracked by quantity."
         actions={
           can('accessory.manage') && (
             <Button onClick={() => setCreating(true)} icon={<Plus className="h-4 w-4" />}>
