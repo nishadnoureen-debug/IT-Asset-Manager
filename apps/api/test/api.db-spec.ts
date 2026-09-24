@@ -797,13 +797,39 @@ describe('asset requests', () => {
       .expect(422);
 
     const asset = await createAsset(s.admin);
+    const mouse = await http()
+      .post(api('/accessories'))
+      .set(s.admin.auth)
+      .send({ name: 'Wireless mouse', category: 'MOUSE', quantityTotal: 4 })
+      .expect(201);
     const fulfilled = await http()
       .post(api(`/requests/${id}/fulfil`))
       .set(s.tech.auth)
-      .send({ assetId: asset.id })
+      .send({
+        assetId: asset.id,
+        condition: 'NEW',
+        accessories: [{ accessoryId: mouse.body.data.id, quantity: 2 }],
+      })
       .expect(200);
     expect(fulfilled.body.data.status).toBe('FULFILLED');
     expect(fulfilled.body.data.asset.assetTag).toBe(asset.assetTag);
+
+    // Fulfilling hands the asset over: it is assigned, stock drops and a handover form exists.
+    const handed = await prisma.assetAssignment.findFirstOrThrow({
+      where: { assetId: asset.id, status: 'ACTIVE' },
+      include: { accessoryAssignments: true, documents: true },
+    });
+    expect(handed.employeeId).toBe(ids.alice);
+    expect(handed.conditionAtAssignment).toBe('NEW');
+    expect(handed.accessoryAssignments[0].quantity).toBe(2);
+    expect(handed.documents.map((d) => d.type)).toContain('HANDOVER_FORM');
+    expect((await prisma.asset.findUniqueOrThrow({ where: { id: asset.id } })).status).toBe(
+      'ASSIGNED',
+    );
+    expect(
+      (await prisma.accessory.findUniqueOrThrow({ where: { id: mouse.body.data.id } }))
+        .quantityAvailable,
+    ).toBe(2);
     // One current form, replaced at each decision, and the requester was told.
     const forms = fulfilled.body.data.documents.filter(
       (d: { type: string }) => d.type === 'REQUEST_FORM',

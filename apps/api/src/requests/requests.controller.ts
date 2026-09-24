@@ -12,9 +12,11 @@ import {
   Query,
 } from '@nestjs/common';
 import { ApiTags } from '@nestjs/swagger';
-import { Prisma, Priority, RequestStatus, RequestType } from '@prisma/client';
+import { AssetCondition, Prisma, Priority, RequestStatus, RequestType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsDate,
   IsEnum,
   IsInt,
@@ -26,8 +28,11 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { ActivityLogService, diff } from '../activity-logs/activity-log.service';
+import { AccessoryLineDto, SIGNATURE_MAX } from '../assignments/assignments.dto';
+import { AssignmentsService } from '../assignments/assignments.service';
 import { trim } from '../assets/assets.dto';
 import { can, dataScope, NO_MATCH_ID, type AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
@@ -75,7 +80,16 @@ class RejectDto {
 
 class FulfilDto {
   @IsOptional() @IsUUID() assetId?: string;
+  /** Condition recorded on the handover form when the asset is issued. */
+  @IsOptional() @IsEnum(AssetCondition) condition?: AssetCondition;
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(20)
+  @ValidateNested({ each: true })
+  @Type(() => AccessoryLineDto)
+  accessories?: AccessoryLineDto[];
   @IsOptional() @Transform(trim) @IsString() @MaxLength(2000) notes?: string;
+  @IsOptional() @IsString() @MaxLength(SIGNATURE_MAX) signature?: string;
 }
 
 class RequestQueryDto extends PaginationQueryDto {
@@ -112,6 +126,7 @@ export class RequestsController {
     private readonly notifications: NotificationsService,
     private readonly documents: DocumentsService,
     private readonly pdf: RequestPdfService,
+    private readonly assignments: AssignmentsService,
   ) {}
 
   private scopeWhere(user: AuthUser): Prisma.AssetRequestWhereInput {
@@ -309,7 +324,10 @@ export class RequestsController {
     return this.decide(id, 'REJECTED', dto.notes, user);
   }
 
-  /** Records that the approved asset was handed over; the handover itself uses the assign flow. */
+  /**
+   * Hands the approved asset over: assigns it to the employee (stock, status, handover form and
+   * acknowledgement all follow the normal assign flow) and closes the request.
+   */
   @Post(':id/fulfil')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('request.fulfil')
@@ -326,6 +344,23 @@ export class RequestsController {
       !(await this.prisma.asset.findFirst({ where: { id: dto.assetId, deletedAt: null } }))
     )
       throw Errors.badRequest('Asset not found', 'assetId');
+    if (dto.accessories?.length && !dto.assetId)
+      throw Errors.badRequest('Choose the asset being handed over', 'assetId');
+
+    // Assigning needs asset.assign; without it the request is only recorded as fulfilled.
+    if (dto.assetId && existing.employeeId && can(user, 'asset.assign')) {
+      await this.assignments.assign(
+        dto.assetId,
+        {
+          employeeId: existing.employeeId,
+          condition: dto.condition ?? 'GOOD',
+          accessories: dto.accessories,
+          notes: dto.notes,
+          signature: dto.signature,
+        },
+        user,
+      );
+    }
 
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.assetRequest.updateMany({

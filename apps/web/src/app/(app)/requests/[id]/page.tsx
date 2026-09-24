@@ -1,23 +1,23 @@
 'use client';
 
-import { CheckCircle2, PackageCheck, XCircle } from 'lucide-react';
+import { CheckCircle2, Minus, PackageCheck, Plus, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
 import { BackLink } from '@/components/back-link';
 import { Documents } from '@/components/documents';
-import { AssetPicker } from '@/components/pickers';
+import { AssetPicker, EnumSelect } from '@/components/pickers';
 import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader, DetailList, PageHeader } from '@/components/ui/card';
 import { Dialog } from '@/components/ui/dialog';
-import { Field, Textarea } from '@/components/ui/form';
+import { Field, Select, Textarea } from '@/components/ui/form';
 import { QueryState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatDateTime, fullName, label, requestRef } from '@/lib/format';
 import { useApi, useApiMutation } from '@/lib/hooks';
-import type { AssetRequest } from '@/lib/types';
+import type { Accessory, AssetRequest } from '@/lib/types';
 
 type ActionKind = 'approve' | 'reject' | 'fulfil' | 'cancel';
 
@@ -41,8 +41,9 @@ const DIALOGS: Record<
   },
   fulfil: {
     title: 'Record the handover',
-    description: 'Mark the request as fulfilled and link the asset that was issued.',
-    label: 'Mark as fulfilled',
+    description:
+      'Pick a free asset and any accessories. The asset is assigned to the employee and the handover form is generated.',
+    label: 'Hand over',
     notesLabel: 'Note (optional)',
     required: false,
   },
@@ -68,7 +69,16 @@ export default function RequestDetailPage() {
   const [action, setAction] = useState<ActionKind | null>(null);
   const [notes, setNotes] = useState('');
   const [assetId, setAssetId] = useState<string | null>(null);
+  const [condition, setCondition] = useState('GOOD');
+  const [lines, setLines] = useState<{ accessoryId: string; quantity: number }[]>([]);
   const [error, setError] = useState<string | null>(null);
+  // Stock is only needed while handing over.
+  const accessories = useApi<Accessory[]>(action === 'fulfil' ? '/accessories' : null, {
+    limit: 100,
+  });
+  const inStock = (accessories.data?.data ?? []).filter(
+    (a) => a.quantityAvailable > 0 && !lines.some((l) => l.accessoryId === a.id),
+  );
 
   const pending = approve.isPending || reject.isPending || fulfil.isPending || cancel.isPending;
 
@@ -76,6 +86,8 @@ export default function RequestDetailPage() {
     setAction(kind);
     setNotes('');
     setAssetId(null);
+    setCondition('GOOD');
+    setLines([]);
     setError(null);
   };
 
@@ -85,9 +97,19 @@ export default function RequestDetailPage() {
       setError('Please give a reason');
       return;
     }
+    if (action === 'fulfil' && lines.length && !assetId) {
+      setError('Choose the asset being handed over');
+      return;
+    }
     const body = {
       notes: notes.trim() || undefined,
-      ...(action === 'fulfil' ? { assetId: assetId ?? undefined } : {}),
+      ...(action === 'fulfil'
+        ? {
+            assetId: assetId ?? undefined,
+            condition,
+            accessories: lines.length ? lines : undefined,
+          }
+        : {}),
     };
     const run = { approve, reject, fulfil, cancel }[action];
     try {
@@ -284,16 +306,117 @@ export default function RequestDetailPage() {
             >
               <div className="space-y-4">
                 {action === 'fulfil' && (
-                  <Field label="Asset issued">
-                    {(p) => (
-                      <AssetPicker
-                        id={p.id}
-                        value={assetId}
-                        onChange={setAssetId}
-                        placeholder="Optional — link the asset handed over"
-                      />
-                    )}
-                  </Field>
+                  <>
+                    <Field
+                      label="Asset to hand over"
+                      hint={
+                        r.assetType
+                          ? `Free ${r.assetType.name.toLowerCase()}s (in stock or available)`
+                          : 'Assets that are in stock or available'
+                      }
+                    >
+                      {(p) => (
+                        <AssetPicker
+                          id={p.id}
+                          value={assetId}
+                          onChange={setAssetId}
+                          query={{
+                            status: 'IN_STOCK,AVAILABLE',
+                            assetTypeId: r.assetType?.id,
+                          }}
+                          placeholder="Search free assets by tag, name or serial…"
+                        />
+                      )}
+                    </Field>
+                    <Field label="Condition at handover">
+                      {(p) => (
+                        <EnumSelect
+                          {...p}
+                          group="assetCondition"
+                          value={condition}
+                          onChange={(e) => setCondition(e.target.value)}
+                        />
+                      )}
+                    </Field>
+                    <div>
+                      <p className="mb-1 text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Accessories from stock
+                      </p>
+                      <div className="space-y-2">
+                        {lines.map((line) => {
+                          const acc = accessories.data?.data.find((a) => a.id === line.accessoryId);
+                          return (
+                            <div key={line.accessoryId} className="flex items-center gap-2">
+                              <span className="flex-1 truncate text-sm">
+                                {acc?.name}
+                                {acc && (
+                                  <span className="text-slate-500">
+                                    {' '}
+                                    ({acc.quantityAvailable} in stock)
+                                  </span>
+                                )}
+                              </span>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label="Decrease"
+                                icon={<Minus className="h-3 w-3" />}
+                                disabled={line.quantity <= 1}
+                                onClick={() =>
+                                  setLines((ls) =>
+                                    ls.map((l) =>
+                                      l === line ? { ...l, quantity: l.quantity - 1 } : l,
+                                    ),
+                                  )
+                                }
+                              />
+                              <span className="w-6 text-center text-sm tabular-nums">
+                                {line.quantity}
+                              </span>
+                              <Button
+                                variant="secondary"
+                                size="sm"
+                                aria-label="Increase"
+                                icon={<Plus className="h-3 w-3" />}
+                                disabled={!!acc && line.quantity >= acc.quantityAvailable}
+                                onClick={() =>
+                                  setLines((ls) =>
+                                    ls.map((l) =>
+                                      l === line ? { ...l, quantity: l.quantity + 1 } : l,
+                                    ),
+                                  )
+                                }
+                              />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                aria-label="Remove"
+                                icon={<Trash2 className="h-4 w-4" />}
+                                onClick={() => setLines((ls) => ls.filter((l) => l !== line))}
+                              />
+                            </div>
+                          );
+                        })}
+                        <Select
+                          aria-label="Add accessory"
+                          value=""
+                          onChange={(e) =>
+                            e.target.value &&
+                            setLines((ls) => [...ls, { accessoryId: e.target.value, quantity: 1 }])
+                          }
+                        >
+                          <option value="">
+                            {inStock.length ? '+ Add accessory…' : 'No accessories in stock'}
+                          </option>
+                          {inStock.map((a) => (
+                            <option key={a.id} value={a.id}>
+                              {a.name} ({a.quantityAvailable} available)
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
+                    </div>
+                  </>
                 )}
                 <Field
                   label={action ? DIALOGS[action].notesLabel : ''}

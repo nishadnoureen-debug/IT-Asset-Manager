@@ -62,6 +62,7 @@ export class AssetsModule {}
   imports: [AssetsModule],
   controllers: [AssignmentsController, AccessoriesController],
   providers: [AssignmentsService, HandoverPdfService],
+  exports: [AssignmentsService],
 })
 export class AssignmentsModule {}
 
@@ -74,7 +75,11 @@ export class MaintenanceModule {}
 @Module({ controllers: [SoftwareController, LicensesController] })
 export class SoftwareModule {}
 
-@Module({ controllers: [RequestsController], providers: [RequestPdfService] })
+@Module({
+  imports: [AssignmentsModule],
+  controllers: [RequestsController],
+  providers: [RequestPdfService],
+})
 export class RequestsModule {}
 
 @Module({ controllers: [AuditsController] })

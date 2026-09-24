@@ -21,7 +21,7 @@ import { trim } from '../assets/assets.dto';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 
 /** PNG data URL from the signature pad (max ~512 KB decoded). */
-const SIGNATURE_MAX = 700_000;
+export const SIGNATURE_MAX = 700_000;
 
 export class AccessoryLineDto {
   @IsUUID() accessoryId!: string;
