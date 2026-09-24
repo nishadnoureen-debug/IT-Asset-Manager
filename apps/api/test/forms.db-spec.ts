@@ -266,19 +266,22 @@ describe('handover, transfer and return forms', () => {
       'OMAR HADDAD',
       'EMP101',
       'Request Details',
-      'Laptop for site survey',
+      'Item Requested',
+      'Laptop',
       'New asset',
+      'Quantity',
+      'Priority',
+      'Raised By',
       'Justification',
       'The current laptop cannot run the survey software.',
-      'Approval',
-      'Approved',
-      'Rejected',
-      'Requested By (signature)',
-      'Approved By (signature)',
       'Verified by:',
+      'FINANCE MANAGER',
       'ARC GLOBAL TECHNICAL SERVICES',
     ])
       expect(before).toContain(text);
+    // The decision lives in the system; the printed form is only countersigned.
+    for (const gone of ['Approval', 'Approved By', 'Required By', 'Handover'])
+      expect(before).not.toContain(gone);
 
     await http()
       .post(api(`/requests/${id}/approve`))
@@ -295,9 +298,9 @@ describe('handover, transfer and return forms', () => {
     );
     expect(forms).toHaveLength(1);
     const after = pdfText(await download(admin.auth, forms[0].id));
-    // (the text extractor drops em dashes, so match the words around them)
-    expect(after).toContain('issue from stock');
+    expect(after).toContain('ASSET REQUEST FORM');
     expect(after).toContain('FIN PERSON');
+    expect(after).not.toContain('issue from stock');
     if (process.env.FORMS_OUT)
       writeFileSync(
         join(process.env.FORMS_OUT, 'asset-request.pdf'),

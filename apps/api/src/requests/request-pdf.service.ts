@@ -23,13 +23,9 @@ export class RequestPdfService {
         employee: { include: { department: true, location: true } },
         assetType: true,
         createdBy: { select: { displayName: true } },
-        decisionBy: { select: { displayName: true } },
-        fulfilledBy: { select: { displayName: true } },
-        asset: { select: { assetTag: true, name: true } },
       },
     });
     const ref = requestRef(r.number);
-    const decided = r.status === 'APPROVED' || r.status === 'REJECTED' || r.status === 'FULFILLED';
 
     return this.forms.render(
       {
@@ -59,12 +55,10 @@ export class RequestPdfService {
 
         f.heading('Request Details');
         f.bullets([
-          ['Request', r.title],
-          ['Request Type', label('requestType', r.type)],
           ['Item Requested', r.assetType?.name ?? ''],
+          ['Request Type', label('requestType', r.type)],
           ['Quantity', String(r.quantity)],
           ['Priority', label('priority', r.priority)],
-          ['Required By', formDate(r.neededBy)],
           ['Raised By', r.createdBy?.displayName ?? ''],
         ]);
         f.rule();
@@ -73,36 +67,7 @@ export class RequestPdfService {
         f.paragraph(r.justification);
         f.rule();
 
-        f.heading('Approval');
-        f.checkBoxes([
-          { text: 'Approved', checked: r.status === 'APPROVED' || r.status === 'FULFILLED' },
-          { text: 'Rejected', checked: r.status === 'REJECTED' },
-          {
-            text: 'Remarks',
-            checked: Boolean(r.decisionNotes?.trim()),
-            fill: r.decisionNotes?.trim() ?? '',
-          },
-        ]);
-        f.doc.moveDown(0.4);
-        f.fieldLine(
-          'Requested By (name)',
-          r.employee ? `${r.employee.firstName} ${r.employee.lastName}` : '',
-        );
-        f.signatureLine('Requested By (signature)');
-        f.fieldLine('Approved By (name)', decided ? (r.decisionBy?.displayName ?? '') : '');
-        f.signatureLine('Approved By (signature)');
-        f.fieldLine('Approval Date', decided ? formDate(r.decisionAt) : '');
-        if (r.status === 'FULFILLED') {
-          f.rule();
-          f.heading('Handover');
-          f.bullets([
-            ['Asset Issued', r.asset ? `${r.asset.assetTag} — ${r.asset.name}` : ''],
-            ['Issued By', r.fulfilledBy?.displayName ?? ''],
-            ['Issued On', formDate(r.fulfilledAt)],
-          ]);
-          f.signatureLine('Received By (signature)');
-        }
-
+        // The decision is recorded in the system; on paper the form is simply countersigned.
         f.verifiedBy();
       },
     );
