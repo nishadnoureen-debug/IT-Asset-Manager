@@ -52,7 +52,7 @@ export interface CheckBoxRow {
 
 /**
  * One printed company form: letterhead, blue section headings, bulleted details, check boxes,
- * signature lines and "Verified by" boxes. Layout follows the company's ASSET HANDOVER FORM.
+ * signature lines and "Approved by" boxes. Layout follows the company's ASSET HANDOVER FORM.
  */
 export class CompanyForm {
   constructor(
@@ -234,8 +234,8 @@ export class CompanyForm {
     this.doc.y = lineY + 10;
   }
 
-  /** "Verified by:" boxes, three per row: title, name, and space to sign. */
-  verifiedBy(): void {
+  /** "Approved by:" boxes, three per row: title, name, and space to sign. */
+  approvedBy(): void {
     const people = this.settings.formSignatories.filter((s) => s.title.trim());
     if (!people.length) return;
     const rowHeights = [26, 24, 44];
@@ -247,7 +247,7 @@ export class CompanyForm {
       .font('Times-Roman')
       .fontSize(14)
       .fillColor(FORM_COLORS.text)
-      .text('Verified by:', MARGINS.left, this.doc.y);
+      .text('Approved by:', MARGINS.left, this.doc.y);
     this.doc.moveDown(0.5);
     for (let start = 0; start < people.length; start += 3) {
       const group = people.slice(start, start + 3);

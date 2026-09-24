@@ -55,7 +55,7 @@ The address printed on QR labels is the service's Render URL (`RENDER_EXTERNAL_U
 (`autoDeployTrigger: checksPass`); database migrations run before the app starts.
 
 Forms: handover, transfer and return PDFs use the letterhead and watermark in `apps/api/assets/forms`
-(`letterhead.jpg`, `watermark.jpg`; replace them to rebrand). Footer, terms and "Verified by" names are edited in
+(`letterhead.jpg`, `watermark.jpg`; replace them to rebrand). Footer, terms and "Approved by" names are edited in
 **Settings → Forms**. Dates on forms use the server time zone (`TZ`, set to `Asia/Dubai` in `render.yaml`).
 
 Backups: Neon keeps a short restore window on the free plan. Export your data regularly from **Reports**

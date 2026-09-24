@@ -18,7 +18,7 @@ interface FormsForm {
   formSignatories: FormSignatory[];
 }
 
-/** Letterhead footer, terms and "Verified by" boxes printed on handover, transfer and return forms. */
+/** Letterhead footer, terms and "Approved by" boxes printed on handover, transfer and return forms. */
 export function FormsSettings() {
   const { can } = useAuth();
   const toast = useToast();
@@ -85,7 +85,7 @@ export function FormsSettings() {
               {(p) => <Textarea {...p} rows={7} {...register('formTerms')} />}
             </Field>
             <div>
-              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Verified by</p>
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Approved by</p>
               <p className="mb-2 text-xs text-slate-500">
                 Signature boxes, three per row. Leave a name empty to write it by hand.
               </p>

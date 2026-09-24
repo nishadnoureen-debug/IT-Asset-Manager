@@ -196,7 +196,7 @@ describe('handover, transfer and return forms', () => {
       'The company-issued device(s) remain the property of ARC Global.',
       'Declaration',
       'Employee Signature',
-      'Verified by:',
+      'Approved by:',
       'FINANCE MANAGER',
       'FIN PERSON',
       'CHIEF OPERATING OFFICER',
@@ -274,7 +274,7 @@ describe('handover, transfer and return forms', () => {
       'Raised By',
       'Justification',
       'The current laptop cannot run the survey software.',
-      'Verified by:',
+      'Approved by:',
       'FINANCE MANAGER',
       'ARC GLOBAL TECHNICAL SERVICES',
     ])

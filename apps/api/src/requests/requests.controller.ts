@@ -392,7 +392,7 @@ export class RequestsController {
     return this.get(id, user);
   }
 
-  /** Prints the form again from the current details, letterhead and "Verified by" list. */
+  /** Prints the form again from the current details, letterhead and "Approved by" list. */
   @Post(':id/form')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('request.edit', 'request.approve', 'request.fulfil')

@@ -1,4 +1,4 @@
-/** A "Verified by" box on the handover, transfer and return forms. */
+/** An "Approved by" box on the handover, transfer and return forms. */
 export interface FormSignatory {
   title: string;
   /** Printed under the title; leave empty to write it by hand. */
@@ -28,7 +28,7 @@ export interface AppSettings {
   formFooter: string;
   /** Terms & Conditions on handover and transfer forms, one per line. {company} = company name. */
   formTerms: string;
-  /** "Verified by" signature boxes, printed three per row. */
+  /** "Approved by" signature boxes, printed three per row. */
   formSignatories: FormSignatory[];
 }
 

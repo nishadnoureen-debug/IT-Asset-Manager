@@ -839,7 +839,7 @@ describe('asset requests', () => {
       await prisma.notification.count({ where: { userId: u.employee, type: 'REQUEST_UPDATE' } }),
     ).toBeGreaterThan(0);
 
-    // Reprinting picks up the current letterhead and "Verified by" list.
+    // Reprinting picks up the current letterhead and "Approved by" list.
     const reprinted = await http()
       .post(api(`/requests/${id}/form`))
       .set(s.admin.auth)

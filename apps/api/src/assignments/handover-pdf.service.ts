@@ -23,7 +23,7 @@ type PersonLike = {
 
 /**
  * Handover, transfer and return forms in the company's paper format: employee and device details,
- * condition check boxes, terms, declaration with the captured signature, and "Verified by" boxes.
+ * condition check boxes, terms, declaration with the captured signature, and "Approved by" boxes.
  */
 @Injectable()
 export class HandoverPdfService {
@@ -158,7 +158,7 @@ export class HandoverPdfService {
           f.fieldLine('Issued By', a.assignedBy.displayName);
         }
 
-        f.verifiedBy();
+        f.approvedBy();
       },
     );
   }

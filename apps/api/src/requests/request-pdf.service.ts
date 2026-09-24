@@ -68,7 +68,7 @@ export class RequestPdfService {
         f.rule();
 
         // The decision is recorded in the system; on paper the form is simply countersigned.
-        f.verifiedBy();
+        f.approvedBy();
       },
     );
   }
