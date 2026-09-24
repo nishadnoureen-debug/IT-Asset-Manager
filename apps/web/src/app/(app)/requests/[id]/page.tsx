@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, Minus, PackageCheck, Plus, Trash2, XCircle } from 'lucide-react';
+import { CheckCircle2, Minus, PackageCheck, Plus, RefreshCw, Trash2, XCircle } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -66,6 +66,7 @@ export default function RequestDetailPage() {
   const reject = useApiMutation<Record<string, unknown>>('post', `/requests/${id}/reject`, inv);
   const fulfil = useApiMutation<Record<string, unknown>>('post', `/requests/${id}/fulfil`, inv);
   const cancel = useApiMutation<Record<string, unknown>>('post', `/requests/${id}/cancel`, inv);
+  const regenerate = useApiMutation('post', `/requests/${id}/form`, inv);
   const [action, setAction] = useState<ActionKind | null>(null);
   const [notes, setNotes] = useState('');
   const [assetId, setAssetId] = useState<string | null>(null);
@@ -230,6 +231,26 @@ export default function RequestDetailPage() {
                   <CardHeader
                     title="Form and attachments"
                     description="The request form is generated for printing and physical signatures."
+                    actions={
+                      can('request.edit') && (
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          icon={<RefreshCw className="h-4 w-4" />}
+                          loading={regenerate.isPending}
+                          onClick={async () => {
+                            try {
+                              await regenerate.mutateAsync({});
+                              toast.success('Form regenerated');
+                            } catch (e) {
+                              toast.error(e);
+                            }
+                          }}
+                        >
+                          Regenerate form
+                        </Button>
+                      )
+                    }
                   />
                   <CardBody>
                     <Documents

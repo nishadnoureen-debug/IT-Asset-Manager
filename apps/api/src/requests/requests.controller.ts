@@ -392,6 +392,16 @@ export class RequestsController {
     return this.get(id, user);
   }
 
+  /** Prints the form again from the current details, letterhead and "Verified by" list. */
+  @Post(':id/form')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('request.edit', 'request.approve', 'request.fulfil')
+  async regenerateForm(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    await this.get(id, user);
+    await this.attachForm(id, user.id);
+    return this.get(id, user);
+  }
+
   @Post(':id/cancel')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('request.cancel', 'request.create')

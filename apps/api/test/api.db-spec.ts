@@ -838,6 +838,21 @@ describe('asset requests', () => {
     expect(
       await prisma.notification.count({ where: { userId: u.employee, type: 'REQUEST_UPDATE' } }),
     ).toBeGreaterThan(0);
+
+    // Reprinting picks up the current letterhead and "Verified by" list.
+    const reprinted = await http()
+      .post(api(`/requests/${id}/form`))
+      .set(s.admin.auth)
+      .expect(200);
+    const current = reprinted.body.data.documents.filter(
+      (d: { type: string }) => d.type === 'REQUEST_FORM',
+    );
+    expect(current).toHaveLength(1);
+    expect(current[0].id).not.toBe(forms[0].id);
+    await http()
+      .post(api(`/requests/${id}/form`))
+      .set(s.employee.auth)
+      .expect(403);
   });
 
   it('lets a requester withdraw a request and an approver reject one', async () => {
