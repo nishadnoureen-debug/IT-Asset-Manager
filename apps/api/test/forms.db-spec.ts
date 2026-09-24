@@ -211,7 +211,7 @@ describe('handover, transfer and return forms', () => {
 
     const t = pdfText(transfer);
     for (const text of [
-      'TRANSFER FORM',
+      'ASSET TRANSFER FORM',
       'Transferred From',
       'OMAR HADDAD',
       'Transferred To',
