@@ -211,7 +211,7 @@ describe('handover, transfer and return forms', () => {
 
     const t = pdfText(transfer);
     for (const text of [
-      'COMPANY ASSETS TRANSFER FORM',
+      'TRANSFER FORM',
       'Transferred From',
       'OMAR HADDAD',
       'Transferred To',
@@ -219,7 +219,11 @@ describe('handover, transfer and return forms', () => {
       'EGYPTIAN',
       'Condition at Time of Transfer',
       'Moved to accounts',
-      'Handed Over By (previous holder) Signature',
+      // Both sides are named next to their signature lines.
+      'Received By (name)',
+      'Received By (signature)',
+      'Handed Over By (name)',
+      'Handed Over By (signature)',
     ])
       expect(t).toContain(text);
 

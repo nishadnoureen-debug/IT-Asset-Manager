@@ -238,7 +238,10 @@ export class CompanyForm {
   verifiedBy(): void {
     const people = this.settings.formSignatories.filter((s) => s.title.trim());
     if (!people.length) return;
-    this.pdf.ensureSpace(this.doc, 130);
+    const rowHeights = [26, 24, 44];
+    const tableHeight = rowHeights.reduce((sum, h) => sum + h, 0);
+    // Keep the heading and every row of boxes on one page, so nobody signs a stray half-table.
+    this.pdf.ensureSpace(this.doc, 40 + Math.ceil(people.length / 3) * (tableHeight + 12));
     this.doc
       .moveDown(0.6)
       .font('Times-Roman')
@@ -246,9 +249,6 @@ export class CompanyForm {
       .fillColor(FORM_COLORS.text)
       .text('Verified by:', MARGINS.left, this.doc.y);
     this.doc.moveDown(0.5);
-
-    const rowHeights = [26, 24, 44];
-    const tableHeight = rowHeights.reduce((sum, h) => sum + h, 0);
     for (let start = 0; start < people.length; start += 3) {
       const group = people.slice(start, start + 3);
       this.pdf.ensureSpace(this.doc, tableHeight + 12);

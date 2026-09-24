@@ -9,7 +9,7 @@ export type FormKind = 'HANDOVER' | 'TRANSFER' | 'RETURN';
 
 const TITLES: Record<FormKind, string> = {
   HANDOVER: 'COMPANY ASSETS HANDOVER FORM',
-  TRANSFER: 'COMPANY ASSETS TRANSFER FORM',
+  TRANSFER: 'TRANSFER FORM',
   RETURN: 'COMPANY ASSETS RETURN FORM',
 };
 
@@ -135,10 +135,22 @@ export class HandoverPdfService {
             ? 'I hereby confirm that I have returned the above-mentioned company device(s) and accessories in the condition recorded on this form.'
             : `I hereby acknowledge receipt of the above-mentioned company device(s) and accessories${form === 'TRANSFER' ? ' transferred to me' : ''}. I agree to abide by the terms and conditions stated above.`,
         );
-        f.signatureLine('Employee Signature', signature);
-        f.fieldLine('Date', formDate(date));
         if (form === 'TRANSFER') {
-          f.fieldLine('Handed Over By (previous holder) Signature', '');
+          // Both sides sign a transfer, so each one is named next to its signature.
+          f.fieldLine('Received By (name)', personName(a.employee) || a.location?.name || '');
+          f.signatureLine('Received By (signature)', signature);
+          f.fieldLine('Date', formDate(date));
+          f.fieldLine(
+            'Handed Over By (name)',
+            personName(a.previousAssignment?.employee ?? null) ||
+              a.previousAssignment?.location?.name ||
+              '',
+          );
+          f.signatureLine('Handed Over By (signature)');
+          f.fieldLine('Date', '');
+        } else {
+          f.signatureLine('Employee Signature', signature);
+          f.fieldLine('Date', formDate(date));
         }
         if (form === 'RETURN') {
           f.fieldLine('Received By', a.returnedBy?.displayName ?? '');
@@ -163,6 +175,11 @@ export class HandoverPdfService {
       ['Nationality', person.nationality?.toUpperCase() ?? ''],
     ]);
   }
+}
+
+/** "FIRST LAST" for the signature lines, or empty when the asset sits at a location. */
+function personName(person: PersonLike): string {
+  return person ? `${person.firstName} ${person.lastName}`.toUpperCase() : '';
 }
 
 /** The Word form's five check boxes, with the recorded condition ticked. */
