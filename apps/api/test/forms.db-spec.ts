@@ -71,6 +71,8 @@ describe('handover, transfer and return forms', () => {
       .send({
         companyName: 'ARC Global',
         formSignatories: [
+          { title: 'HR Department', name: 'Hr Person' },
+          { title: 'IT Department', name: 'It Person' },
           { title: 'Finance Manager', name: 'Fin Person' },
           { title: 'Commercial Manager', name: 'Commercial Person' },
           { title: 'Operations Manager', name: '' },
@@ -197,6 +199,8 @@ describe('handover, transfer and return forms', () => {
       'Declaration',
       'Employee Signature',
       'Approved by:',
+      'HR DEPARTMENT',
+      'IT DEPARTMENT',
       'FINANCE MANAGER',
       'FIN PERSON',
       'CHIEF OPERATING OFFICER',

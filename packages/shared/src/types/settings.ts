@@ -55,8 +55,10 @@ export const DEFAULT_SETTINGS: AppSettings = {
     'The device(s) must be returned in good condition upon resignation, termination, or when requested by management.',
     'The cost of repair or replacement may be recovered in case of negligence or misuse, as per company policy.',
   ].join('\n'),
-  // IT approves the request itself, so the printed form is only countersigned above that.
+  // Printed three per row, so six titles fill two rows.
   formSignatories: [
+    'HR Department',
+    'IT Department',
     'Finance Manager',
     'Commercial Manager',
     'Operations Manager',
