@@ -1,7 +1,8 @@
 'use client';
 
 import clsx from 'clsx';
-import { Bell, LogOut, Menu, Monitor, QrCode, UserCircle2, X } from 'lucide-react';
+import { Bell, LogOut, Menu, QrCode, UserCircle2, X } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
@@ -59,9 +60,7 @@ function NavLinks({ items, onNavigate }: { items: NavItem[]; onNavigate?: () => 
 function Brand({ companyName }: { companyName?: string }) {
   return (
     <Link href="/dashboard" className="flex items-center gap-2.5 px-3">
-      <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white">
-        <Monitor className="h-4 w-4" aria-hidden />
-      </span>
+      <Image src="/logo-mark.png" alt="" width={256} height={110} className="h-7 w-auto" priority />
       <span className="min-w-0 leading-tight">
         <span className="block text-sm font-bold text-slate-900 dark:text-slate-50">IT Assets</span>
         {companyName && (

@@ -39,6 +39,8 @@ COPY --from=build --chown=app:app /repo/apps/api/assets ./apps/api/assets
 # Web: the self-contained Next.js server.
 COPY --from=build --chown=app:app /repo/apps/web/.next/standalone /web
 COPY --from=build --chown=app:app /repo/apps/web/.next/static /web/apps/web/.next/static
+# Logos and other static files (the standalone bundle does not include public/).
+COPY --from=build --chown=app:app /repo/apps/web/public /web/apps/web/public
 COPY --chown=app:app docker/start-app.mjs /repo/start-app.mjs
 USER app
 EXPOSE 3000

@@ -91,6 +91,7 @@ jobs:
           done
           curl -fsS -o /dev/null http://localhost:3000/login
           curl -fsS http://localhost:3000/api/v1/auth/registration | grep -q '"enabled":true'
+          curl -fsS -o /dev/null http://localhost:3000/logo.png
           echo "web, API and database are up"
       - name: API is private (loopback only) and the form letterhead is in the image
         run: |

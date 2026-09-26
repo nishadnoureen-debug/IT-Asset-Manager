@@ -12,6 +12,8 @@ const API_INTERNAL_URL = apiInternalUrl();
 
 const nextConfig: NextConfig = {
   output: 'standalone',
+  // Static PNGs served as-is: no image optimiser (and no sharp) needed on the server.
+  images: { unoptimized: true },
   reactStrictMode: true,
   poweredByHeader: false,
   transpilePackages: ['@itam/shared'],
