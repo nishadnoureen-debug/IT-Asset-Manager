@@ -57,6 +57,13 @@ const TONE_MAP: Partial<Record<LabelGroup, Record<string, Tone>>> = {
     CANCELLED: 'gray',
   },
   priority: { LOW: 'gray', MEDIUM: 'blue', HIGH: 'amber', CRITICAL: 'red' },
+  simStatus: {
+    ACTIVE: 'green',
+    PARKED: 'amber',
+    SUSPENDED: 'violet',
+    SPARE: 'blue',
+    CANCELLED: 'gray',
+  },
   requestStatus: {
     SUBMITTED: 'amber',
     APPROVED: 'green',

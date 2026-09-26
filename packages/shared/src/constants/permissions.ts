@@ -72,6 +72,9 @@ export const PERMISSIONS = {
   REQUEST_FULFIL: 'request.fulfil',
   REQUEST_CANCEL: 'request.cancel',
 
+  SIM_VIEW: 'sim.view',
+  SIM_MANAGE: 'sim.manage',
+
   AUDIT_VIEW: 'audit.view',
   AUDIT_CREATE: 'audit.create',
   AUDIT_PERFORM: 'audit.perform',
@@ -155,6 +158,7 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly PermissionKey[]> = {
     P.REQUEST_FULFIL,
     P.AUDIT_VIEW,
     P.AUDIT_PERFORM,
+    P.SIM_VIEW,
     P.DOCUMENT_VIEW,
     P.DOCUMENT_UPLOAD,
     P.NOTIFICATION_VIEW,
@@ -203,6 +207,7 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly PermissionKey[]> = {
     P.AUDIT_VIEW,
     P.AUDIT_CREATE,
     P.AUDIT_PERFORM,
+    P.SIM_VIEW,
     P.REQUEST_VIEW,
     P.REPORT_VIEW,
     P.REPORT_EXPORT,

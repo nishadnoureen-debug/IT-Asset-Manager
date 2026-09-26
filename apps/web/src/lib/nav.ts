@@ -10,6 +10,7 @@ import {
   type LucideIcon,
   QrCode,
   Settings,
+  Signal,
   ShieldCheck,
   ShoppingCart,
   Users,
@@ -54,6 +55,13 @@ export const NAV: NavItem[] = [
     label: 'Asset requests',
     icon: ClipboardCheck,
     anyOf: ['request.view', 'request.view_department', 'request.view_own'],
+    section: 'main',
+  },
+  {
+    href: '/sims',
+    label: 'SIM cards',
+    icon: Signal,
+    anyOf: ['sim.view', 'sim.manage'],
     section: 'main',
   },
   {

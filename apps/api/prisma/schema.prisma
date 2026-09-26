@@ -174,6 +174,18 @@ enum LicenseType {
   @@map("license_type")
 }
 
+enum SimStatus {
+  ACTIVE
+  /// Temporarily out of use; carriers usually charge a parking fee.
+  PARKED
+  SUSPENDED
+  /// In stock, not issued to anyone.
+  SPARE
+  CANCELLED
+
+  @@map("sim_status")
+}
+
 enum RequestType {
   NEW_ASSET
   REPLACEMENT
@@ -344,6 +356,7 @@ model Employee {
   accessoryAssignments AccessoryAssignment[]
   softwareAssignments  SoftwareAssignment[]
   requests             AssetRequest[]        @relation("RequestEmployee")
+  simCards             SimCard[]
   documents            Document[]
 
   @@index([departmentId])
@@ -496,6 +509,7 @@ model Asset {
   maintenance         Maintenance[]
   softwareAssignments SoftwareAssignment[]
   requests            AssetRequest[]
+  simCards            SimCard[]
   documents           Document[]
   auditItems          AuditItem[]
 
@@ -972,6 +986,7 @@ model User {
   maintenanceAssigned       Maintenance[]         @relation("MaintenanceTechnician")
   softwareAssignmentsMade   SoftwareAssignment[]  @relation("SoftwareAssignedBy")
   softwareUnassignmentsMade SoftwareAssignment[]  @relation("SoftwareUnassignedBy")
+  simUsages                 SimUsage[]            @relation("SimUsageRecordedBy")
   requestsCreated           AssetRequest[]        @relation("RequestCreatedBy")
   requestsDecided           AssetRequest[]        @relation("RequestDecidedBy")
   requestsFulfilled         AssetRequest[]        @relation("RequestFulfilledBy")
@@ -1144,6 +1159,86 @@ model StoredFile {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@map("stored_files")
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Company SIM cards: the rate plan each line is on and what it costs each month.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// A carrier rate plan (e.g. "Business 150") with its standing monthly charge.
+model SimPlan {
+  id            String    @id @default(uuid()) @db.Uuid
+  name          String    @unique @db.VarChar(120)
+  provider      String?   @db.VarChar(80)
+  monthlyCharge Decimal   @default(0) @map("monthly_charge") @db.Decimal(14, 2)
+  currency      String    @db.Char(3)
+  remarks       String?
+  isActive      Boolean   @default(true) @map("is_active")
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  simCards SimCard[]
+  usages   SimUsage[]
+
+  @@map("sim_plans")
+}
+
+/// A company SIM / line, optionally held by an employee and sitting in a device.
+model SimCard {
+  id          String    @id @default(uuid()) @db.Uuid
+  phoneNumber String    @unique @map("phone_number") @db.VarChar(40)
+  /// ICCID printed on the SIM.
+  simNumber   String?   @unique @map("sim_number") @db.VarChar(32)
+  provider    String?   @db.VarChar(80)
+  planId      String?   @map("plan_id") @db.Uuid
+  status      SimStatus @default(SPARE)
+  employeeId  String?   @map("employee_id") @db.Uuid
+  assetId     String?   @map("asset_id") @db.Uuid
+  activatedAt DateTime? @map("activated_at") @db.Date
+  cancelledAt DateTime? @map("cancelled_at") @db.Date
+  remarks     String?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  plan     SimPlan?   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  employee Employee?  @relation(fields: [employeeId], references: [id], onDelete: SetNull)
+  asset    Asset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
+  usages   SimUsage[]
+
+  @@index([status])
+  @@index([employeeId])
+  @@index([assetId])
+  @@map("sim_cards")
+}
+
+/// One billing month for one SIM. total_charge is the sum of the five charge columns.
+model SimUsage {
+  id                   String   @id @default(uuid()) @db.Uuid
+  simCardId            String   @map("sim_card_id") @db.Uuid
+  /// First day of the billing month.
+  period               DateTime @db.Date
+  planId               String?  @map("plan_id") @db.Uuid
+  monthlyCharge        Decimal  @default(0) @map("monthly_charge") @db.Decimal(14, 2)
+  excessUsage          Decimal  @default(0) @map("excess_usage") @db.Decimal(14, 2)
+  internationalCharges Decimal  @default(0) @map("international_charges") @db.Decimal(14, 2)
+  roamingCharges       Decimal  @default(0) @map("roaming_charges") @db.Decimal(14, 2)
+  parkingCharges       Decimal  @default(0) @map("parking_charges") @db.Decimal(14, 2)
+  totalCharge          Decimal  @default(0) @map("total_charge") @db.Decimal(14, 2)
+  currency             String   @db.Char(3)
+  remarks              String?
+  recordedById         String?  @map("recorded_by_id") @db.Uuid
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  simCard    SimCard  @relation(fields: [simCardId], references: [id], onDelete: Cascade)
+  plan       SimPlan? @relation(fields: [planId], references: [id], onDelete: SetNull)
+  recordedBy User?    @relation("SimUsageRecordedBy", fields: [recordedById], references: [id], onDelete: SetNull)
+
+  @@unique([simCardId, period])
+  @@index([period])
+  @@map("sim_usages")
 }
 
 /// Application settings (company name, default currency, asset tag prefix, alert windows…).

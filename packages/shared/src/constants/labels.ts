@@ -95,6 +95,13 @@ export const LABELS = {
     OPEN_SOURCE: 'Open source',
     TRIAL: 'Trial',
   },
+  simStatus: {
+    ACTIVE: 'Active',
+    PARKED: 'Parked',
+    SUSPENDED: 'Suspended',
+    SPARE: 'Spare',
+    CANCELLED: 'Cancelled',
+  },
   requestType: {
     NEW_ASSET: 'New asset',
     REPLACEMENT: 'Replacement',

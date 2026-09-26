@@ -27,6 +27,7 @@ import { QrService } from './qr/qr.service';
 import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { SettingsController } from './settings/settings.controller';
+import { SimsController } from './sims/sims.controller';
 import { LicensesController, SoftwareController } from './software/software.controllers';
 import { RequestPdfService } from './requests/request-pdf.service';
 import { RequestsController } from './requests/requests.controller';
@@ -75,6 +76,9 @@ export class MaintenanceModule {}
 @Module({ controllers: [SoftwareController, LicensesController] })
 export class SoftwareModule {}
 
+@Module({ controllers: [SimsController] })
+export class SimsModule {}
+
 @Module({
   imports: [AssignmentsModule],
   controllers: [RequestsController],
@@ -101,6 +105,7 @@ export const FEATURE_MODULES = [
   ProcurementModule,
   MaintenanceModule,
   SoftwareModule,
+  SimsModule,
   RequestsModule,
   AuditsModule,
   ReportsModule,

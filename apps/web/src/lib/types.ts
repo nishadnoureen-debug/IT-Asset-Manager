@@ -363,6 +363,68 @@ export interface AssetRequest {
   documents?: DocumentItem[];
 }
 
+export interface SimPlan {
+  id: Id;
+  name: string;
+  provider: string | null;
+  monthlyCharge: string | number;
+  currency: string;
+  remarks: string | null;
+  isActive: boolean;
+  _count?: { simCards: number };
+}
+
+export interface SimUsage {
+  id: Id;
+  simCardId: Id;
+  /** First day of the billing month. */
+  period: string;
+  monthlyCharge: string | number;
+  excessUsage: string | number;
+  internationalCharges: string | number;
+  roamingCharges: string | number;
+  parkingCharges: string | number;
+  totalCharge: string | number;
+  currency: string;
+  remarks: string | null;
+  plan?: { id: Id; name: string } | null;
+  recordedBy?: UserRef | null;
+  simCard?: {
+    id: Id;
+    phoneNumber: string;
+    status: string;
+    employee: { id: Id; firstName: string; lastName: string } | null;
+  };
+}
+
+/** Column totals returned next to the paging numbers on /sim-usages. */
+export interface SimUsageTotals {
+  monthlyCharge: string | number | null;
+  excessUsage: string | number | null;
+  internationalCharges: string | number | null;
+  roamingCharges: string | number | null;
+  parkingCharges: string | number | null;
+  totalCharge: string | number | null;
+}
+
+export interface SimCard {
+  id: Id;
+  phoneNumber: string;
+  simNumber: string | null;
+  provider: string | null;
+  status: 'ACTIVE' | 'PARKED' | 'SUSPENDED' | 'SPARE' | 'CANCELLED';
+  planId: Id | null;
+  employeeId: Id | null;
+  assetId: Id | null;
+  activatedAt: string | null;
+  cancelledAt: string | null;
+  remarks: string | null;
+  plan: { id: Id; name: string; monthlyCharge: string | number; currency: string } | null;
+  employee: EmployeeRef | null;
+  asset: { id: Id; assetTag: string; name: string } | null;
+  usages?: SimUsage[];
+}
+
 export interface AuditSummary {
   total: number;
   PENDING: number;
