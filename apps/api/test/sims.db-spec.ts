@@ -208,6 +208,39 @@ describe('SIM cards', () => {
       .set(admin.auth)
       .expect(200);
     expect(byEmployee.body.data).toHaveLength(2);
+
+    // Older swaps stay put until the newer ones are undone.
+    const tooEarly = await http()
+      .delete(api(`/sim-swaps/${listed.body.data[1].id}`))
+      .set(admin.auth)
+      .expect(422);
+    expect(tooEarly.body.error.code).toBe('INVALID_STATE');
+
+    // Undoing the newest swap puts the line back with its previous holder.
+    await http()
+      .delete(api(`/sim-swaps/${listed.body.data[0].id}`))
+      .set(admin.auth)
+      .expect(200);
+    const undone = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(undone.body.data.employee.employeeNumber).toBe('EMP901');
+    expect(undone.body.data.status).toBe('ACTIVE');
+    expect(undone.body.data.swaps).toHaveLength(1);
+
+    // Undoing the first swap as well restores the original holder and SIM number.
+    await http()
+      .delete(api(`/sim-swaps/${listed.body.data[1].id}`))
+      .set(admin.auth)
+      .expect(200);
+    const original = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(original.body.data.employee.employeeNumber).toBe('EMP900');
+    expect(original.body.data.simNumber).toBe('8997100000000000009');
+    expect(original.body.data.swaps).toHaveLength(0);
   });
 
   it('lets auditors look but not change, and hides SIMs from employees', async () => {
@@ -226,6 +259,10 @@ describe('SIM cards', () => {
       .post(api(`/sim-cards/${card.id}/swaps`))
       .set(auditor.auth)
       .send({ reason: 'OTHER', newSimNumber: '8997100000000000099' })
+      .expect(403);
+    await http()
+      .delete(api(`/sim-swaps/00000000-0000-4000-8000-000000000000`))
+      .set(auditor.auth)
       .expect(403);
     await http().get(api('/sim-cards')).set(worker.auth).expect(403);
     await http().get(api('/sim-swaps')).set(worker.auth).expect(403);

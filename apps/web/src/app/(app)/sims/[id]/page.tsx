@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRightLeft, FileText, Pencil, Plus } from 'lucide-react';
+import { ArrowRightLeft, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -9,9 +9,10 @@ import { StatusBadge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader, DetailList, PageHeader } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { EmptyState, QueryState } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
-import { downloadFile } from '@/lib/api-client';
+import { api, downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatMoney, fullName, label, swapRef } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
@@ -37,7 +38,23 @@ export default function SimCardPage() {
   const [editing, setEditing] = useState(false);
   const [usage, setUsage] = useState<SimUsage | 'new' | null>(null);
   const [swapping, setSwapping] = useState(false);
+  const [removing, setRemoving] = useState<SimSwap | null>(null);
   const manage = can('sim.manage');
+  // Swaps come back newest first, and only the newest one can be undone.
+  const newestSwap = query.data?.data.swaps?.[0]?.id;
+
+  const removeSwap = async () => {
+    if (!removing) return;
+    try {
+      await api.delete(`/sim-swaps/${removing.id}`);
+      toast.success(`Swap ${swapRef(removing.number)} removed`);
+      void query.refetch();
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   const columns: Column<SimUsage>[] = [
     {
@@ -117,18 +134,29 @@ export default function SimCardPage() {
       hideOnMobile: true,
     },
     {
-      key: 'form',
+      key: 'actions',
       header: '',
       cell: (s) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`Swap form ${swapRef(s.number)}`}
-          icon={<FileText className="h-4 w-4" />}
-          onClick={() =>
-            downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
-          }
-        />
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Swap form ${swapRef(s.number)}`}
+            icon={<FileText className="h-4 w-4" />}
+            onClick={() =>
+              downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
+            }
+          />
+          {manage && s.id === newestSwap && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${swapRef(s.number)}`}
+              icon={<Trash2 className="h-4 w-4" />}
+              onClick={() => setRemoving(s)}
+            />
+          )}
+        </div>
       ),
     },
   ];
@@ -265,6 +293,15 @@ export default function SimCardPage() {
 
           <SimCardDialog open={editing} card={sim} onClose={() => setEditing(false)} />
           {swapping && <SimSwapDialog open card={sim} onClose={() => setSwapping(false)} />}
+          <ConfirmDialog
+            open={removing !== null}
+            onClose={() => setRemoving(null)}
+            onConfirm={removeSwap}
+            title={`Remove swap ${removing ? swapRef(removing.number) : ''}?`}
+            description="The line goes back to the holder and SIM number it had before this swap."
+            confirmLabel="Remove"
+            danger
+          />
           {usage && (
             <SimUsageDialog
               open

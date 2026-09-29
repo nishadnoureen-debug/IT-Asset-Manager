@@ -56,7 +56,7 @@ export default function SimsPage() {
   const [editingUsage, setEditingUsage] = useState<SimUsage | null>(null);
   const [swapping, setSwapping] = useState<SimCard | null>(null);
   const [deleting, setDeleting] = useState<{
-    kind: 'card' | 'plan';
+    kind: 'card' | 'plan' | 'swap';
     id: string;
     name: string;
   } | null>(null);
@@ -91,11 +91,13 @@ export default function SimsPage() {
 
   const remove = async () => {
     if (!deleting) return;
+    const endpoint = { card: 'sim-cards', plan: 'sim-plans', swap: 'sim-swaps' }[deleting.kind];
     try {
-      await api.delete(`/${deleting.kind === 'card' ? 'sim-cards' : 'sim-plans'}/${deleting.id}`);
+      await api.delete(`/${endpoint}/${deleting.id}`);
       toast.success(`${deleting.name} removed`);
       void cards.refetch();
       void plans.refetch();
+      void swaps.refetch();
     } catch (e) {
       toast.error(e);
     } finally {
@@ -363,18 +365,31 @@ export default function SimsPage() {
       hideOnMobile: true,
     },
     {
-      key: 'form',
+      key: 'actions',
       header: '',
       cell: (s) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          aria-label={`Swap form ${swapRef(s.number)}`}
-          icon={<FileText className="h-4 w-4" />}
-          onClick={() =>
-            downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
-          }
-        />
+        <div className="flex justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            aria-label={`Swap form ${swapRef(s.number)}`}
+            icon={<FileText className="h-4 w-4" />}
+            onClick={() =>
+              downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
+            }
+          />
+          {manage && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${swapRef(s.number)}`}
+              icon={<Trash2 className="h-4 w-4" />}
+              onClick={() =>
+                setDeleting({ kind: 'swap', id: s.id, name: `Swap ${swapRef(s.number)}` })
+              }
+            />
+          )}
+        </div>
       ),
     },
   ];
@@ -592,7 +607,11 @@ export default function SimsPage() {
         onClose={() => setDeleting(null)}
         onConfirm={remove}
         title={`Remove ${deleting?.name ?? ''}?`}
-        description="It is archived, so past months stay in the records."
+        description={
+          deleting?.kind === 'swap'
+            ? 'The line goes back to the holder and SIM number it had before. Only the newest swap on a line can be undone.'
+            : 'It is archived, so past months stay in the records.'
+        }
         confirmLabel="Remove"
         danger
       />

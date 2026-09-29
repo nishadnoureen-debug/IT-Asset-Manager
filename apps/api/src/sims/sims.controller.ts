@@ -695,6 +695,73 @@ export class SimsController {
     return swap;
   }
 
+  /**
+   * Undoes a swap that should not have been recorded: the line goes back to the holder and the SIM
+   * number it had before. Only the newest swap on a line can be undone, so the history stays in the
+   * order it happened.
+   */
+  @Delete('sim-swaps/:id')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('sim.manage')
+  async removeSwap(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const swap = await this.prisma.simSwap.findUnique({
+      where: { id },
+      include: { simCard: true },
+    });
+    if (!swap) throw Errors.notFound('SIM swap');
+    const newer = await this.prisma.simSwap.findFirst({
+      where: {
+        simCardId: swap.simCardId,
+        id: { not: id },
+        OR: [
+          { swappedAt: { gt: swap.swappedAt } },
+          { swappedAt: swap.swappedAt, createdAt: { gt: swap.createdAt } },
+        ],
+      },
+    });
+    if (newer) throw Errors.invalidState('Undo the newer swaps on this line first');
+    // The SIM number can only go back if no other line has taken it in the meantime.
+    if (
+      swap.newSimNumber &&
+      swap.previousSimNumber &&
+      (await this.prisma.simCard.findFirst({
+        where: { simNumber: swap.previousSimNumber, id: { not: swap.simCardId }, deletedAt: null },
+      }))
+    )
+      throw Errors.conflict('SIM_IN_USE', 'Another line now has the SIM number this swap replaced');
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.simCard.update({
+        where: { id: swap.simCardId },
+        data: {
+          employeeId: swap.fromEmployeeId,
+          // Only touch the SIM number if this swap was the one that changed it.
+          ...(swap.newSimNumber ? { simNumber: swap.previousSimNumber } : {}),
+          status: swap.fromEmployeeId
+            ? 'ACTIVE'
+            : swap.simCard.status === 'ACTIVE'
+              ? 'SPARE'
+              : swap.simCard.status,
+        },
+      });
+      await tx.simSwap.delete({ where: { id } });
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'sim_swap.delete',
+      entityType: 'sim_swap',
+      entityId: id,
+      oldValues: {
+        ref: swapRef(swap.number),
+        phoneNumber: swap.simCard.phoneNumber,
+        toEmployeeId: swap.toEmployeeId,
+        reason: swap.reason,
+      },
+      newValues: { employeeId: swap.fromEmployeeId, simNumber: swap.previousSimNumber },
+    });
+    return { id };
+  }
+
   /** The printed SIM CARD SWAP REQUEST FORM, generated from the record for physical signatures. */
   @Get('sim-swaps/:id/form')
   @SkipEnvelope()
