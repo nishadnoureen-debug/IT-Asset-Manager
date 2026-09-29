@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRightLeft, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, FileText, Pencil, Plus, Trash2, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -20,6 +20,7 @@ import {
   CHARGE_FIELDS,
   SimCardDialog,
   SimSwapDialog,
+  SimTransferDialog,
   SimUsageDialog,
 } from '@/features/sims/sim-dialogs';
 import type { SimCard, SimSwap, SimUsage } from '@/lib/types';
@@ -38,6 +39,7 @@ export default function SimCardPage() {
   const [editing, setEditing] = useState(false);
   const [usage, setUsage] = useState<SimUsage | 'new' | null>(null);
   const [swapping, setSwapping] = useState(false);
+  const [transferring, setTransferring] = useState(false);
   const [removing, setRemoving] = useState<SimSwap | null>(null);
   const manage = can('sim.manage');
   // Swaps come back newest first, and only the newest one can be undone.
@@ -128,7 +130,9 @@ export default function SimCardPage() {
       cell: (s) => (
         <div className="min-w-0">
           <p>{label('simSwapReason', s.reason)}</p>
-          {s.reasonDetail && <p className="truncate text-xs text-slate-500">{s.reasonDetail}</p>}
+          <p className="truncate text-xs text-slate-500">
+            {s.reasonDetail ?? (s.asset ? `Into ${s.asset.assetTag}` : '')}
+          </p>
         </div>
       ),
       hideOnMobile: true,
@@ -181,6 +185,13 @@ export default function SimCardPage() {
                   </Button>
                   <Button
                     variant="secondary"
+                    icon={<UserCheck className="h-4 w-4" />}
+                    onClick={() => setTransferring(true)}
+                  >
+                    Transfer
+                  </Button>
+                  <Button
+                    variant="secondary"
                     icon={<ArrowRightLeft className="h-4 w-4" />}
                     onClick={() => setSwapping(true)}
                   >
@@ -214,8 +225,8 @@ export default function SimCardPage() {
               </Card>
               <Card>
                 <CardHeader
-                  title="Swaps"
-                  description="Who handed this line over to whom, newest first. Each swap has a printable request form."
+                  title="Swaps & transfers"
+                  description="Who handed this line over to whom, newest first. Each one has a printable request form."
                 />
                 <DataTable
                   caption={`Swaps for ${sim.phoneNumber}`}
@@ -223,8 +234,10 @@ export default function SimCardPage() {
                   rows={sim.swaps ?? []}
                   empty={
                     <EmptyState
-                      title="No swaps recorded"
-                      description={manage ? 'Swap the line when someone else takes it.' : undefined}
+                      title="Nothing recorded yet"
+                      description={
+                        manage ? 'Transfer or swap the line when someone else takes it.' : undefined
+                      }
                     />
                   }
                 />
@@ -293,6 +306,9 @@ export default function SimCardPage() {
 
           <SimCardDialog open={editing} card={sim} onClose={() => setEditing(false)} />
           {swapping && <SimSwapDialog open card={sim} onClose={() => setSwapping(false)} />}
+          {transferring && (
+            <SimTransferDialog open card={sim} onClose={() => setTransferring(false)} />
+          )}
           <ConfirmDialog
             open={removing !== null}
             onClose={() => setRemoving(null)}

@@ -243,6 +243,88 @@ describe('SIM cards', () => {
     expect(original.body.data.swaps).toHaveLength(0);
   });
 
+  it('transfers a line to another employee, into the device they hold', async () => {
+    const admin = await login(app, 'it@example.com');
+    const card = await prisma.simCard.findFirstOrThrow({ where: { phoneNumber: '0500000009' } });
+    const holder = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP900' } });
+    const receiver = await prisma.employee.findFirstOrThrow({
+      where: { employeeNumber: 'EMP901' },
+    });
+
+    // The receiver holds a laptop and a phone; a SIM belongs in the phone.
+    const [laptopType, phoneType] = await Promise.all(
+      ['Laptop', 'Mobile Phone'].map((name) =>
+        prisma.assetType.findUniqueOrThrow({ where: { name } }),
+      ),
+    );
+    const assets: { id: string; assetTag: string }[] = [];
+    for (const [name, type] of [
+      ['Latitude 5450', laptopType],
+      ['Moto G75', phoneType],
+    ] as const) {
+      const asset = await http()
+        .post(api('/assets'))
+        .set(admin.auth)
+        .send({ name, assetTypeId: type.id })
+        .expect(201);
+      await http()
+        .post(api(`/assets/${asset.body.data.id}/assign`))
+        .set(admin.auth)
+        .send({ employeeId: receiver.id, condition: 'GOOD' })
+        .expect(201);
+      assets.push(asset.body.data as { id: string; assetTag: string });
+    }
+    const [laptop, phone] = assets;
+
+    const transfer = await http()
+      .post(api(`/sim-cards/${card.id}/transfer`))
+      .set(admin.auth)
+      .send({ toEmployeeId: receiver.id, remarks: 'Took over the site' })
+      .expect(200);
+    expect(transfer.body.data.reason).toBe('TRANSFER');
+    // The line was with its original holder, so that is the side it comes from.
+    expect(transfer.body.data.fromEmployee.employeeNumber).toBe('EMP900');
+    // The phone wins over the laptop the same employee holds.
+    expect(transfer.body.data.asset.assetTag).toBe(phone.assetTag);
+
+    const moved = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(moved.body.data.employee.employeeNumber).toBe('EMP901');
+    expect(moved.body.data.asset.assetTag).toBe(phone.assetTag);
+    expect(moved.body.data.status).toBe('ACTIVE');
+
+    // A named device is used as given, and shows up in the line's history.
+    const again = await http()
+      .post(api(`/sim-cards/${card.id}/transfer`))
+      .set(admin.auth)
+      .send({ toEmployeeId: holder.id, assetId: laptop.id })
+      .expect(200);
+    expect(again.body.data.asset.assetTag).toBe(laptop.assetTag);
+    expect(again.body.data.previousAssetId).toBe(phone.id);
+
+    // Undoing it puts both the holder and the device back.
+    await http()
+      .delete(api(`/sim-swaps/${again.body.data.id}`))
+      .set(admin.auth)
+      .expect(200);
+    const back = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(back.body.data.employee.employeeNumber).toBe('EMP901');
+    expect(back.body.data.asset.assetTag).toBe(phone.assetTag);
+
+    // A transfer needs someone to transfer to.
+    const nobody = await http()
+      .post(api(`/sim-cards/${card.id}/transfer`))
+      .set(admin.auth)
+      .send({ remarks: 'No one' })
+      .expect(400);
+    expect(nobody.body.error.details[0].field).toBe('toEmployeeId');
+  });
+
   it('lets auditors look but not change, and hides SIMs from employees', async () => {
     const auditor = await login(app, 'auditor@example.com');
     const worker = await login(app, 'worker@example.com');
@@ -263,6 +345,11 @@ describe('SIM cards', () => {
     await http()
       .delete(api(`/sim-swaps/00000000-0000-4000-8000-000000000000`))
       .set(auditor.auth)
+      .expect(403);
+    await http()
+      .post(api(`/sim-cards/${card.id}/transfer`))
+      .set(auditor.auth)
+      .send({ toEmployeeId: '00000000-0000-4000-8000-000000000000' })
       .expect(403);
     await http().get(api('/sim-cards')).set(worker.auth).expect(403);
     await http().get(api('/sim-swaps')).set(worker.auth).expect(403);

@@ -14,7 +14,7 @@ import {
   StreamableFile,
 } from '@nestjs/common';
 import { ApiTags, PartialType } from '@nestjs/swagger';
-import { Prisma, SimStatus, SimSwapReason } from '@prisma/client';
+import { AssetCategory, Prisma, SimStatus, SimSwapReason } from '@prisma/client';
 import type { Response } from 'express';
 import { Transform, Type } from 'class-transformer';
 import {
@@ -165,6 +165,18 @@ class CreateSimSwapDto {
   @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
 }
 
+class TransferSimDto {
+  /** The employee the line moves to. */
+  @IsUUID() toEmployeeId!: string;
+  /**
+   * The device the line goes into. Left out, the employee's own device is used (their phone or
+   * tablet, otherwise the asset they hold); null leaves the line out of any device.
+   */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() assetId?: string | null;
+  @IsOptional() @Type(() => Date) @IsDate() transferredAt?: Date;
+  @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
+}
+
 class SimSwapQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() simCardId?: string;
   @IsOptional() @IsEnum(SimSwapReason) reason?: SimSwapReason;
@@ -194,6 +206,7 @@ const usageInclude = {
 const swapPeople = {
   fromEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
   toEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+  asset: { select: { id: true, assetTag: true, name: true } },
   createdBy: { select: { id: true, displayName: true } },
 } satisfies Prisma.SimSwapInclude;
 
@@ -201,6 +214,9 @@ const swapInclude = {
   ...swapPeople,
   simCard: { select: { id: true, phoneNumber: true, simNumber: true, provider: true } },
 } satisfies Prisma.SimSwapInclude;
+
+/** Phones and tablets are the devices a SIM normally goes into. */
+const PHONE_CATEGORIES: AssetCategory[] = ['MOBILE', 'TABLET'];
 
 /** First day of the month the date falls in, as a plain date. */
 function billingMonth(date: Date): Date {
@@ -661,6 +677,9 @@ export class SimsController {
           reasonDetail: dto.reasonDetail,
           newSimNumber: dto.newSimNumber,
           previousSimNumber: card.simNumber,
+          // A swap leaves the line in the device it is already in.
+          assetId: card.assetId,
+          previousAssetId: card.assetId,
           swappedAt: dto.swappedAt ?? new Date(),
           remarks: dto.remarks,
           createdById: user.id,
@@ -735,8 +754,9 @@ export class SimsController {
         where: { id: swap.simCardId },
         data: {
           employeeId: swap.fromEmployeeId,
-          // Only touch the SIM number if this swap was the one that changed it.
+          // Only touch the SIM number and the device if this swap was what changed them.
           ...(swap.newSimNumber ? { simNumber: swap.previousSimNumber } : {}),
+          ...(swap.assetId !== swap.previousAssetId ? { assetId: swap.previousAssetId } : {}),
           status: swap.fromEmployeeId
             ? 'ACTIVE'
             : swap.simCard.status === 'ACTIVE'
@@ -757,9 +777,79 @@ export class SimsController {
         toEmployeeId: swap.toEmployeeId,
         reason: swap.reason,
       },
-      newValues: { employeeId: swap.fromEmployeeId, simNumber: swap.previousSimNumber },
+      newValues: {
+        employeeId: swap.fromEmployeeId,
+        simNumber: swap.previousSimNumber,
+        assetId: swap.previousAssetId,
+      },
     });
     return { id };
+  }
+
+  /**
+   * Transfers the line to another employee, the way an asset is transferred: it becomes theirs and
+   * moves into their device — their phone or tablet, otherwise the asset they hold — unless another
+   * device (or none) is named. The move is kept in the line's history and can be undone.
+   */
+  @Post('sim-cards/:id/transfer')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('sim.manage')
+  async transfer(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: TransferSimDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const card = await this.get(id);
+    if (
+      !(await this.prisma.employee.findFirst({
+        where: { id: dto.toEmployeeId, deletedAt: null },
+      }))
+    )
+      throw Errors.badRequest('Employee not found', 'toEmployeeId');
+    if (
+      dto.assetId &&
+      !(await this.prisma.asset.findFirst({ where: { id: dto.assetId, deletedAt: null } }))
+    )
+      throw Errors.badRequest('Asset not found', 'assetId');
+    // No device named: the line follows the employee into the device they hold.
+    const assetId = dto.assetId === undefined ? await this.deviceOf(dto.toEmployeeId) : dto.assetId;
+
+    const swap = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.simSwap.create({
+        data: {
+          simCardId: id,
+          fromEmployeeId: card.employeeId,
+          toEmployeeId: dto.toEmployeeId,
+          reason: 'TRANSFER',
+          previousSimNumber: card.simNumber,
+          assetId,
+          previousAssetId: card.assetId,
+          swappedAt: dto.transferredAt ?? new Date(),
+          remarks: dto.remarks,
+          createdById: user.id,
+        },
+        include: swapInclude,
+      });
+      await tx.simCard.update({
+        where: { id },
+        data: { employeeId: dto.toEmployeeId, assetId, status: 'ACTIVE' },
+      });
+      return created;
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'sim_card.transfer',
+      entityType: 'sim_card',
+      entityId: id,
+      oldValues: { employeeId: card.employeeId, assetId: card.assetId },
+      newValues: {
+        ref: swapRef(swap.number),
+        phoneNumber: card.phoneNumber,
+        employeeId: dto.toEmployeeId,
+        assetId,
+      },
+    });
+    return swap;
   }
 
   /** The printed SIM CARD SWAP REQUEST FORM, generated from the record for physical signatures. */
@@ -793,6 +883,17 @@ export class SimsController {
     ) as Record<(typeof CHARGE_FIELDS)[number], number>;
     const totalCharge = CHARGE_FIELDS.reduce((sum, field) => sum + values[field], 0);
     return { ...values, totalCharge: Math.round(totalCharge * 100) / 100 };
+  }
+
+  /** The device an employee holds: their phone or tablet, otherwise their newest asset. */
+  private async deviceOf(employeeId: string): Promise<string | null> {
+    const held = await this.prisma.assetAssignment.findMany({
+      where: { employeeId, status: 'ACTIVE', asset: { deletedAt: null } },
+      orderBy: { assignedAt: 'desc' },
+      select: { assetId: true, asset: { select: { assetType: { select: { category: true } } } } },
+    });
+    const phone = held.find((a) => PHONE_CATEGORIES.includes(a.asset.assetType.category));
+    return (phone ?? held[0])?.assetId ?? null;
   }
 
   private async assertReferences(dto: Partial<CreateSimCardDto>): Promise<void> {

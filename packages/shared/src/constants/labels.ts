@@ -118,6 +118,7 @@ export const LABELS = {
     STOLEN: 'Stolen',
     DAMAGED: 'Damaged / faulty SIM',
     UPGRADE: 'Upgrade to eSIM / new device',
+    TRANSFER: 'Transfer',
     OTHER: 'Other',
   },
   requestStatus: {

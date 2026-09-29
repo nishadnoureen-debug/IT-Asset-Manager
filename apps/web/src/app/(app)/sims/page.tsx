@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRightLeft, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, FileText, Pencil, Plus, Trash2, UserCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -23,6 +23,7 @@ import {
   SimCardDialog,
   SimPlanDialog,
   SimSwapDialog,
+  SimTransferDialog,
   SimUsageDialog,
   CHARGE_FIELDS,
 } from '@/features/sims/sim-dialogs';
@@ -55,6 +56,7 @@ export default function SimsPage() {
   const [editingPlan, setEditingPlan] = useState<SimPlan | 'new' | null>(null);
   const [editingUsage, setEditingUsage] = useState<SimUsage | null>(null);
   const [swapping, setSwapping] = useState<SimCard | null>(null);
+  const [transferring, setTransferring] = useState<SimCard | null>(null);
   const [deleting, setDeleting] = useState<{
     kind: 'card' | 'plan' | 'swap';
     id: string;
@@ -165,6 +167,16 @@ export default function SimsPage() {
             header: '',
             cell: (c: SimCard) => (
               <div className="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Transfer ${c.phoneNumber}`}
+                  icon={<UserCheck className="h-4 w-4" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setTransferring(c);
+                  }}
+                />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -353,7 +365,9 @@ export default function SimsPage() {
       cell: (s) => (
         <div className="min-w-0">
           <p>{label('simSwapReason', s.reason)}</p>
-          {s.reasonDetail && <p className="truncate text-xs text-slate-500">{s.reasonDetail}</p>}
+          <p className="truncate text-xs text-slate-500">
+            {s.reasonDetail ?? (s.asset ? `Into ${s.asset.assetTag}` : '')}
+          </p>
         </div>
       ),
       hideOnMobile: true,
@@ -418,7 +432,7 @@ export default function SimsPage() {
             { value: 'cards', label: 'SIM cards' },
             { value: 'plans', label: 'Rate plans' },
             { value: 'usage', label: 'Monthly usage' },
-            { value: 'swaps', label: 'Swaps' },
+            { value: 'swaps', label: 'Swaps & transfers' },
           ]}
         />
       </div>
@@ -552,7 +566,7 @@ export default function SimsPage() {
             onReset={() => set({ search: '' })}
           />
           <DataTable
-            caption="SIM card swaps"
+            caption="SIM card swaps and transfers"
             columns={swapColumns}
             rows={swaps.data?.data}
             loading={swaps.isFetching}
@@ -562,10 +576,10 @@ export default function SimsPage() {
             onPage={(page) => set({ page: String(page) })}
             empty={
               <EmptyState
-                title="No swaps recorded"
+                title="Nothing recorded yet"
                 description={
                   manage
-                    ? 'Swap a line from the SIM cards tab to record who received it.'
+                    ? 'Transfer or swap a line from the SIM cards tab to record who received it.'
                     : undefined
                 }
               />
@@ -598,6 +612,16 @@ export default function SimsPage() {
           card={swapping}
           onClose={(swap) => {
             setSwapping(null);
+            if (swap) set({ tab: 'swaps', page: '1', search: '' });
+          }}
+        />
+      )}
+      {transferring && (
+        <SimTransferDialog
+          open
+          card={transferring}
+          onClose={(swap) => {
+            setTransferring(null);
             if (swap) set({ tab: 'swaps', page: '1', search: '' });
           }}
         />

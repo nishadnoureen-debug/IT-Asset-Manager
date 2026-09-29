@@ -100,11 +100,13 @@ erDiagram
 
 `asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
 then handed over, with a printable form attached to the request.
-`sim_swaps` records each time a line changes hands: who held it, who received it, why, and the replacement SIM
-if one was issued. Creating a swap moves `sim_cards.employee_id` (and `sim_number`) in the same transaction, so
-the line and its history never disagree; the printable swap form is generated from the record on request.
-Only the newest swap on a line can be removed, and removing it puts the line back to the holder and SIM number
-it had before.
+`sim_swaps` records each time a line changes hands: who held it, who received it, why, the replacement SIM if
+one was issued, and the device it moved into. Creating a swap or a transfer moves `sim_cards.employee_id` (and
+`sim_number` or `asset_id`) in the same transaction, so the line and its history never disagree; the printable
+swap form is generated from the record on request. A transfer is a swap with reason `TRANSFER`: the line follows
+the employee into the device they hold (their phone or tablet, otherwise their newest asset). Only the newest
+swap on a line can be removed, and removing it puts the line back to the holder, SIM number and device it had
+before.
 `refresh_tokens`, `password_reset_tokens` and `settings` were added with authentication and the Settings screen
 (migration `auth_and_settings`, which also creates the `asset_tag_seq` sequence used for generated tags).
 

@@ -18,7 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useApi, useApiMutation } from '@/lib/hooks';
 import { fullName } from '@/lib/format';
-import type { SimCard, SimPlan, SimSwap, SimUsage } from '@/lib/types';
+import type { AssetListItem, SimCard, SimPlan, SimSwap, SimUsage } from '@/lib/types';
 
 /** The charge columns, in the order they are entered and printed. */
 export const CHARGE_FIELDS = [
@@ -535,7 +535,14 @@ export function SimSwapDialog({
             )}
           </Field>
           <Field label="Reason for swap">
-            {(p) => <EnumSelect {...p} group="simSwapReason" {...register('reason')} />}
+            {(p) => (
+              <EnumSelect
+                {...p}
+                group="simSwapReason"
+                exclude={['TRANSFER']}
+                {...register('reason')}
+              />
+            )}
           </Field>
           <Field label={REASON_DETAIL[reason] ?? 'Detail'}>
             {(p) => <Input {...p} {...register('reasonDetail')} />}
@@ -551,6 +558,159 @@ export function SimSwapDialog({
           {(p) => <Textarea {...p} rows={2} {...register('remarks')} />}
         </Field>
       </form>
+    </Dialog>
+  );
+}
+
+// ── Transfer ─────────────────────────────────────────────────────────────────
+
+/** Phones and tablets are the devices a SIM normally goes into. */
+const PHONE_CATEGORIES = ['MOBILE', 'TABLET'];
+
+/**
+ * Moves a line to another employee the way an asset is transferred: it becomes theirs and goes into
+ * the device they hold, which is filled in as soon as they are chosen.
+ */
+export function SimTransferDialog({
+  open,
+  card,
+  onClose,
+}: {
+  open: boolean;
+  card: SimCard;
+  onClose: (swap?: SimSwap) => void;
+}) {
+  const toast = useToast();
+  const [toEmployeeId, setToEmployeeId] = useState<string | null>(null);
+  const [assetId, setAssetId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [remarks, setRemarks] = useState('');
+  const [transferredAt, setTransferredAt] = useState('');
+  // What the new holder has now, so the line follows them into their own device.
+  const held = useApi<AssetListItem[]>(open && toEmployeeId ? '/assets' : null, {
+    employeeId: toEmployeeId ?? undefined,
+    limit: 20,
+  });
+  const theirAssets = held.data?.data ?? [];
+  const mutation = useApiMutation<Record<string, unknown>, SimSwap>(
+    'post',
+    `/sim-cards/${card.id}/transfer`,
+    ['/sim-cards', '/sim-swaps', `/sim-cards/${card.id}`],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    setToEmployeeId(null);
+    setAssetId(null);
+    setError(null);
+    setRemarks('');
+    setTransferredAt(new Date().toISOString().slice(0, 10));
+  }, [open]);
+
+  // Their phone or tablet if they have one, otherwise the newest asset they hold.
+  useEffect(() => {
+    if (!theirAssets.length) return;
+    const phone = theirAssets.find((a) => PHONE_CATEGORIES.includes(a.assetType.category));
+    setAssetId((phone ?? theirAssets[0]).id);
+  }, [theirAssets]);
+
+  const submit = async () => {
+    if (!toEmployeeId) {
+      setError('Choose who the line is transferred to');
+      return;
+    }
+    try {
+      const { data } = await mutation.mutateAsync({
+        toEmployeeId,
+        assetId,
+        transferredAt: transferredAt || undefined,
+        remarks: remarks || undefined,
+      });
+      toast.success('Line transferred');
+      onClose(data);
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+
+  const device = theirAssets.find((a) => a.id === assetId);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={() => onClose()}
+      size="lg"
+      title={`Transfer ${card.phoneNumber}`}
+      description="The line becomes the new holder's and moves into their device."
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onClose()}>
+            Cancel
+          </Button>
+          <Button onClick={submit} loading={mutation.isPending}>
+            Transfer
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-4">
+        <FormGrid>
+          <Field label="Transferred to" required error={error ?? undefined}>
+            {(p) => (
+              <EmployeePicker
+                id={p.id}
+                value={toEmployeeId}
+                onChange={(id) => {
+                  setToEmployeeId(id);
+                  setAssetId(null);
+                  setError(null);
+                }}
+                placeholder="Search employees…"
+              />
+            )}
+          </Field>
+          <Field
+            label="In device"
+            hint={
+              toEmployeeId
+                ? device
+                  ? `${device.assetType.name} held by the new holder`
+                  : 'The new holder has no device; the line goes into none'
+                : 'Filled in from what the new holder has'
+            }
+          >
+            {(p) => (
+              <AssetPicker
+                id={p.id}
+                value={assetId}
+                onChange={setAssetId}
+                initialLabel={device ? `${device.assetTag} — ${device.name}` : undefined}
+                placeholder="No device"
+              />
+            )}
+          </Field>
+          <Field label="Transferred on">
+            {(p) => (
+              <Input
+                {...p}
+                type="date"
+                value={transferredAt}
+                onChange={(e) => setTransferredAt(e.target.value)}
+              />
+            )}
+          </Field>
+        </FormGrid>
+        <Field label="Remarks">
+          {(p) => (
+            <Textarea
+              {...p}
+              rows={2}
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+            />
+          )}
+        </Field>
+      </div>
     </Dialog>
   );
 }

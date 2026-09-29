@@ -515,6 +515,8 @@ model Asset {
   softwareAssignments SoftwareAssignment[]
   requests            AssetRequest[]
   simCards            SimCard[]
+  simSwaps            SimSwap[]            @relation("SimSwapAsset")
+  simSwapsReplaced    SimSwap[]            @relation("SimSwapPreviousAsset")
   documents           Document[]
   auditItems          AuditItem[]
 
@@ -1262,6 +1264,8 @@ enum SimSwapReason {
   DAMAGED
   /// Moved to an eSIM or a new device.
   UPGRADE
+  /// The line simply moved to another employee, with their device.
+  TRANSFER
   OTHER
 
   @@map("sim_swap_reason")
@@ -1284,16 +1288,21 @@ model SimSwap {
   newSimNumber      String?       @map("new_sim_number") @db.VarChar(32)
   /// ICCID the line was on before the swap, kept for the record.
   previousSimNumber String?       @map("previous_sim_number") @db.VarChar(32)
+  /// Device the line sits in after the swap, and the one it sat in before.
+  assetId           String?       @map("asset_id") @db.Uuid
+  previousAssetId   String?       @map("previous_asset_id") @db.Uuid
   swappedAt         DateTime      @map("swapped_at") @db.Date
   remarks           String?
   createdById       String?       @map("created_by_id") @db.Uuid
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  simCard      SimCard   @relation(fields: [simCardId], references: [id], onDelete: Cascade)
-  fromEmployee Employee? @relation("SimSwapFrom", fields: [fromEmployeeId], references: [id], onDelete: SetNull)
-  toEmployee   Employee? @relation("SimSwapTo", fields: [toEmployeeId], references: [id], onDelete: SetNull)
-  createdBy    User?     @relation("SimSwapCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  simCard       SimCard   @relation(fields: [simCardId], references: [id], onDelete: Cascade)
+  fromEmployee  Employee? @relation("SimSwapFrom", fields: [fromEmployeeId], references: [id], onDelete: SetNull)
+  toEmployee    Employee? @relation("SimSwapTo", fields: [toEmployeeId], references: [id], onDelete: SetNull)
+  asset         Asset?    @relation("SimSwapAsset", fields: [assetId], references: [id], onDelete: SetNull)
+  previousAsset Asset?    @relation("SimSwapPreviousAsset", fields: [previousAssetId], references: [id], onDelete: SetNull)
+  createdBy     User?     @relation("SimSwapCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
   @@index([simCardId])
   @@index([swappedAt(sort: Desc)])

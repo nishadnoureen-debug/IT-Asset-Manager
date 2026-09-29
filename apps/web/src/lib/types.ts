@@ -420,10 +420,13 @@ export interface SimSwap {
   id: Id;
   number: number;
   simCardId: Id;
-  reason: 'LOW_USAGE' | 'LOST' | 'STOLEN' | 'DAMAGED' | 'UPGRADE' | 'OTHER';
+  reason: 'LOW_USAGE' | 'LOST' | 'STOLEN' | 'DAMAGED' | 'UPGRADE' | 'TRANSFER' | 'OTHER';
   reasonDetail: string | null;
   newSimNumber: string | null;
   previousSimNumber: string | null;
+  assetId: Id | null;
+  previousAssetId: Id | null;
+  asset?: { id: Id; assetTag: string; name: string } | null;
   swappedAt: string;
   remarks: string | null;
   fromEmployee: EmployeeRef | null;
