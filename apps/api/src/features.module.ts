@@ -27,6 +27,7 @@ import { QrService } from './qr/qr.service';
 import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { SettingsController } from './settings/settings.controller';
+import { SimSwapPdfService } from './sims/sim-swap-pdf.service';
 import { SimsController } from './sims/sims.controller';
 import { LicensesController, SoftwareController } from './software/software.controllers';
 import { RequestPdfService } from './requests/request-pdf.service';
@@ -76,7 +77,7 @@ export class MaintenanceModule {}
 @Module({ controllers: [SoftwareController, LicensesController] })
 export class SoftwareModule {}
 
-@Module({ controllers: [SimsController] })
+@Module({ controllers: [SimsController], providers: [SimSwapPdfService] })
 export class SimsModule {}
 
 @Module({

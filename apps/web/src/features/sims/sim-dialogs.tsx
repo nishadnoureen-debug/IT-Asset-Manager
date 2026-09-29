@@ -17,7 +17,8 @@ import {
 import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useApi, useApiMutation } from '@/lib/hooks';
-import type { SimCard, SimPlan, SimUsage } from '@/lib/types';
+import { fullName } from '@/lib/format';
+import type { SimCard, SimPlan, SimSwap, SimUsage } from '@/lib/types';
 
 /** The charge columns, in the order they are entered and printed. */
 export const CHARGE_FIELDS = [
@@ -404,6 +405,147 @@ export function SimUsageDialog({
               {(p) => <Input {...p} type="number" min={0} step="0.01" {...register(field.key)} />}
             </Field>
           ))}
+        </FormGrid>
+        <Field label="Remarks">
+          {(p) => <Textarea {...p} rows={2} {...register('remarks')} />}
+        </Field>
+      </form>
+    </Dialog>
+  );
+}
+
+// ── Swap ─────────────────────────────────────────────────────────────────────
+
+/** What the ticked reason asks to be written on the printed form. */
+const REASON_DETAIL: Record<string, string> = {
+  LOW_USAGE: 'Usage to note',
+  STOLEN: 'Police report number',
+  LOST: 'What happened',
+  DAMAGED: 'What is wrong with it',
+  UPGRADE: 'New device or eSIM',
+  OTHER: 'Detail',
+};
+
+interface SwapValues {
+  reason: string;
+  reasonDetail: string;
+  newSimNumber: string;
+  swappedAt: string;
+  remarks: string;
+}
+
+/**
+ * Hands a line over to another employee: records the swap, moves the SIM and prepares the printed
+ * SIM CARD SWAP REQUEST FORM.
+ */
+export function SimSwapDialog({
+  open,
+  card,
+  onClose,
+}: {
+  open: boolean;
+  card: SimCard;
+  onClose: (swap?: SimSwap) => void;
+}) {
+  const toast = useToast();
+  const [toEmployeeId, setToEmployeeId] = useState<string | null>(null);
+  const mutation = useApiMutation<Record<string, unknown>, SimSwap>(
+    'post',
+    `/sim-cards/${card.id}/swaps`,
+    ['/sim-cards', '/sim-swaps', `/sim-cards/${card.id}`],
+  );
+  const {
+    register,
+    handleSubmit,
+    reset,
+    setError,
+    watch,
+    formState: { errors },
+  } = useForm<SwapValues>();
+  const reason = watch('reason') || 'OTHER';
+
+  useEffect(() => {
+    if (!open) return;
+    reset({
+      reason: 'OTHER',
+      reasonDetail: '',
+      newSimNumber: '',
+      swappedAt: new Date().toISOString().slice(0, 10),
+      remarks: '',
+    });
+    setToEmployeeId(null);
+  }, [open, reset]);
+
+  const onSubmit = handleSubmit(async (v) => {
+    try {
+      const { data } = await mutation.mutateAsync({
+        toEmployeeId,
+        reason: v.reason,
+        reasonDetail: v.reasonDetail || undefined,
+        newSimNumber: v.newSimNumber || undefined,
+        swappedAt: v.swappedAt || undefined,
+        remarks: v.remarks || undefined,
+      });
+      toast.success('Swap recorded — the request form is ready to print');
+      onClose(data);
+    } catch (e) {
+      if (e instanceof ApiError) {
+        for (const [f, m] of Object.entries(e.fieldErrors)) setError(f as 'reason', { message: m });
+        setError('root', {
+          message:
+            e.code === 'SIM_IN_USE' ? 'Another line already has this SIM number.' : e.message,
+        });
+      }
+    }
+  });
+
+  return (
+    <Dialog
+      open={open}
+      onClose={() => onClose()}
+      size="lg"
+      title={`Swap ${card.phoneNumber}`}
+      description={
+        card.employee
+          ? `${fullName(card.employee)} hands the line over. Leave the new holder empty to take it back into stock.`
+          : 'The line is in stock. Choose who receives it.'
+      }
+      footer={
+        <>
+          <Button variant="secondary" onClick={() => onClose()}>
+            Cancel
+          </Button>
+          <Button onClick={onSubmit} loading={mutation.isPending}>
+            Record swap
+          </Button>
+        </>
+      }
+    >
+      <form onSubmit={onSubmit} noValidate className="space-y-4">
+        <FormError message={errors.root?.message} />
+        <FormGrid>
+          <Field label="Received by (new holder)" error={errors.reason?.message}>
+            {(p) => (
+              <EmployeePicker
+                id={p.id}
+                value={toEmployeeId}
+                onChange={setToEmployeeId}
+                placeholder="Back into stock"
+              />
+            )}
+          </Field>
+          <Field label="Reason for swap">
+            {(p) => <EnumSelect {...p} group="simSwapReason" {...register('reason')} />}
+          </Field>
+          <Field label={REASON_DETAIL[reason] ?? 'Detail'}>
+            {(p) => <Input {...p} {...register('reasonDetail')} />}
+          </Field>
+          <Field label="Replacement SIM (ICCID)" hint="Only if the physical card changed">
+            {(p) => <Input {...p} className="font-mono" {...register('newSimNumber')} />}
+          </Field>
+          <Field label="Swapped on" error={errors.swappedAt?.message}>
+            {(p) => <Input {...p} type="date" {...register('swappedAt')} />}
+          </Field>
         </FormGrid>
         <Field label="Remarks">
           {(p) => <Textarea {...p} rows={2} {...register('remarks')} />}

@@ -52,6 +52,11 @@ class CreateRequestDto {
   @IsOptional() @IsUUID() assetTypeId?: string;
   @IsOptional() @Type(() => Number) @IsInt() @Min(1) @Max(999) quantity?: number;
   @IsOptional() @Type(() => Date) @IsDate() neededBy?: Date;
+  /** Printed on the request form: brand / model preferred and the accessories asked for. */
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(160) preferredModel?: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(300) accessoriesRequired?: string;
+  /** What the request type asks for: what to specify, the old asset code, or a return date. */
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(300) typeDetail?: string;
   /** Staff can raise a request for an employee; everyone else requests for themselves. */
   @IsOptional() @IsUUID() employeeId?: string;
 }
@@ -68,6 +73,9 @@ class UpdateRequestDto {
   @Type(() => Date)
   @IsDate()
   neededBy?: Date | null;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(160) preferredModel?: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(300) accessoriesRequired?: string;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(300) typeDetail?: string;
 }
 
 class DecisionDto {
@@ -200,6 +208,7 @@ export class RequestsController {
             lastName: true,
             employeeNumber: true,
             jobTitle: true,
+            nationality: true,
             department: { select: { id: true, name: true } },
           },
         },
@@ -235,6 +244,9 @@ export class RequestsController {
           assetTypeId: dto.assetTypeId,
           quantity: dto.quantity,
           neededBy: dto.neededBy,
+          preferredModel: dto.preferredModel,
+          accessoriesRequired: dto.accessoriesRequired,
+          typeDetail: dto.typeDetail,
           employeeId,
           createdById: user.id,
         },

@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Plus } from 'lucide-react';
+import { ArrowRightLeft, FileText, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useState } from 'react';
@@ -10,11 +10,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader, DetailList, PageHeader } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { EmptyState, QueryState } from '@/components/ui/states';
+import { useToast } from '@/components/ui/toast';
+import { downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
-import { formatDate, formatMoney, fullName } from '@/lib/format';
+import { formatDate, formatMoney, fullName, label, swapRef } from '@/lib/format';
 import { useApi } from '@/lib/hooks';
-import { CHARGE_FIELDS, SimCardDialog, SimUsageDialog } from '@/features/sims/sim-dialogs';
-import type { SimCard, SimUsage } from '@/lib/types';
+import {
+  CHARGE_FIELDS,
+  SimCardDialog,
+  SimSwapDialog,
+  SimUsageDialog,
+} from '@/features/sims/sim-dialogs';
+import type { SimCard, SimSwap, SimUsage } from '@/lib/types';
 
 /** "September 2026" for a billing month. */
 const monthLabel = (period: string) =>
@@ -25,9 +32,11 @@ const monthLabel = (period: string) =>
 export default function SimCardPage() {
   const { id } = useParams<{ id: string }>();
   const { can } = useAuth();
+  const toast = useToast();
   const query = useApi<SimCard>(`/sim-cards/${id}`, undefined, { placeholderData: undefined });
   const [editing, setEditing] = useState(false);
   const [usage, setUsage] = useState<SimUsage | 'new' | null>(null);
+  const [swapping, setSwapping] = useState(false);
   const manage = can('sim.manage');
 
   const columns: Column<SimUsage>[] = [
@@ -75,6 +84,55 @@ export default function SimCardPage() {
       : []),
   ];
 
+  const swapColumns: Column<SimSwap>[] = [
+    {
+      key: 'swappedAt',
+      header: 'Swapped',
+      cell: (s) => (
+        <div className="min-w-0">
+          <p className="whitespace-nowrap">{formatDate(s.swappedAt)}</p>
+          <p className="text-xs text-slate-500">{swapRef(s.number)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'holders',
+      header: 'Handed over',
+      cell: (s) => (
+        <span className="whitespace-nowrap">
+          {s.fromEmployee ? fullName(s.fromEmployee) : 'Stock'} &rarr;{' '}
+          {s.toEmployee ? fullName(s.toEmployee) : 'Stock'}
+        </span>
+      ),
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      cell: (s) => (
+        <div className="min-w-0">
+          <p>{label('simSwapReason', s.reason)}</p>
+          {s.reasonDetail && <p className="truncate text-xs text-slate-500">{s.reasonDetail}</p>}
+        </div>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'form',
+      header: '',
+      cell: (s) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={`Swap form ${swapRef(s.number)}`}
+          icon={<FileText className="h-4 w-4" />}
+          onClick={() =>
+            downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
+          }
+        />
+      ),
+    },
+  ];
+
   return (
     <QueryState query={query}>
       {(sim) => (
@@ -92,6 +150,13 @@ export default function SimCardPage() {
                     onClick={() => setEditing(true)}
                   >
                     Edit SIM
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    icon={<ArrowRightLeft className="h-4 w-4" />}
+                    onClick={() => setSwapping(true)}
+                  >
+                    Swap SIM
                   </Button>
                   <Button icon={<Plus className="h-4 w-4" />} onClick={() => setUsage('new')}>
                     Record month
@@ -115,6 +180,23 @@ export default function SimCardPage() {
                     <EmptyState
                       title="No months recorded"
                       description={manage ? 'Record a month from the carrier bill.' : undefined}
+                    />
+                  }
+                />
+              </Card>
+              <Card>
+                <CardHeader
+                  title="Swaps"
+                  description="Who handed this line over to whom, newest first. Each swap has a printable request form."
+                />
+                <DataTable
+                  caption={`Swaps for ${sim.phoneNumber}`}
+                  columns={swapColumns}
+                  rows={sim.swaps ?? []}
+                  empty={
+                    <EmptyState
+                      title="No swaps recorded"
+                      description={manage ? 'Swap the line when someone else takes it.' : undefined}
                     />
                   }
                 />
@@ -182,6 +264,7 @@ export default function SimCardPage() {
           </div>
 
           <SimCardDialog open={editing} card={sim} onClose={() => setEditing(false)} />
+          {swapping && <SimSwapDialog open card={sim} onClose={() => setSwapping(false)} />}
           {usage && (
             <SimUsageDialog
               open

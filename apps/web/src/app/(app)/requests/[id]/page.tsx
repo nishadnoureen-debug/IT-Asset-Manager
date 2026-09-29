@@ -141,8 +141,8 @@ export default function RequestDetailPage() {
             <PageHeader
               title={r.title}
               description={`${requestRef(r.number)} · ${label('requestType', r.type)}${
-                r.quantity > 1 ? ` · ×${r.quantity}` : ''
-              }`}
+                r.typeDetail ? ` (${r.typeDetail})` : ''
+              }${r.quantity > 1 ? ` · ×${r.quantity}` : ''}`}
               actions={
                 <div className="flex flex-wrap gap-2">
                   {r.status === 'SUBMITTED' && can('request.approve') && (
@@ -277,7 +277,9 @@ export default function RequestDetailPage() {
                           value: <StatusBadge group="priority" value={r.priority} />,
                         },
                         { label: 'Item', value: r.assetType?.name ?? '—' },
+                        { label: 'Brand / model', value: r.preferredModel || '—' },
                         { label: 'Quantity', value: String(r.quantity) },
+                        { label: 'Accessories', value: r.accessoriesRequired || '—' },
                         {
                           label: 'Required by',
                           value: r.neededBy ? formatDate(r.neededBy) : '—',

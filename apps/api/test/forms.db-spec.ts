@@ -9,8 +9,8 @@ import { seedDatabase } from '../src/database/seed';
 import { createTestApp, createUser, login, PNG_1PX, SIGNATURE, truncateAll } from './db/helpers';
 
 /**
- * Handover, transfer and return forms in the company layout. Set FORMS_OUT=<dir> to also write the
- * generated PDFs to disk for a visual check.
+ * Handover, transfer, return, asset request and SIM card swap forms in the company layout. Set
+ * FORMS_OUT=<dir> to also write the generated PDFs to disk for a visual check.
  */
 const prisma = new PrismaClient();
 let app: INestApplication;
@@ -245,7 +245,7 @@ describe('handover, transfer and return forms', () => {
       expect(r).toContain(text);
     expect(r).not.toContain('Terms & Conditions');
   });
-  it('prints the asset request form with the approval boxes and signature lines', async () => {
+  it('prints the fixed asset request form, with its own two approval boxes', async () => {
     const admin = await login(app, 'it@example.com');
     const omar = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP101' } });
     const laptopType = await prisma.assetType.findUniqueOrThrow({ where: { name: 'Laptop' } });
@@ -259,6 +259,11 @@ describe('handover, transfer and return forms', () => {
         employeeId: omar.id,
         quantity: 2,
         priority: 'HIGH',
+        type: 'REPLACEMENT',
+        typeDetail: 'ARC-LT-0007',
+        preferredModel: 'Dell Latitude 5450',
+        accessoriesRequired: 'Bag, mouse, docking station',
+        neededBy: '2026-10-15',
       })
       .expect(201);
     const id = created.body.data.id as string;
@@ -266,25 +271,51 @@ describe('handover, transfer and return forms', () => {
     const before = pdfText(await download(admin.auth, created.body.data.documents[0].id));
     for (const text of [
       'ASSET REQUEST FORM',
-      'Requested For',
+      'REQ-',
+      'Employee Details',
       'OMAR HADDAD',
       'EMP101',
-      'Request Details',
-      'Item Requested',
+      'SITE SUPERVISOR',
+      'JORDANIAN',
+      'Asset Details',
+      'Asset Type (Laptop / Mobile / Tablet / SIM / Other)',
       'Laptop',
-      'New asset',
+      'Brand / Model Preferred',
+      'Dell Latitude 5450',
       'Quantity',
-      'Priority',
-      'Raised By',
-      'Justification',
+      'Accessories Required',
+      'Bag, mouse, docking station',
+      'Required By (Date)',
+      '15/10/2026',
+      'Purpose / Justification',
       'The current laptop cannot run the survey software.',
+      'Request Type',
+      'New Requirement (Specify)',
+      'Replacement (Old Asset Code)',
+      'ARC-LT-0007',
+      'Upgrade (Specify)',
+      'Temporary Use (Return Date)',
+      'Other Remarks',
       'Approved by:',
-      'FINANCE MANAGER',
+      'COMMERCIAL MANAGER',
+      'TIJO GEORGE',
+      'CHIEF OPERATING OFFICER',
+      'MUHAMMED RAMSHID',
       'ARC GLOBAL TECHNICAL SERVICES',
     ])
       expect(before).toContain(text);
-    // The decision lives in the system; the printed form is only countersigned.
-    for (const gone of ['Approval', 'Approved By', 'Required By', 'Handover'])
+    // The form is fixed: the Settings → Forms signatory list does not reach it.
+    for (const gone of [
+      'HR DEPARTMENT',
+      'IT DEPARTMENT',
+      'FINANCE MANAGER',
+      'FIN PERSON',
+      'COMMERCIAL PERSON',
+      'Requested For',
+      'Request Details',
+      'Priority',
+      'Handover',
+    ])
       expect(before).not.toContain(gone);
 
     await http()
@@ -296,19 +327,110 @@ describe('handover, transfer and return forms', () => {
       .get(api(`/requests/${id}`))
       .set(admin.auth)
       .expect(200);
-    // The form is replaced, so the printed copy shows the decision.
+    // The form is replaced, so one current copy stays on the request.
     const forms = approved.body.data.documents.filter(
       (d: { type: string }) => d.type === 'REQUEST_FORM',
     );
     expect(forms).toHaveLength(1);
-    const after = pdfText(await download(admin.auth, forms[0].id));
-    expect(after).toContain('ASSET REQUEST FORM');
-    expect(after).toContain('FIN PERSON');
-    expect(after).not.toContain('issue from stock');
+    const after = await download(admin.auth, forms[0].id);
+    expect(pdfText(after)).toContain('ASSET REQUEST FORM');
+    expect(pdfText(after)).not.toContain('issue from stock');
     if (process.env.FORMS_OUT)
-      writeFileSync(
-        join(process.env.FORMS_OUT, 'asset-request.pdf'),
-        await download(admin.auth, forms[0].id),
-      );
+      writeFileSync(join(process.env.FORMS_OUT, 'asset-request.pdf'), after);
+  });
+
+  it('prints the fixed SIM card swap request form', async () => {
+    const admin = await login(app, 'it@example.com');
+    const [omar, sara] = await Promise.all(
+      ['EMP101', 'EMP202'].map((employeeNumber) =>
+        prisma.employee.findFirstOrThrow({ where: { employeeNumber } }),
+      ),
+    );
+    const plan = await http()
+      .post(api('/sim-plans'))
+      .set(admin.auth)
+      .send({ name: 'Business 200', provider: 'e&', monthlyCharge: 200 })
+      .expect(201);
+    const card = await http()
+      .post(api('/sim-cards'))
+      .set(admin.auth)
+      .send({
+        phoneNumber: '0500000007',
+        simNumber: '8997100000000000007',
+        provider: 'e&',
+        planId: plan.body.data.id,
+        status: 'ACTIVE',
+        employeeId: omar.id,
+      })
+      .expect(201);
+
+    const swap = await http()
+      .post(api(`/sim-cards/${card.body.data.id}/swaps`))
+      .set(admin.auth)
+      .send({
+        toEmployeeId: sara.id,
+        reason: 'STOLEN',
+        reasonDetail: 'Bur Dubai 2026/4471',
+        newSimNumber: '8997100000000000008',
+        swappedAt: '2026-09-20',
+        remarks: 'Handset stolen on site',
+      })
+      .expect(201);
+    expect(swap.body.data.fromEmployee.employeeNumber).toBe('EMP101');
+    expect(swap.body.data.toEmployee.employeeNumber).toBe('EMP202');
+
+    const res = await http()
+      .get(api(`/sim-swaps/${swap.body.data.id}/form`))
+      .set(admin.auth)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(res.headers['content-type']).toContain('application/pdf');
+    const pdf = res.body as Buffer;
+    const text = pdfText(pdf);
+    for (const expected of [
+      'SIM CARD SWAP REQUEST FORM',
+      'SWP-',
+      '20/09/2026',
+      'Employee Details',
+      'HANDED OVER BY (Current Holder)',
+      'OMAR HADDAD',
+      'EMP101',
+      'RECEIVED BY (New Holder)',
+      'SARA KHAN',
+      'EMP202',
+      'EGYPTIAN',
+      'SIM Details',
+      'Mobile Number',
+      '0500000007',
+      'Network Provider (e& / du)',
+      'Plan / Package',
+      'Business 200',
+      'Replacement SIM (ICCID)',
+      '8997100000000000008',
+      'Reason for Swap',
+      'Low Usage (Specify)',
+      'Stolen (Police Report No.)',
+      'Bur Dubai 2026/4471',
+      'Damaged / Faulty SIM',
+      'Upgrade to eSIM / New Device',
+      'Other Remarks',
+      'Handset stolen on site',
+      'Approved by:',
+      'COMMERCIAL MANAGER',
+      'TIJO GEORGE',
+      'CHIEF OPERATING OFFICER',
+      'MUHAMMED RAMSHID',
+      'ARC GLOBAL TECHNICAL SERVICES',
+    ])
+      expect(text).toContain(expected);
+    // Fixed form: the Settings → Forms signatories stay out of it.
+    for (const gone of ['HR DEPARTMENT', 'FINANCE MANAGER', 'COMMERCIAL PERSON'])
+      expect(text).not.toContain(gone);
+    if (process.env.FORMS_OUT) writeFileSync(join(process.env.FORMS_OUT, 'sim-swap.pdf'), pdf);
   });
 });

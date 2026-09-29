@@ -45,6 +45,7 @@ const EXPECTED_TABLES = [
   'settings',
   'sim_cards',
   'sim_plans',
+  'sim_swaps',
   'sim_usages',
   'software',
   'software_assignments',

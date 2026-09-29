@@ -5,7 +5,7 @@ import request from 'supertest';
 import { seedDatabase } from '../src/database/seed';
 import { createTestApp, createUser, login, truncateAll } from './db/helpers';
 
-/** Company SIM cards: rate plans, the lines, and what each line cost per month. */
+/** Company SIM cards: rate plans, the lines, what each line cost per month, and swaps. */
 const prisma = new PrismaClient();
 let app: INestApplication;
 const http = () => request(app.getHttpServer());
@@ -124,17 +124,111 @@ describe('SIM cards', () => {
     expect(busy.body.error.code).toBe('INVALID_STATE');
   });
 
+  it('swaps a line to another holder and keeps the SIM record in step', async () => {
+    const admin = await login(app, 'it@example.com');
+    const card = await prisma.simCard.findFirstOrThrow({ where: { phoneNumber: '0500000009' } });
+    const holder = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP900' } });
+    const receiver = await prisma.employee.create({
+      data: {
+        employeeNumber: 'EMP901',
+        firstName: 'Sara',
+        lastName: 'Khan',
+        email: 'sara.sim@example.com',
+      },
+    });
+
+    const swap = await http()
+      .post(api(`/sim-cards/${card.id}/swaps`))
+      .set(admin.auth)
+      .send({
+        toEmployeeId: receiver.id,
+        reason: 'DAMAGED',
+        reasonDetail: 'Cracked SIM tray',
+        newSimNumber: '8997100000000000010',
+        swappedAt: '2026-09-18',
+      })
+      .expect(201);
+    // The holder it came from defaults to whoever held the line.
+    expect(swap.body.data.fromEmployee.id).toBe(holder.id);
+    expect(swap.body.data.previousSimNumber).toBe('8997100000000000009');
+    expect(swap.body.data.number).toBeGreaterThan(0);
+
+    // The line now belongs to the new holder, on the replacement SIM.
+    const moved = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(moved.body.data.employee.employeeNumber).toBe('EMP901');
+    expect(moved.body.data.simNumber).toBe('8997100000000000010');
+    expect(moved.body.data.swaps).toHaveLength(1);
+
+    // A replacement SIM another line already uses is refused.
+    const other = await http()
+      .post(api('/sim-cards'))
+      .set(admin.auth)
+      .send({ phoneNumber: '0500000011', simNumber: '8997100000000000011' })
+      .expect(201);
+    const clash = await http()
+      .post(api(`/sim-cards/${card.id}/swaps`))
+      .set(admin.auth)
+      .send({ toEmployeeId: holder.id, newSimNumber: '8997100000000000011' })
+      .expect(409);
+    expect(clash.body.error.code).toBe('SIM_IN_USE');
+
+    // A swap has to move something.
+    const empty = await http()
+      .post(api(`/sim-cards/${other.body.data.id}/swaps`))
+      .set(admin.auth)
+      .send({ reason: 'OTHER' })
+      .expect(400);
+    expect(empty.body.error.details[0].field).toBe('toEmployeeId');
+
+    // Handing it back to nobody returns the line to stock.
+    await http()
+      .post(api(`/sim-cards/${card.id}/swaps`))
+      .set(admin.auth)
+      .send({ toEmployeeId: null, reason: 'LOW_USAGE', reasonDetail: '0.2 GB in three months' })
+      .expect(201);
+    const back = await http()
+      .get(api(`/sim-cards/${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(back.body.data.employee).toBeNull();
+    expect(back.body.data.status).toBe('SPARE');
+
+    // Both swaps are listed for the line, newest first, and can be filtered by employee.
+    const listed = await http()
+      .get(api(`/sim-swaps?simCardId=${card.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(listed.body.data).toHaveLength(2);
+    expect(listed.body.data[0].reason).toBe('LOW_USAGE');
+    const byEmployee = await http()
+      .get(api(`/sim-swaps?employeeId=${receiver.id}`))
+      .set(admin.auth)
+      .expect(200);
+    expect(byEmployee.body.data).toHaveLength(2);
+  });
+
   it('lets auditors look but not change, and hides SIMs from employees', async () => {
     const auditor = await login(app, 'auditor@example.com');
     const worker = await login(app, 'worker@example.com');
 
     await http().get(api('/sim-cards')).set(auditor.auth).expect(200);
+    await http().get(api('/sim-swaps')).set(auditor.auth).expect(200);
     await http()
       .post(api('/sim-plans'))
       .set(auditor.auth)
       .send({ name: 'Auditor plan' })
       .expect(403);
+    const card = await prisma.simCard.findFirstOrThrow({ where: { deletedAt: null } });
+    await http()
+      .post(api(`/sim-cards/${card.id}/swaps`))
+      .set(auditor.auth)
+      .send({ reason: 'OTHER', newSimNumber: '8997100000000000099' })
+      .expect(403);
     await http().get(api('/sim-cards')).set(worker.auth).expect(403);
+    await http().get(api('/sim-swaps')).set(worker.auth).expect(403);
   });
 
   it('refuses charges that are not money and months that do not exist', async () => {

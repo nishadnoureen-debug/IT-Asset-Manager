@@ -1,6 +1,6 @@
 'use client';
 
-import { Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowRightLeft, FileText, Pencil, Plus, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
@@ -15,19 +15,20 @@ import { Input } from '@/components/ui/form';
 import { EmptyState } from '@/components/ui/states';
 import { Tabs } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
-import { api } from '@/lib/api-client';
+import { api, downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
-import { formatDate, formatMoney, fullName } from '@/lib/format';
+import { formatDate, formatMoney, fullName, label, swapRef } from '@/lib/format';
 import { useApi, useListParams } from '@/lib/hooks';
 import {
   SimCardDialog,
   SimPlanDialog,
+  SimSwapDialog,
   SimUsageDialog,
   CHARGE_FIELDS,
 } from '@/features/sims/sim-dialogs';
-import type { SimCard, SimPlan, SimUsage, SimUsageTotals } from '@/lib/types';
+import type { SimCard, SimPlan, SimSwap, SimUsage, SimUsageTotals } from '@/lib/types';
 
-type Tab = 'cards' | 'plans' | 'usage';
+type Tab = 'cards' | 'plans' | 'usage' | 'swaps';
 
 const DEFAULTS = {
   tab: 'cards',
@@ -53,6 +54,7 @@ export default function SimsPage() {
   const [editingCard, setEditingCard] = useState<SimCard | 'new' | null>(null);
   const [editingPlan, setEditingPlan] = useState<SimPlan | 'new' | null>(null);
   const [editingUsage, setEditingUsage] = useState<SimUsage | null>(null);
+  const [swapping, setSwapping] = useState<SimCard | null>(null);
   const [deleting, setDeleting] = useState<{
     kind: 'card' | 'plan';
     id: string;
@@ -78,6 +80,12 @@ export default function SimsPage() {
     page: params.page,
     limit: 50,
   });
+  const swaps = useApi<SimSwap[]>(tab === 'swaps' ? '/sim-swaps' : null, {
+    search: params.search,
+    page: params.page,
+    limit: 25,
+  });
+
   // The API adds column totals to the paging meta of /sim-usages.
   const totals = usage.data?.meta as { totals?: SimUsageTotals } | undefined;
 
@@ -155,6 +163,16 @@ export default function SimsPage() {
             header: '',
             cell: (c: SimCard) => (
               <div className="flex justify-end gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Swap ${c.phoneNumber}`}
+                  icon={<ArrowRightLeft className="h-4 w-4" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSwapping(c);
+                  }}
+                />
                 <Button
                   variant="ghost"
                   size="sm"
@@ -292,11 +310,80 @@ export default function SimsPage() {
       : []),
   ];
 
+  const swapColumns: Column<SimSwap>[] = [
+    {
+      key: 'swappedAt',
+      header: 'Swapped',
+      cell: (s) => (
+        <div className="min-w-0">
+          <p className="whitespace-nowrap font-medium text-slate-900 dark:text-slate-100">
+            {formatDate(s.swappedAt)}
+          </p>
+          <p className="text-xs text-slate-500">{swapRef(s.number)}</p>
+        </div>
+      ),
+    },
+    {
+      key: 'sim',
+      header: 'Number',
+      cell: (s) => (
+        <Link
+          href={`/sims/${s.simCardId}`}
+          className="text-blue-600 hover:underline dark:text-blue-400"
+        >
+          {s.simCard?.phoneNumber ?? '—'}
+        </Link>
+      ),
+    },
+    {
+      key: 'holders',
+      header: 'Handed over',
+      cell: (s) => (
+        <span className="whitespace-nowrap">
+          {s.fromEmployee ? fullName(s.fromEmployee) : 'Stock'} &rarr;{' '}
+          {s.toEmployee ? fullName(s.toEmployee) : 'Stock'}
+        </span>
+      ),
+    },
+    {
+      key: 'reason',
+      header: 'Reason',
+      cell: (s) => (
+        <div className="min-w-0">
+          <p>{label('simSwapReason', s.reason)}</p>
+          {s.reasonDetail && <p className="truncate text-xs text-slate-500">{s.reasonDetail}</p>}
+        </div>
+      ),
+      hideOnMobile: true,
+    },
+    {
+      key: 'newSim',
+      header: 'New SIM',
+      cell: (s) => <span className="font-mono text-xs">{s.newSimNumber ?? '—'}</span>,
+      hideOnMobile: true,
+    },
+    {
+      key: 'form',
+      header: '',
+      cell: (s) => (
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-label={`Swap form ${swapRef(s.number)}`}
+          icon={<FileText className="h-4 w-4" />}
+          onClick={() =>
+            downloadFile(`/sim-swaps/${s.id}/form`).catch((e: unknown) => toast.error(e))
+          }
+        />
+      ),
+    },
+  ];
+
   return (
     <>
       <PageHeader
         title="SIM cards"
-        description="Company lines, their rate plans and what they cost each month."
+        description="Company lines, their rate plans, what they cost each month and who holds them."
         actions={
           manage && (
             <Button
@@ -316,6 +403,7 @@ export default function SimsPage() {
             { value: 'cards', label: 'SIM cards' },
             { value: 'plans', label: 'Rate plans' },
             { value: 'usage', label: 'Monthly usage' },
+            { value: 'swaps', label: 'Swaps' },
           ]}
         />
       </div>
@@ -439,6 +527,38 @@ export default function SimsPage() {
         </Card>
       )}
 
+      {tab === 'swaps' && (
+        <Card>
+          <FilterBar
+            search={params.search}
+            onSearch={(search) => set({ search })}
+            placeholder="Number or ICCID…"
+            showReset={!!params.search}
+            onReset={() => set({ search: '' })}
+          />
+          <DataTable
+            caption="SIM card swaps"
+            columns={swapColumns}
+            rows={swaps.data?.data}
+            loading={swaps.isFetching}
+            error={swaps.error}
+            onRetry={() => void swaps.refetch()}
+            meta={swaps.data?.meta}
+            onPage={(page) => set({ page: String(page) })}
+            empty={
+              <EmptyState
+                title="No swaps recorded"
+                description={
+                  manage
+                    ? 'Swap a line from the SIM cards tab to record who received it.'
+                    : undefined
+                }
+              />
+            }
+          />
+        </Card>
+      )}
+
       <SimCardDialog
         open={editingCard !== null}
         card={editingCard === 'new' ? null : editingCard}
@@ -455,6 +575,16 @@ export default function SimsPage() {
           simCardId={editingUsage.simCardId}
           usage={editingUsage}
           onClose={() => setEditingUsage(null)}
+        />
+      )}
+      {swapping && (
+        <SimSwapDialog
+          open
+          card={swapping}
+          onClose={(swap) => {
+            setSwapping(null);
+            if (swap) set({ tab: 'swaps', page: '1', search: '' });
+          }}
         />
       )}
       <ConfirmDialog

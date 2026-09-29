@@ -103,11 +103,21 @@ export const LABELS = {
     CANCELLED: 'Cancelled',
   },
   requestType: {
-    NEW_ASSET: 'New asset',
+    NEW_ASSET: 'New requirement',
     REPLACEMENT: 'Replacement',
+    UPGRADE: 'Upgrade',
+    TEMPORARY: 'Temporary use',
     ACCESSORY: 'Accessory',
     SOFTWARE: 'Software',
     REPAIR: 'Repair',
+    OTHER: 'Other',
+  },
+  simSwapReason: {
+    LOW_USAGE: 'Low usage',
+    LOST: 'Lost SIM / phone',
+    STOLEN: 'Stolen',
+    DAMAGED: 'Damaged / faulty SIM',
+    UPGRADE: 'Upgrade to eSIM / new device',
     OTHER: 'Other',
   },
   requestStatus: {

@@ -346,6 +346,9 @@ export interface AssetRequest {
   status: 'SUBMITTED' | 'APPROVED' | 'REJECTED' | 'FULFILLED' | 'CANCELLED';
   quantity: number;
   neededBy: string | null;
+  preferredModel: string | null;
+  accessoriesRequired: string | null;
+  typeDetail: string | null;
   decisionNotes: string | null;
   decisionAt: string | null;
   fulfilledAt: string | null;
@@ -354,7 +357,13 @@ export interface AssetRequest {
   updatedAt: string;
   createdById: Id | null;
   employeeId: Id | null;
-  employee: (EmployeeRef & { jobTitle?: string | null; department?: Ref | null }) | null;
+  employee:
+    | (EmployeeRef & {
+        jobTitle?: string | null;
+        nationality?: string | null;
+        department?: Ref | null;
+      })
+    | null;
   assetType: Ref | null;
   createdBy: UserRef | null;
   decisionBy: UserRef | null;
@@ -407,6 +416,22 @@ export interface SimUsageTotals {
   totalCharge: string | number | null;
 }
 
+export interface SimSwap {
+  id: Id;
+  number: number;
+  simCardId: Id;
+  reason: 'LOW_USAGE' | 'LOST' | 'STOLEN' | 'DAMAGED' | 'UPGRADE' | 'OTHER';
+  reasonDetail: string | null;
+  newSimNumber: string | null;
+  previousSimNumber: string | null;
+  swappedAt: string;
+  remarks: string | null;
+  fromEmployee: EmployeeRef | null;
+  toEmployee: EmployeeRef | null;
+  createdBy?: UserRef | null;
+  simCard?: { id: Id; phoneNumber: string; simNumber: string | null; provider: string | null };
+}
+
 export interface SimCard {
   id: Id;
   phoneNumber: string;
@@ -423,6 +448,7 @@ export interface SimCard {
   employee: EmployeeRef | null;
   asset: { id: Id; assetTag: string; name: string } | null;
   usages?: SimUsage[];
+  swaps?: SimSwap[];
 }
 
 export interface AuditSummary {

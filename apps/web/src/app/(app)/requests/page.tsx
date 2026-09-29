@@ -39,7 +39,18 @@ interface NewRequestValues {
   assetTypeId: string;
   quantity: string;
   neededBy: string;
+  preferredModel: string;
+  accessoriesRequired: string;
+  typeDetail: string;
 }
+
+/** What the request type asks to be written on the printed form. */
+const TYPE_DETAIL: Record<string, string> = {
+  NEW_ASSET: 'Specify',
+  REPLACEMENT: 'Old asset code',
+  UPGRADE: 'Specify',
+  TEMPORARY: 'Return date',
+};
 
 function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const toast = useToast();
@@ -56,8 +67,10 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
     handleSubmit,
     reset,
     setError,
+    watch,
     formState: { errors },
   } = useForm<NewRequestValues>();
+  const type = watch('type') || 'NEW_ASSET';
 
   useEffect(() => {
     if (open) {
@@ -69,6 +82,9 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
         assetTypeId: '',
         quantity: '1',
         neededBy: '',
+        preferredModel: '',
+        accessoriesRequired: '',
+        typeDetail: '',
       });
       setEmployeeId(null);
     }
@@ -84,6 +100,9 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
         quantity: Number(v.quantity) || 1,
         assetTypeId: v.assetTypeId || undefined,
         neededBy: v.neededBy || undefined,
+        preferredModel: v.preferredModel || undefined,
+        accessoriesRequired: v.accessoriesRequired || undefined,
+        typeDetail: v.typeDetail || undefined,
         employeeId: employeeId ?? undefined,
       });
       toast.success(`Request ${requestRef(data.number)} submitted for approval`);
@@ -174,6 +193,23 @@ function NewRequestDialog({ open, onClose }: { open: boolean; onClose: () => voi
           </Field>
           <Field label="Required by">
             {(p) => <Input {...p} type="date" {...register('neededBy')} />}
+          </Field>
+          <Field label={TYPE_DETAIL[type] ?? 'Remarks'} hint="Printed on the request form">
+            {(p) => <Input {...p} {...register('typeDetail')} />}
+          </Field>
+          <Field label="Brand / model preferred">
+            {(p) => (
+              <Input {...p} placeholder="e.g. Dell Latitude 5450" {...register('preferredModel')} />
+            )}
+          </Field>
+          <Field label="Accessories required">
+            {(p) => (
+              <Input
+                {...p}
+                placeholder="e.g. Bag, mouse, dock"
+                {...register('accessoriesRequired')}
+              />
+            )}
           </Field>
           {staff && (
             <Field label="For employee">

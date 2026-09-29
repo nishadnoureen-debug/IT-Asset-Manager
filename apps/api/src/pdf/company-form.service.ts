@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
-import type { AppSettings } from '@itam/shared';
+import type { AppSettings, FormSignatory } from '@itam/shared';
 import { type Pdf, PdfService, pdfSafe } from './pdf.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -36,7 +36,18 @@ export const FORM_COLORS = {
   value: '#334155',
   rule: '#A0A0A0',
   line: '#6B7280',
+  // Light leader line on the fixed request forms.
+  leader: '#C9D3DD',
 };
+
+/**
+ * The two signatories printed on the fixed request forms (asset request, SIM card swap). These forms
+ * are printed as agreed, so they do not follow the Settings → Forms signatory list.
+ */
+export const REQUEST_FORM_SIGNATORIES: FormSignatory[] = [
+  { title: 'Commercial Manager', name: 'Tijo George' },
+  { title: 'Chief Operating Officer', name: 'Muhammed Ramshid' },
+];
 const PAGE = { width: 595.28, height: 841.89 };
 const MARGINS = { top: 122, bottom: 82, left: 56, right: 56 };
 const CONTENT_WIDTH = PAGE.width - MARGINS.left - MARGINS.right;
@@ -128,6 +139,96 @@ export class CompanyForm {
       }
       this.doc.moveDown(0.25);
     }
+  }
+
+  /**
+   * "• Label: ______" rows with the value written on a light line that runs to the right margin —
+   * the layout of the printed asset request and SIM swap forms.
+   */
+  fields(rows: [string, string][]): void {
+    const labelX = MARGINS.left + 26;
+    const lineEnd = MARGINS.left + CONTENT_WIDTH;
+    for (const [labelText, value] of rows) {
+      this.pdf.ensureSpace(this.doc, 24);
+      const y = this.doc.y;
+      const text = `${labelText}: `;
+      this.doc.font('Times-Roman').fontSize(10.5).fillColor(FORM_COLORS.text);
+      this.doc.text('•', MARGINS.left + 12, y, { lineBreak: false });
+      this.doc.text(text, labelX, y, { lineBreak: false });
+      const valueX = labelX + this.doc.widthOfString(text);
+      if (value.trim())
+        this.doc
+          .fillColor(FORM_COLORS.value)
+          .text(pdfSafe(value.trim()), valueX + 2, y, { width: lineEnd - valueX - 2 });
+      const bottom = Math.max(this.doc.y, y + 13);
+      this.doc
+        .save()
+        .lineWidth(0.5)
+        .strokeColor(FORM_COLORS.leader)
+        .moveTo(valueX, y + 13)
+        .lineTo(lineEnd, y + 13)
+        .stroke()
+        .restore();
+      this.doc.x = MARGINS.left;
+      this.doc.y = bottom + 6;
+    }
+  }
+
+  /**
+   * Two columns of labelled lines side by side under their own headings, divided by a vertical rule —
+   * the "handed over by / received by" block of the SIM card swap form.
+   */
+  columns(left: { title: string; rows: [string, string][] }, right: typeof left): void {
+    const gap = 24;
+    const colWidth = (CONTENT_WIDTH - gap) / 2;
+    const rowCount = Math.max(left.rows.length, right.rows.length);
+    this.pdf.ensureSpace(this.doc, 24 + rowCount * 19);
+    const top = this.doc.y;
+
+    const column = (side: typeof left, x: number) => {
+      this.doc
+        .font('Helvetica-Bold')
+        .fontSize(9.5)
+        .fillColor(FORM_COLORS.heading)
+        .text(pdfSafe(side.title), x, top, { width: colWidth, lineBreak: false, ellipsis: true });
+      let y = top + 19;
+      for (const [labelText, value] of side.rows) {
+        const text = `${labelText}: `;
+        this.doc.font('Times-Roman').fontSize(10.5).fillColor(FORM_COLORS.text);
+        this.doc.text(text, x, y, { lineBreak: false });
+        const valueX = x + this.doc.widthOfString(text);
+        if (value.trim())
+          this.doc.fillColor(FORM_COLORS.value).text(pdfSafe(value.trim()), valueX + 2, y, {
+            width: Math.max(x + colWidth - valueX - 2, 10),
+            lineBreak: false,
+            ellipsis: true,
+          });
+        this.doc
+          .save()
+          .lineWidth(0.5)
+          .strokeColor(FORM_COLORS.leader)
+          .moveTo(valueX, y + 13)
+          .lineTo(x + colWidth, y + 13)
+          .stroke()
+          .restore();
+        y += 19;
+      }
+      return y;
+    };
+
+    const leftBottom = column(left, MARGINS.left);
+    const rightBottom = column(right, MARGINS.left + colWidth + gap);
+    const bottom = Math.max(leftBottom, rightBottom);
+    this.doc
+      .save()
+      .lineWidth(0.5)
+      .strokeColor(FORM_COLORS.rule)
+      .moveTo(MARGINS.left + colWidth + gap / 2, top - 4)
+      .lineTo(MARGINS.left + colWidth + gap / 2, bottom - 6)
+      .stroke()
+      .restore();
+    this.doc.x = MARGINS.left;
+    this.doc.y = bottom;
   }
 
   paragraph(text: string): void {
@@ -234,9 +335,12 @@ export class CompanyForm {
     this.doc.y = lineY + 10;
   }
 
-  /** "Approved by:" boxes, three per row: title, name, and space to sign. */
-  approvedBy(): void {
-    const people = this.settings.formSignatories.filter((s) => s.title.trim());
+  /**
+   * "Approved by:" boxes, three per row: title, name, and space to sign. Defaults to the
+   * Settings → Forms list; the fixed request forms pass their own signatories instead.
+   */
+  approvedBy(signatories?: FormSignatory[]): void {
+    const people = (signatories ?? this.settings.formSignatories).filter((s) => s.title.trim());
     if (!people.length) return;
     const rowHeights = [26, 24, 44];
     const tableHeight = rowHeights.reduce((sum, h) => sum + h, 0);

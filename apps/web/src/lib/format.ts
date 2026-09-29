@@ -98,3 +98,4 @@ export function toDateInput(value: string | null | undefined): string {
 export const requestRef = (n: number) => `REQ-${String(n).padStart(6, '0')}`;
 export const maintenanceRef = (n: number) => `MNT-${String(n).padStart(5, '0')}`;
 export const auditRef = (n: number) => `AUD-${String(n).padStart(4, '0')}`;
+export const swapRef = (n: number) => `SWP-${String(n).padStart(6, '0')}`;

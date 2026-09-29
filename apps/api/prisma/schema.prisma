@@ -189,6 +189,9 @@ enum SimStatus {
 enum RequestType {
   NEW_ASSET
   REPLACEMENT
+  UPGRADE
+  /// Borrowed for a while and given back.
+  TEMPORARY
   ACCESSORY
   SOFTWARE
   REPAIR
@@ -357,6 +360,8 @@ model Employee {
   softwareAssignments  SoftwareAssignment[]
   requests             AssetRequest[]        @relation("RequestEmployee")
   simCards             SimCard[]
+  simSwapsFrom         SimSwap[]             @relation("SimSwapFrom")
+  simSwapsTo           SimSwap[]             @relation("SimSwapTo")
   documents            Document[]
 
   @@index([departmentId])
@@ -791,31 +796,37 @@ model SoftwareAssignment {
 // ─────────────────────────────────────────────────────────────────────────────
 
 model AssetRequest {
-  id            String        @id @default(uuid()) @db.Uuid
+  id                  String        @id @default(uuid()) @db.Uuid
   /// Human-friendly reference (REQ-000123).
-  number        Int           @unique @default(autoincrement())
-  title         String        @db.VarChar(200)
-  type          RequestType   @default(NEW_ASSET)
-  priority      Priority      @default(MEDIUM)
-  status        RequestStatus @default(SUBMITTED)
+  number              Int           @unique @default(autoincrement())
+  title               String        @db.VarChar(200)
+  type                RequestType   @default(NEW_ASSET)
+  priority            Priority      @default(MEDIUM)
+  status              RequestStatus @default(SUBMITTED)
   /// Employee the asset is requested for.
-  employeeId    String?       @map("employee_id") @db.Uuid
-  createdById   String?       @map("created_by_id") @db.Uuid
+  employeeId          String?       @map("employee_id") @db.Uuid
+  createdById         String?       @map("created_by_id") @db.Uuid
   /// What is being asked for; free text when no catalogue type fits.
-  assetTypeId   String?       @map("asset_type_id") @db.Uuid
-  quantity      Int           @default(1)
-  justification String
-  neededBy      DateTime?     @map("needed_by") @db.Date
-  decisionById  String?       @map("decision_by_id") @db.Uuid
-  decisionAt    DateTime?     @map("decision_at") @db.Timestamptz(6)
-  decisionNotes String?       @map("decision_notes")
+  assetTypeId         String?       @map("asset_type_id") @db.Uuid
+  quantity            Int           @default(1)
+  /// Brand / model the requester would prefer.
+  preferredModel      String?       @map("preferred_model") @db.VarChar(160)
+  /// Accessories asked for alongside the asset (free text, as written on the form).
+  accessoriesRequired String?       @map("accessories_required") @db.VarChar(300)
+  /// The detail the request type asks for: what to specify, the old asset code, or a return date.
+  typeDetail          String?       @map("type_detail") @db.VarChar(300)
+  justification       String
+  neededBy            DateTime?     @map("needed_by") @db.Date
+  decisionById        String?       @map("decision_by_id") @db.Uuid
+  decisionAt          DateTime?     @map("decision_at") @db.Timestamptz(6)
+  decisionNotes       String?       @map("decision_notes")
   /// Asset handed over when the request was fulfilled.
-  assetId       String?       @map("asset_id") @db.Uuid
-  fulfilledById String?       @map("fulfilled_by_id") @db.Uuid
-  fulfilledAt   DateTime?     @map("fulfilled_at") @db.Timestamptz(6)
-  cancelledAt   DateTime?     @map("cancelled_at") @db.Timestamptz(6)
-  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+  assetId             String?       @map("asset_id") @db.Uuid
+  fulfilledById       String?       @map("fulfilled_by_id") @db.Uuid
+  fulfilledAt         DateTime?     @map("fulfilled_at") @db.Timestamptz(6)
+  cancelledAt         DateTime?     @map("cancelled_at") @db.Timestamptz(6)
+  createdAt           DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   employee    Employee?  @relation("RequestEmployee", fields: [employeeId], references: [id], onDelete: SetNull)
   createdBy   User?      @relation("RequestCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
@@ -987,6 +998,7 @@ model User {
   softwareAssignmentsMade   SoftwareAssignment[]  @relation("SoftwareAssignedBy")
   softwareUnassignmentsMade SoftwareAssignment[]  @relation("SoftwareUnassignedBy")
   simUsages                 SimUsage[]            @relation("SimUsageRecordedBy")
+  simSwapsRecorded          SimSwap[]             @relation("SimSwapCreatedBy")
   requestsCreated           AssetRequest[]        @relation("RequestCreatedBy")
   requestsDecided           AssetRequest[]        @relation("RequestDecidedBy")
   requestsFulfilled         AssetRequest[]        @relation("RequestFulfilledBy")
@@ -1206,6 +1218,7 @@ model SimCard {
   employee Employee?  @relation(fields: [employeeId], references: [id], onDelete: SetNull)
   asset    Asset?     @relation(fields: [assetId], references: [id], onDelete: SetNull)
   usages   SimUsage[]
+  swaps    SimSwap[]
 
   @@index([status])
   @@index([employeeId])
@@ -1239,6 +1252,52 @@ model SimUsage {
   @@unique([simCardId, period])
   @@index([period])
   @@map("sim_usages")
+}
+
+/// Why a SIM was swapped from one holder (or handset) to another.
+enum SimSwapReason {
+  LOW_USAGE
+  LOST
+  STOLEN
+  DAMAGED
+  /// Moved to an eSIM or a new device.
+  UPGRADE
+  OTHER
+
+  @@map("sim_swap_reason")
+}
+
+/// One SIM card swap: who handed it over, who received it, and why.
+model SimSwap {
+  id                String        @id @default(uuid()) @db.Uuid
+  /// Human-friendly reference (SWP-000123).
+  number            Int           @unique @default(autoincrement())
+  simCardId         String        @map("sim_card_id") @db.Uuid
+  /// Holder before the swap; empty when the line was in stock.
+  fromEmployeeId    String?       @map("from_employee_id") @db.Uuid
+  /// Holder after the swap; empty when the line goes back to stock.
+  toEmployeeId      String?       @map("to_employee_id") @db.Uuid
+  reason            SimSwapReason @default(OTHER)
+  /// What the reason asks for: the usage, the police report number, or remarks.
+  reasonDetail      String?       @map("reason_detail") @db.VarChar(300)
+  /// ICCID of the replacement SIM, when a new one was issued.
+  newSimNumber      String?       @map("new_sim_number") @db.VarChar(32)
+  /// ICCID the line was on before the swap, kept for the record.
+  previousSimNumber String?       @map("previous_sim_number") @db.VarChar(32)
+  swappedAt         DateTime      @map("swapped_at") @db.Date
+  remarks           String?
+  createdById       String?       @map("created_by_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  simCard      SimCard   @relation(fields: [simCardId], references: [id], onDelete: Cascade)
+  fromEmployee Employee? @relation("SimSwapFrom", fields: [fromEmployeeId], references: [id], onDelete: SetNull)
+  toEmployee   Employee? @relation("SimSwapTo", fields: [toEmployeeId], references: [id], onDelete: SetNull)
+  createdBy    User?     @relation("SimSwapCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([simCardId])
+  @@index([swappedAt(sort: Desc)])
+  @@map("sim_swaps")
 }
 
 /// Application settings (company name, default currency, asset tag prefix, alert windows…).

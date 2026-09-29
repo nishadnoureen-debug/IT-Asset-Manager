@@ -91,7 +91,7 @@ erDiagram
 | Maintenance  | `maintenance`                                                     |
 | Software     | `software`, `software_licenses`, `software_assignments`           |
 | Requests     | `asset_requests`                                                  |
-| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`                            |
+| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`               |
 | Documents    | `documents` (file metadata; files go to S3-compatible storage)    |
 | Audits       | `audit_sessions`, `audit_items`                                   |
 | Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
@@ -100,6 +100,9 @@ erDiagram
 
 `asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
 then handed over, with a printable form attached to the request.
+`sim_swaps` records each time a line changes hands: who held it, who received it, why, and the replacement SIM
+if one was issued. Creating a swap moves `sim_cards.employee_id` (and `sim_number`) in the same transaction, so
+the line and its history never disagree; the printable swap form is generated from the record on request.
 `refresh_tokens`, `password_reset_tokens` and `settings` were added with authentication and the Settings screen
 (migration `auth_and_settings`, which also creates the `asset_tag_seq` sequence used for generated tags).
 

@@ -10,9 +10,12 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
 import { ApiTags, PartialType } from '@nestjs/swagger';
-import { Prisma, SimStatus } from '@prisma/client';
+import { Prisma, SimStatus, SimSwapReason } from '@prisma/client';
+import type { Response } from 'express';
 import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
@@ -32,11 +35,13 @@ import { ActivityLogService, diff } from '../activity-logs/activity-log.service'
 import { trim } from '../assets/assets.dto';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
+import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
 import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
+import { SimSwapPdfService, swapRef } from './sim-swap-pdf.service';
 
 const money = () => [IsOptional(), Type(() => Number), IsNumber({ maxDecimalPlaces: 2 }), Min(0)];
 /** Charge columns of a usage row, in the order they appear on the screen. */
@@ -142,6 +147,30 @@ class SimUsageQueryDto extends PaginationQueryDto {
   @IsOptional() @IsUUID() planId?: string;
 }
 
+// ─── Swaps ──────────────────────────────────────────────────────────────────
+
+class CreateSimSwapDto {
+  /** Holder the line is moving to; leave empty to take it back into stock. */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() toEmployeeId?: string | null;
+  /**
+   * Holder the line is coming from. Defaults to whoever holds it now, so the form shows the same
+   * handover the records do.
+   */
+  @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() fromEmployeeId?: string | null;
+  @IsOptional() @IsEnum(SimSwapReason) reason?: SimSwapReason;
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(300) reasonDetail?: string;
+  /** ICCID of the replacement SIM, when the physical card is changed too. */
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(32) newSimNumber?: string;
+  @IsOptional() @Type(() => Date) @IsDate() swappedAt?: Date;
+  @IsOptional() @IsString() @MaxLength(2000) remarks?: string;
+}
+
+class SimSwapQueryDto extends PaginationQueryDto {
+  @IsOptional() @IsUUID() simCardId?: string;
+  @IsOptional() @IsEnum(SimSwapReason) reason?: SimSwapReason;
+  @IsOptional() @IsUUID() employeeId?: string;
+}
+
 const cardInclude = {
   plan: { select: { id: true, name: true, monthlyCharge: true, currency: true } },
   employee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
@@ -161,14 +190,27 @@ const usageInclude = {
   recordedBy: { select: { id: true, displayName: true } },
 } satisfies Prisma.SimUsageInclude;
 
+/** The two sides of a swap and who recorded it; the line itself is added when it is not obvious. */
+const swapPeople = {
+  fromEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+  toEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
+  createdBy: { select: { id: true, displayName: true } },
+} satisfies Prisma.SimSwapInclude;
+
+const swapInclude = {
+  ...swapPeople,
+  simCard: { select: { id: true, phoneNumber: true, simNumber: true, provider: true } },
+} satisfies Prisma.SimSwapInclude;
+
 /** First day of the month the date falls in, as a plain date. */
 function billingMonth(date: Date): Date {
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
 }
 
 /**
- * Company SIM cards: the carrier rate plans, the lines themselves, and what each line cost in a
- * given month (monthly charge, excess usage, international, roaming and parking).
+ * Company SIM cards: the carrier rate plans, the lines themselves, what each line cost in a given
+ * month (monthly charge, excess usage, international, roaming and parking), and the swaps that move
+ * a line from one holder to another — each with its printable swap request form.
  */
 @ApiTags('SIM cards')
 @Controller()
@@ -177,6 +219,7 @@ export class SimsController {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityLogService,
     private readonly settings: SettingsService,
+    private readonly swapPdf: SimSwapPdfService,
   ) {}
 
   // ── Rate plans ────────────────────────────────────────────────────────────
@@ -324,6 +367,7 @@ export class SimsController {
           take: 24,
           include: { plan: { select: { name: true } } },
         },
+        swaps: { orderBy: { swappedAt: 'desc' }, take: 24, include: swapPeople },
       },
     });
     if (!card) throw Errors.notFound('SIM card');
@@ -533,6 +577,141 @@ export class SimsController {
       oldValues: { period: existing.period, totalCharge: existing.totalCharge },
     });
     return { id };
+  }
+
+  // ── Swaps ─────────────────────────────────────────────────────────────────
+
+  @Get('sim-swaps')
+  @RequirePermissions('sim.view', 'sim.manage')
+  listSwaps(@Query() q: SimSwapQueryDto) {
+    const where: Prisma.SimSwapWhereInput = {
+      simCardId: q.simCardId,
+      reason: q.reason,
+      ...(q.employeeId
+        ? { OR: [{ fromEmployeeId: q.employeeId }, { toEmployeeId: q.employeeId }] }
+        : {}),
+      ...(q.search
+        ? { simCard: { OR: searchFilter(q.search, ['phoneNumber', 'simNumber']) } }
+        : {}),
+    };
+    return paginate(
+      q,
+      (page) =>
+        this.prisma.simSwap.findMany({
+          where,
+          include: swapInclude,
+          orderBy: resolveOrderBy<Prisma.SimSwapOrderByWithRelationInput>(
+            q,
+            {
+              swappedAt: (o) => ({ swappedAt: o }),
+              number: (o) => ({ number: o }),
+              createdAt: (o) => ({ createdAt: o }),
+            },
+            { swappedAt: 'desc' },
+          ),
+          ...page,
+        }),
+      () => this.prisma.simSwap.count({ where }),
+    );
+  }
+
+  /**
+   * Swaps the line over: records who handed it over and who received it, moves the SIM to the new
+   * holder and, when a replacement card was issued, puts its ICCID on the line.
+   */
+  @Post('sim-cards/:id/swaps')
+  @RequirePermissions('sim.manage')
+  async createSwap(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateSimSwapDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const card = await this.get(id);
+    const fromEmployeeId = dto.fromEmployeeId === undefined ? card.employeeId : dto.fromEmployeeId;
+    const toEmployeeId = dto.toEmployeeId ?? null;
+    if (!fromEmployeeId && !toEmployeeId && !dto.newSimNumber)
+      throw Errors.badRequest(
+        'Say who is receiving the line, or which SIM replaces it',
+        'toEmployeeId',
+      );
+    for (const [field, employeeId] of [
+      ['fromEmployeeId', fromEmployeeId],
+      ['toEmployeeId', toEmployeeId],
+    ] as const)
+      if (
+        employeeId &&
+        !(await this.prisma.employee.findFirst({ where: { id: employeeId, deletedAt: null } }))
+      )
+        throw Errors.badRequest('Employee not found', field);
+    if (
+      dto.newSimNumber &&
+      (await this.prisma.simCard.findFirst({
+        where: { simNumber: dto.newSimNumber, id: { not: id }, deletedAt: null },
+      }))
+    )
+      throw Errors.conflict('SIM_IN_USE', 'Another line already has this SIM number');
+
+    const swap = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.simSwap.create({
+        data: {
+          simCardId: id,
+          fromEmployeeId,
+          toEmployeeId,
+          reason: dto.reason,
+          reasonDetail: dto.reasonDetail,
+          newSimNumber: dto.newSimNumber,
+          previousSimNumber: card.simNumber,
+          swappedAt: dto.swappedAt ?? new Date(),
+          remarks: dto.remarks,
+          createdById: user.id,
+        },
+        include: swapInclude,
+      });
+      await tx.simCard.update({
+        where: { id },
+        data: {
+          employeeId: toEmployeeId,
+          simNumber: dto.newSimNumber ?? undefined,
+          // A line nobody holds any more goes back to stock.
+          status: toEmployeeId ? 'ACTIVE' : card.status === 'ACTIVE' ? 'SPARE' : card.status,
+        },
+      });
+      return created;
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'sim_swap.create',
+      entityType: 'sim_swap',
+      entityId: swap.id,
+      oldValues: { employeeId: card.employeeId, simNumber: card.simNumber },
+      newValues: {
+        ref: swapRef(swap.number),
+        phoneNumber: card.phoneNumber,
+        toEmployeeId,
+        reason: swap.reason,
+        newSimNumber: dto.newSimNumber,
+      },
+    });
+    return swap;
+  }
+
+  /** The printed SIM CARD SWAP REQUEST FORM, generated from the record for physical signatures. */
+  @Get('sim-swaps/:id/form')
+  @SkipEnvelope()
+  @RequirePermissions('sim.view', 'sim.manage')
+  async swapForm(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const swap = await this.prisma.simSwap.findUnique({ where: { id }, select: { number: true } });
+    if (!swap) throw Errors.notFound('SIM swap');
+    const ref = swapRef(swap.number);
+    const pdf = await this.swapPdf.render(id);
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="sim-card-swap-${ref}.pdf"`,
+    });
+    return new StreamableFile(pdf);
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
