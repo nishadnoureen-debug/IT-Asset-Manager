@@ -18,7 +18,7 @@ interface FormsForm {
   formSignatories: FormSignatory[];
 }
 
-/** Letterhead footer, terms and "Approved by" boxes printed on handover, transfer and return forms. */
+/** Letterhead footer, terms and "Approved by" boxes printed on the handover, transfer and return forms. */
 export function FormsSettings() {
   const { can } = useAuth();
   const toast = useToast();
@@ -64,7 +64,7 @@ export function FormsSettings() {
     <Card>
       <CardHeader
         title="Handover, transfer and return forms"
-        description="Printed on every generated form, under the company letterhead."
+        description="Printed on the handover, transfer and return forms, under the company letterhead. The asset request and SIM card swap forms are fixed and are not changed here."
       />
       <CardBody>
         <form onSubmit={onSubmit} className="space-y-5">
