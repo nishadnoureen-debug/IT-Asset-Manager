@@ -2,7 +2,7 @@
   "name": "it-asset-management",
   "version": "0.1.0",
   "private": true,
-  "description": "Zaby — IT asset management monorepo (Next.js web, NestJS API, shared types)",
+  "description": "TIWARI TRACKER — IT asset management monorepo (Next.js web, NestJS API, shared types)",
   "workspaces": [
     "packages/shared",
     "apps/api",

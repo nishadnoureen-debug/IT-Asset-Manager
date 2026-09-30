@@ -44,7 +44,11 @@ export function configureApp(app: INestApplication): void {
   if (config.get('ENABLE_SWAGGER', { infer: true }) && !isProduction) {
     const document = SwaggerModule.createDocument(
       app,
-      new DocumentBuilder().setTitle('Zaby API').setVersion('1.0').addBearerAuth().build(),
+      new DocumentBuilder()
+        .setTitle('TIWARI TRACKER API')
+        .setVersion('1.0')
+        .addBearerAuth()
+        .build(),
     );
     SwaggerModule.setup('api/docs', app, document);
   }
