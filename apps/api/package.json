@@ -2,7 +2,7 @@
   "name": "@itam/api",
   "version": "0.1.0",
   "private": true,
-  "description": "Zabi REST API (NestJS, /api/v1)",
+  "description": "Zaby REST API (NestJS, /api/v1)",
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch",

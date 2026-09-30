@@ -1,6 +1,6 @@
-# Zabi
+# Zaby
 
-Zabi is a secure, responsive web application for tracking company IT devices (laptops, desktops, monitors, mobiles,
+Zaby is a secure, responsive web application for tracking company IT devices (laptops, desktops, monitors, mobiles,
 tablets, printers, servers, network equipment, projectors and accessories) through their full lifecycle:
 **Purchased → Registered → In stock → Assigned → Transferred / Returned → Repair → Available → Retired → Disposed**.
 

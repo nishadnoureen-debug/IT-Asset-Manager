@@ -81,7 +81,7 @@ export default function LoginPage() {
             Welcome back
           </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Sign in to Zabi with your company account.
+            Sign in to Zaby with your company account.
           </p>
         </div>
         <FormError message={errors.root?.message} />
