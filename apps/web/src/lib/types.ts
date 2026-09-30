@@ -427,6 +427,9 @@ export interface SimSwap {
   assetId: Id | null;
   previousAssetId: Id | null;
   asset?: { id: Id; assetTag: string; name: string } | null;
+  /** The other line's row, when two employees exchanged their SIM cards. */
+  pairedSwapId: Id | null;
+  paired?: { id: Id; number: number; simCard: { id: Id; phoneNumber: string } } | null;
   swappedAt: string;
   remarks: string | null;
   fromEmployee: EmployeeRef | null;

@@ -110,9 +110,10 @@ machine at the same time. `rental_items.status` follows the open rentals: `RENTE
 one was issued, and the device it moved into. Creating a swap or a transfer moves `sim_cards.employee_id` (and
 `sim_number` or `asset_id`) in the same transaction, so the line and its history never disagree; the printable
 swap form is generated from the record on request. A transfer is a swap with reason `TRANSFER`: the line follows
-the employee into the device they hold (their phone or tablet, otherwise their newest asset). Only the newest
-swap on a line can be removed, and removing it puts the line back to the holder, SIM number and device it had
-before.
+the employee into the device they hold (their phone or tablet, otherwise their newest asset). When two employees
+exchange their SIM cards, each line gets its own row and the two point at each other through `paired_swap_id`, so
+the exchange is undone as one. Only the newest swap on a line can be removed, and removing it puts the line back
+to the holder, SIM number and device it had before.
 `refresh_tokens`, `password_reset_tokens` and `settings` were added with authentication and the Settings screen
 (migration `auth_and_settings`, which also creates the `asset_tag_seq` sequence used for generated tags).
 

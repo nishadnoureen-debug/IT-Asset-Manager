@@ -325,6 +325,104 @@ describe('SIM cards', () => {
     expect(nobody.body.error.details[0].field).toBe('toEmployeeId');
   });
 
+  it('exchanges two lines so both employees end up with the other one', async () => {
+    const admin = await login(app, 'it@example.com');
+    const [omar, sara] = await Promise.all(
+      ['EMP900', 'EMP901'].map((employeeNumber) =>
+        prisma.employee.findFirstOrThrow({ where: { employeeNumber } }),
+      ),
+    );
+    // Each of them has a line, in their own phone.
+    const phoneType = await prisma.assetType.findUniqueOrThrow({ where: { name: 'Mobile Phone' } });
+    const phones: { id: string; assetTag: string }[] = [];
+    for (const [name, holder] of [
+      ['Moto G75 A', omar],
+      ['Moto G75 B', sara],
+    ] as const) {
+      const asset = await http()
+        .post(api('/assets'))
+        .set(admin.auth)
+        .send({ name, assetTypeId: phoneType.id })
+        .expect(201);
+      await http()
+        .post(api(`/assets/${asset.body.data.id}/assign`))
+        .set(admin.auth)
+        .send({ employeeId: holder.id, condition: 'GOOD' })
+        .expect(201);
+      phones.push(asset.body.data as { id: string; assetTag: string });
+    }
+    const cards: { id: string; phoneNumber: string }[] = [];
+    for (const [phoneNumber, holder, phone] of [
+      ['0500000021', omar, phones[0]],
+      ['0500000022', sara, phones[1]],
+    ] as const) {
+      const card = await http()
+        .post(api('/sim-cards'))
+        .set(admin.auth)
+        .send({ phoneNumber, status: 'ACTIVE', employeeId: holder.id, assetId: phone.id })
+        .expect(201);
+      cards.push(card.body.data as { id: string; phoneNumber: string });
+    }
+    const [lineA, lineB] = cards;
+
+    const swap = await http()
+      .post(api(`/sim-cards/${lineA.id}/swaps`))
+      .set(admin.auth)
+      .send({ withSimCardId: lineB.id, reason: 'OTHER', remarks: 'They exchanged numbers' })
+      .expect(201);
+    expect(swap.body.data.fromEmployee.employeeNumber).toBe('EMP900');
+    expect(swap.body.data.toEmployee.employeeNumber).toBe('EMP901');
+    // The two halves point at each other, so the pair is undone together.
+    expect(swap.body.data.paired.simCard.phoneNumber).toBe('0500000022');
+
+    // Each line is now with the other employee, in that employee's phone.
+    const [movedA, movedB] = await Promise.all(
+      [lineA, lineB].map((c) =>
+        http()
+          .get(api(`/sim-cards/${c.id}`))
+          .set(admin.auth)
+          .expect(200)
+          .then((r) => r.body.data),
+      ),
+    );
+    expect(movedA.employee.employeeNumber).toBe('EMP901');
+    expect(movedA.asset.assetTag).toBe(phones[1].assetTag);
+    expect(movedB.employee.employeeNumber).toBe('EMP900');
+    expect(movedB.asset.assetTag).toBe(phones[0].assetTag);
+    // Both lines carry the swap in their history.
+    expect(movedA.swaps).toHaveLength(1);
+    expect(movedB.swaps).toHaveLength(1);
+
+    // A line cannot be swapped with itself.
+    const itself = await http()
+      .post(api(`/sim-cards/${lineA.id}/swaps`))
+      .set(admin.auth)
+      .send({ withSimCardId: lineA.id })
+      .expect(400);
+    expect(itself.body.error.details[0].field).toBe('withSimCardId');
+
+    // Undoing one half puts both lines back where they were.
+    await http()
+      .delete(api(`/sim-swaps/${swap.body.data.id}`))
+      .set(admin.auth)
+      .expect(200);
+    const [backA, backB] = await Promise.all(
+      [lineA, lineB].map((c) =>
+        http()
+          .get(api(`/sim-cards/${c.id}`))
+          .set(admin.auth)
+          .expect(200)
+          .then((r) => r.body.data),
+      ),
+    );
+    expect(backA.employee.employeeNumber).toBe('EMP900');
+    expect(backA.asset.assetTag).toBe(phones[0].assetTag);
+    expect(backB.employee.employeeNumber).toBe('EMP901');
+    expect(backB.asset.assetTag).toBe(phones[1].assetTag);
+    expect(backA.swaps).toHaveLength(0);
+    expect(backB.swaps).toHaveLength(0);
+  });
+
   it('lets auditors look but not change, and hides SIMs from employees', async () => {
     const auditor = await login(app, 'auditor@example.com');
     const worker = await login(app, 'worker@example.com');

@@ -157,6 +157,11 @@ class CreateSimSwapDto {
    * handover the records do.
    */
   @IsOptional() @ValidateIf((_, v) => v !== null) @IsUUID() fromEmployeeId?: string | null;
+  /**
+   * The other line, when two employees exchange their SIM cards: each one ends up with the other's
+   * line, in the other's device.
+   */
+  @IsOptional() @IsUUID() withSimCardId?: string;
   @IsOptional() @IsEnum(SimSwapReason) reason?: SimSwapReason;
   @IsOptional() @Transform(trim) @IsString() @MaxLength(300) reasonDetail?: string;
   /** ICCID of the replacement SIM, when the physical card is changed too. */
@@ -207,6 +212,10 @@ const swapPeople = {
   fromEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
   toEmployee: { select: { id: true, firstName: true, lastName: true, employeeNumber: true } },
   asset: { select: { id: true, assetTag: true, name: true } },
+  // The other line, when two employees exchanged their SIM cards.
+  paired: {
+    select: { id: true, number: true, simCard: { select: { id: true, phoneNumber: true } } },
+  },
   createdBy: { select: { id: true, displayName: true } },
 } satisfies Prisma.SimSwapInclude;
 
@@ -226,7 +235,8 @@ function billingMonth(date: Date): Date {
 /**
  * Company SIM cards: the carrier rate plans, the lines themselves, what each line cost in a given
  * month (monthly charge, excess usage, international, roaming and parking), and the swaps that move
- * a line from one holder to another — each with its printable swap request form.
+ * a line from one holder to another, or exchange two lines between their holders — each with its
+ * printable swap request form.
  */
 @ApiTags('SIM cards')
 @Controller()
@@ -642,6 +652,7 @@ export class SimsController {
     @Body() dto: CreateSimSwapDto,
     @CurrentUser() user: AuthUser,
   ) {
+    if (dto.withSimCardId) return this.exchange(id, dto.withSimCardId, dto, user);
     const card = await this.get(id);
     const fromEmployeeId = dto.fromEmployeeId === undefined ? card.employeeId : dto.fromEmployeeId;
     const toEmployeeId = dto.toEmployeeId ?? null;
@@ -725,20 +736,25 @@ export class SimsController {
   async removeSwap(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
     const swap = await this.prisma.simSwap.findUnique({
       where: { id },
-      include: { simCard: true },
+      include: { simCard: true, paired: { include: { simCard: true } } },
     });
     if (!swap) throw Errors.notFound('SIM swap');
-    const newer = await this.prisma.simSwap.findFirst({
-      where: {
-        simCardId: swap.simCardId,
-        id: { not: id },
-        OR: [
-          { swappedAt: { gt: swap.swappedAt } },
-          { swappedAt: swap.swappedAt, createdAt: { gt: swap.createdAt } },
-        ],
-      },
-    });
-    if (newer) throw Errors.invalidState('Undo the newer swaps on this line first');
+    // The two halves of an exchange are undone together, so neither line is left half-swapped.
+    const halves = [swap, ...(swap.paired ? [swap.paired] : [])];
+    const ids = halves.map((half) => half.id);
+    for (const half of halves) {
+      const newer = await this.prisma.simSwap.findFirst({
+        where: {
+          simCardId: half.simCardId,
+          id: { notIn: ids },
+          OR: [
+            { swappedAt: { gt: half.swappedAt } },
+            { swappedAt: half.swappedAt, createdAt: { gt: half.createdAt } },
+          ],
+        },
+      });
+      if (newer) throw Errors.invalidState('Undo the newer swaps on this line first');
+    }
     // The SIM number can only go back if no other line has taken it in the meantime.
     if (
       swap.newSimNumber &&
@@ -750,21 +766,22 @@ export class SimsController {
       throw Errors.conflict('SIM_IN_USE', 'Another line now has the SIM number this swap replaced');
 
     await this.prisma.$transaction(async (tx) => {
-      await tx.simCard.update({
-        where: { id: swap.simCardId },
-        data: {
-          employeeId: swap.fromEmployeeId,
-          // Only touch the SIM number and the device if this swap was what changed them.
-          ...(swap.newSimNumber ? { simNumber: swap.previousSimNumber } : {}),
-          ...(swap.assetId !== swap.previousAssetId ? { assetId: swap.previousAssetId } : {}),
-          status: swap.fromEmployeeId
-            ? 'ACTIVE'
-            : swap.simCard.status === 'ACTIVE'
-              ? 'SPARE'
-              : swap.simCard.status,
-        },
-      });
-      await tx.simSwap.delete({ where: { id } });
+      for (const half of halves)
+        await tx.simCard.update({
+          where: { id: half.simCardId },
+          data: {
+            employeeId: half.fromEmployeeId,
+            // Only touch the SIM number and the device if this swap was what changed them.
+            ...(half.newSimNumber ? { simNumber: half.previousSimNumber } : {}),
+            ...(half.assetId !== half.previousAssetId ? { assetId: half.previousAssetId } : {}),
+            status: half.fromEmployeeId
+              ? 'ACTIVE'
+              : half.simCard.status === 'ACTIVE'
+                ? 'SPARE'
+                : half.simCard.status,
+          },
+        });
+      await tx.simSwap.deleteMany({ where: { id: { in: ids } } });
     });
     await this.activity.recordSafely({
       actorId: user.id,
@@ -781,9 +798,85 @@ export class SimsController {
         employeeId: swap.fromEmployeeId,
         simNumber: swap.previousSimNumber,
         assetId: swap.previousAssetId,
+        undidPaired: swap.paired ? swapRef(swap.paired.number) : undefined,
       },
     });
     return { id };
+  }
+
+  /**
+   * Two employees exchange their SIM cards: each line moves to the other's holder and into the
+   * other's device, and both halves are kept as one swap that is undone together.
+   */
+  private async exchange(id: string, withSimCardId: string, dto: CreateSimSwapDto, user: AuthUser) {
+    if (id === withSimCardId)
+      throw Errors.badRequest('Choose the other line to swap with', 'withSimCardId');
+    if (dto.newSimNumber)
+      throw Errors.badRequest(
+        'A replacement SIM is not part of swapping two lines',
+        'newSimNumber',
+      );
+    const [a, b] = await Promise.all([this.get(id), this.get(withSimCardId)]);
+    if (!a.employeeId && !b.employeeId)
+      throw Errors.badRequest('Neither line is with anyone to swap', 'withSimCardId');
+
+    const swappedAt = dto.swappedAt ?? new Date();
+    const half = (
+      card: typeof a,
+      other: typeof b,
+    ): Omit<Prisma.SimSwapUncheckedCreateInput, 'simCardId'> => ({
+      fromEmployeeId: card.employeeId,
+      toEmployeeId: other.employeeId,
+      reason: dto.reason,
+      reasonDetail: dto.reasonDetail,
+      previousSimNumber: card.simNumber,
+      // The line follows its new holder into their device.
+      assetId: other.assetId,
+      previousAssetId: card.assetId,
+      swappedAt,
+      remarks: dto.remarks,
+      createdById: user.id,
+    });
+    const statusOf = (card: typeof a, holderId: string | null) =>
+      holderId ? 'ACTIVE' : card.status === 'ACTIVE' ? 'SPARE' : card.status;
+
+    const swap = await this.prisma.$transaction(async (tx) => {
+      const second = await tx.simSwap.create({ data: { simCardId: b.id, ...half(b, a) } });
+      const first = await tx.simSwap.create({
+        data: { simCardId: a.id, ...half(a, b), pairedSwapId: second.id },
+        include: swapInclude,
+      });
+      await tx.simSwap.update({ where: { id: second.id }, data: { pairedSwapId: first.id } });
+      for (const [card, other] of [
+        [a, b],
+        [b, a],
+      ] as const)
+        await tx.simCard.update({
+          where: { id: card.id },
+          data: {
+            employeeId: other.employeeId,
+            assetId: other.assetId,
+            status: statusOf(card, other.employeeId),
+          },
+        });
+      return first;
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'sim_swap.exchange',
+      entityType: 'sim_swap',
+      entityId: swap.id,
+      oldValues: {
+        [a.phoneNumber]: { employeeId: a.employeeId, assetId: a.assetId },
+        [b.phoneNumber]: { employeeId: b.employeeId, assetId: b.assetId },
+      },
+      newValues: {
+        ref: swapRef(swap.number),
+        [a.phoneNumber]: { employeeId: b.employeeId, assetId: b.assetId },
+        [b.phoneNumber]: { employeeId: a.employeeId, assetId: a.assetId },
+      },
+    });
+    return swap;
   }
 
   /**

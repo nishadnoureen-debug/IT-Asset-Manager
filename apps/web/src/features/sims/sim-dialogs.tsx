@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { AssetPicker, EmployeePicker, EnumSelect } from '@/components/pickers';
+import { AssetPicker, EmployeePicker, EnumSelect, SearchSelect } from '@/components/pickers';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
 import {
@@ -434,9 +434,16 @@ interface SwapValues {
   remarks: string;
 }
 
+/** What the reason sub-line says about a swap: its detail, the other line, or the device. */
+export function swapNote(swap: SimSwap): string {
+  if (swap.reasonDetail) return swap.reasonDetail;
+  if (swap.paired) return `Swapped with ${swap.paired.simCard.phoneNumber}`;
+  return swap.asset ? `Into ${swap.asset.assetTag}` : '';
+}
+
 /**
- * Hands a line over to another employee: records the swap, moves the SIM and prepares the printed
- * SIM CARD SWAP REQUEST FORM.
+ * Hands a line over to another employee, or exchanges it with another line so the two employees
+ * change SIM cards: records the swap, moves the SIMs and prepares the printed swap request form.
  */
 export function SimSwapDialog({
   open,
@@ -449,6 +456,8 @@ export function SimSwapDialog({
 }) {
   const toast = useToast();
   const [toEmployeeId, setToEmployeeId] = useState<string | null>(null);
+  /** The other line, when the two employees are exchanging their SIM cards. */
+  const [withSimCardId, setWithSimCardId] = useState<string | null>(null);
   const mutation = useApiMutation<Record<string, unknown>, SimSwap>(
     'post',
     `/sim-cards/${card.id}/swaps`,
@@ -474,15 +483,18 @@ export function SimSwapDialog({
       remarks: '',
     });
     setToEmployeeId(null);
+    setWithSimCardId(null);
   }, [open, reset]);
 
   const onSubmit = handleSubmit(async (v) => {
     try {
       const { data } = await mutation.mutateAsync({
-        toEmployeeId,
+        // Exchanging two lines settles both holders, so nobody is named here.
+        ...(withSimCardId
+          ? { withSimCardId }
+          : { toEmployeeId, newSimNumber: v.newSimNumber || undefined }),
         reason: v.reason,
         reasonDetail: v.reasonDetail || undefined,
-        newSimNumber: v.newSimNumber || undefined,
         swappedAt: v.swappedAt || undefined,
         remarks: v.remarks || undefined,
       });
@@ -506,9 +518,11 @@ export function SimSwapDialog({
       size="lg"
       title={`Swap ${card.phoneNumber}`}
       description={
-        card.employee
-          ? `${fullName(card.employee)} hands the line over. Leave the new holder empty to take it back into stock.`
-          : 'The line is in stock. Choose who receives it.'
+        withSimCardId
+          ? 'Each employee ends up with the other line, in the device they already have.'
+          : card.employee
+            ? `${fullName(card.employee)} hands the line over. Leave the new holder empty to take it back into stock.`
+            : 'The line is in stock. Choose who receives it.'
       }
       footer={
         <>
@@ -524,16 +538,44 @@ export function SimSwapDialog({
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <FormError message={errors.root?.message} />
         <FormGrid>
-          <Field label="Received by (new holder)" error={errors.reason?.message}>
+          <Field
+            label="Swap with another line"
+            hint="Both employees keep their device and change SIM cards"
+          >
             {(p) => (
-              <EmployeePicker
+              <SearchSelect<{
+                id: string;
+                phoneNumber: string;
+                employee: { firstName: string; lastName: string } | null;
+              }>
                 id={p.id}
-                value={toEmployeeId}
-                onChange={setToEmployeeId}
-                placeholder="Back into stock"
+                endpoint="/sim-cards"
+                value={withSimCardId}
+                onChange={(id) => {
+                  setWithSimCardId(id);
+                  if (id) setToEmployeeId(null);
+                }}
+                toOption={(c) => ({
+                  id: c.id,
+                  label: c.phoneNumber,
+                  sublabel: c.employee ? fullName(c.employee) : 'In stock',
+                })}
+                placeholder="No, hand this line over"
               />
             )}
           </Field>
+          {!withSimCardId && (
+            <Field label="Received by (new holder)" error={errors.reason?.message}>
+              {(p) => (
+                <EmployeePicker
+                  id={p.id}
+                  value={toEmployeeId}
+                  onChange={setToEmployeeId}
+                  placeholder="Back into stock"
+                />
+              )}
+            </Field>
+          )}
           <Field label="Reason for swap">
             {(p) => (
               <EnumSelect
@@ -547,9 +589,11 @@ export function SimSwapDialog({
           <Field label={REASON_DETAIL[reason] ?? 'Detail'}>
             {(p) => <Input {...p} {...register('reasonDetail')} />}
           </Field>
-          <Field label="Replacement SIM (ICCID)" hint="Only if the physical card changed">
-            {(p) => <Input {...p} className="font-mono" {...register('newSimNumber')} />}
-          </Field>
+          {!withSimCardId && (
+            <Field label="Replacement SIM (ICCID)" hint="Only if the physical card changed">
+              {(p) => <Input {...p} className="font-mono" {...register('newSimNumber')} />}
+            </Field>
+          )}
           <Field label="Swapped on" error={errors.swappedAt?.message}>
             {(p) => <Input {...p} type="date" {...register('swappedAt')} />}
           </Field>

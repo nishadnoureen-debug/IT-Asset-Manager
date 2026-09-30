@@ -22,6 +22,7 @@ import {
   SimSwapDialog,
   SimTransferDialog,
   SimUsageDialog,
+  swapNote,
 } from '@/features/sims/sim-dialogs';
 import type { SimCard, SimSwap, SimUsage } from '@/lib/types';
 
@@ -130,9 +131,7 @@ export default function SimCardPage() {
       cell: (s) => (
         <div className="min-w-0">
           <p>{label('simSwapReason', s.reason)}</p>
-          <p className="truncate text-xs text-slate-500">
-            {s.reasonDetail ?? (s.asset ? `Into ${s.asset.assetTag}` : '')}
-          </p>
+          <p className="truncate text-xs text-slate-500">{swapNote(s)}</p>
         </div>
       ),
       hideOnMobile: true,

@@ -1293,6 +1293,8 @@ model SimSwap {
   /// Device the line sits in after the swap, and the one it sat in before.
   assetId           String?       @map("asset_id") @db.Uuid
   previousAssetId   String?       @map("previous_asset_id") @db.Uuid
+  /// The other line's row when two employees exchanged their SIM cards.
+  pairedSwapId      String?       @unique @map("paired_swap_id") @db.Uuid
   swappedAt         DateTime      @map("swapped_at") @db.Date
   remarks           String?
   createdById       String?       @map("created_by_id") @db.Uuid
@@ -1303,6 +1305,8 @@ model SimSwap {
   fromEmployee  Employee? @relation("SimSwapFrom", fields: [fromEmployeeId], references: [id], onDelete: SetNull)
   toEmployee    Employee? @relation("SimSwapTo", fields: [toEmployeeId], references: [id], onDelete: SetNull)
   asset         Asset?    @relation("SimSwapAsset", fields: [assetId], references: [id], onDelete: SetNull)
+  paired        SimSwap?  @relation("SimSwapPair", fields: [pairedSwapId], references: [id], onDelete: SetNull)
+  pairedWith    SimSwap?  @relation("SimSwapPair")
   previousAsset Asset?    @relation("SimSwapPreviousAsset", fields: [previousAssetId], references: [id], onDelete: SetNull)
   createdBy     User?     @relation("SimSwapCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
 
