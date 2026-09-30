@@ -433,4 +433,68 @@ describe('handover, transfer and return forms', () => {
       expect(text).not.toContain(gone);
     if (process.env.FORMS_OUT) writeFileSync(join(process.env.FORMS_OUT, 'sim-swap.pdf'), pdf);
   });
+
+  it('prints both lines when two employees exchange their SIM cards', async () => {
+    const admin = await login(app, 'it@example.com');
+    const [omar, sara] = await Promise.all(
+      ['EMP101', 'EMP202'].map((employeeNumber) =>
+        prisma.employee.findFirstOrThrow({ where: { employeeNumber } }),
+      ),
+    );
+    const plan = await prisma.simPlan.findFirstOrThrow({ where: { name: 'Business 200' } });
+    const cards: { id: string }[] = [];
+    for (const [phoneNumber, holder] of [
+      ['0500000031', omar],
+      ['0500000032', sara],
+    ] as const) {
+      const card = await http()
+        .post(api('/sim-cards'))
+        .set(admin.auth)
+        .send({
+          phoneNumber,
+          provider: 'du',
+          planId: plan.id,
+          status: 'ACTIVE',
+          employeeId: holder.id,
+        })
+        .expect(201);
+      cards.push(card.body.data as { id: string });
+    }
+
+    const swap = await http()
+      .post(api(`/sim-cards/${cards[0].id}/swaps`))
+      .set(admin.auth)
+      .send({ withSimCardId: cards[1].id, reason: 'OTHER', remarks: 'They exchanged numbers' })
+      .expect(201);
+
+    const res = await http()
+      .get(api(`/sim-swaps/${swap.body.data.id}/form`))
+      .set(admin.auth)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    const pdf = res.body as Buffer;
+    const text = pdfText(pdf);
+    for (const expected of [
+      'SIM CARD SWAP REQUEST FORM',
+      'OMAR HADDAD',
+      'SARA KHAN',
+      'SIM Details',
+      // Both lines, side by side.
+      'HANDED OVER (SIM)',
+      '0500000031',
+      'RECEIVED IN EXCHANGE (SIM)',
+      '0500000032',
+      'Business 200',
+      'Approved by:',
+      'TIJO GEORGE',
+    ])
+      expect(text).toContain(expected);
+    if (process.env.FORMS_OUT)
+      writeFileSync(join(process.env.FORMS_OUT, 'sim-swap-exchange.pdf'), pdf);
+  });
 });

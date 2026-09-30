@@ -21,6 +21,8 @@ const REASON_ROWS: { reason: SimSwapReason; text: string }[] = [
   { reason: 'OTHER', text: 'Other Remarks' },
 ];
 
+type Line = { phoneNumber: string; provider: string | null; plan: { name: string } | null };
+
 type Holder = Pick<
   Employee,
   'firstName' | 'lastName' | 'employeeNumber' | 'jobTitle' | 'nationality'
@@ -45,6 +47,8 @@ export class SimSwapPdfService {
       where: { id: swapId },
       include: {
         simCard: { include: { plan: true } },
+        // The line coming back the other way, when two employees exchanged their SIM cards.
+        paired: { include: { simCard: { include: { plan: true } } } },
         fromEmployee: { include: { department: true } },
         toEmployee: { include: { department: true } },
       },
@@ -66,14 +70,20 @@ export class SimSwapPdfService {
         f.rule();
 
         f.heading('SIM Details');
-        f.fields([
-          ['Mobile Number', swap.simCard.phoneNumber],
-          ['Network Provider (e& / du)', swap.simCard.provider ?? ''],
-          ['Plan / Package', swap.simCard.plan?.name ?? ''],
-          ...(swap.newSimNumber
-            ? ([['Replacement SIM (ICCID)', swap.newSimNumber]] as [string, string][])
-            : []),
-        ]);
+        // An exchange has a line on each side, so both are printed side by side.
+        if (swap.paired) {
+          f.columns(
+            { title: 'HANDED OVER (SIM)', rows: this.line(swap.simCard) },
+            { title: 'RECEIVED IN EXCHANGE (SIM)', rows: this.line(swap.paired.simCard) },
+          );
+        } else {
+          f.fields([
+            ...this.line(swap.simCard),
+            ...(swap.newSimNumber
+              ? ([['Replacement SIM (ICCID)', swap.newSimNumber]] as [string, string][])
+              : []),
+          ]);
+        }
         f.rule();
 
         f.heading('Reason for Swap');
@@ -83,6 +93,15 @@ export class SimSwapPdfService {
         f.approvedBy(REQUEST_FORM_SIGNATORIES);
       },
     );
+  }
+
+  /** The three lines that describe one SIM. */
+  private line(card: Line): [string, string][] {
+    return [
+      ['Mobile Number', card.phoneNumber],
+      ['Network Provider (e& / du)', card.provider ?? ''],
+      ['Plan / Package', card.plan?.name ?? ''],
+    ];
   }
 
   /** The five employee lines of one column; blank lines when that side is the store. */
