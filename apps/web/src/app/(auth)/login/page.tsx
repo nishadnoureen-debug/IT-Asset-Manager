@@ -77,9 +77,11 @@ export default function LoginPage() {
     <div className="space-y-5">
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-50">Sign in</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
+            Welcome back
+          </h1>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-            Use your company account.
+            Sign in to Zabi with your company account.
           </p>
         </div>
         <FormError message={errors.root?.message} />
@@ -107,22 +109,24 @@ export default function LoginPage() {
             />
           )}
         </Field>
-        <Button type="submit" className="w-full" loading={isSubmitting}>
-          Sign in
-        </Button>
-        <p className="text-center text-sm">
+        <div className="text-right">
           <Link
             href="/forgot-password"
-            className="text-blue-600 hover:underline dark:text-blue-400"
+            className="text-sm text-blue-600 hover:underline dark:text-blue-400"
           >
             Forgot your password?
           </Link>
-        </p>
+        </div>
+        <Button type="submit" className="w-full" loading={isSubmitting}>
+          Sign in
+        </Button>
       </form>
 
       {registration?.enabled && (
-        <div className="border-t border-slate-200 pt-5 text-center dark:border-slate-800">
-          <p className="mb-3 text-sm text-slate-600 dark:text-slate-400">New here?</p>
+        <div className="relative border-t border-slate-200 pt-6 text-center dark:border-slate-800">
+          <span className="absolute -top-2.5 left-1/2 -translate-x-1/2 bg-white px-3 text-xs font-medium uppercase tracking-wide text-slate-400 dark:bg-slate-900 dark:text-slate-500">
+            New here?
+          </span>
           <ButtonLink
             href="/register"
             variant="secondary"

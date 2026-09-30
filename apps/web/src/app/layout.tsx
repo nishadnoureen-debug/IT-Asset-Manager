@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: { default: 'IT Asset Management', template: '%s · IT Asset Management' },
+  title: { default: 'Zabi', template: '%s · Zabi' },
   description: 'Track company IT devices through their full lifecycle.',
 };
 
