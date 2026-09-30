@@ -211,7 +211,7 @@ export class CompanyForm {
           .lineTo(x + colWidth, y + 13)
           .stroke()
           .restore();
-        y += 19;
+        y += 18;
       }
       return y;
     };
@@ -279,7 +279,7 @@ export class CompanyForm {
         .lineTo(lineEnd, y + 13)
         .stroke()
         .restore();
-      this.doc.y = underlineY + 7;
+      this.doc.y = underlineY + 5;
     }
     this.doc.x = MARGINS.left;
   }
@@ -333,6 +333,37 @@ export class CompanyForm {
       .restore();
     this.doc.x = MARGINS.left;
     this.doc.y = lineY + 10;
+  }
+
+  /**
+   * Two signature lines side by side, for the two people a form is between. Both fit on one row, so
+   * a form that already runs to the bottom of the page keeps its "Approved by" boxes with it.
+   */
+  signatureRow(left: string, right: string): void {
+    this.pdf.ensureSpace(this.doc, 26);
+    const top = this.doc.y + 2;
+    const gap = 24;
+    const colWidth = (CONTENT_WIDTH - gap) / 2;
+    [left, right].forEach((labelText, col) => {
+      const x = MARGINS.left + col * (colWidth + gap);
+      const text = `${labelText}: `;
+      this.doc
+        .font('Times-Roman')
+        .fontSize(10.5)
+        .fillColor(FORM_COLORS.text)
+        .text(text, x, top, { lineBreak: false });
+      const lineX = x + this.doc.widthOfString(text);
+      this.doc
+        .save()
+        .lineWidth(0.6)
+        .strokeColor(FORM_COLORS.line)
+        .moveTo(lineX, top + 13)
+        .lineTo(x + colWidth, top + 13)
+        .stroke()
+        .restore();
+    });
+    this.doc.x = MARGINS.left;
+    this.doc.y = top + 18;
   }
 
   /**

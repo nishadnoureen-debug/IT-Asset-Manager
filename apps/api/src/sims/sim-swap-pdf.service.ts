@@ -90,6 +90,9 @@ export class SimSwapPdfService {
         f.checkBoxes(this.reasonRows(swap.reason, swap.reasonDetail, swap.remarks));
         f.rule();
 
+        // Both employees sign for the line they are giving up and the one they are taking on.
+        f.signatureRow('Handed Over By (signature)', 'Received By (signature)');
+
         f.approvedBy(REQUEST_FORM_SIGNATORIES);
       },
     );

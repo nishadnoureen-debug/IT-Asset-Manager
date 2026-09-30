@@ -420,6 +420,9 @@ describe('handover, transfer and return forms', () => {
       'Upgrade to eSIM / New Device',
       'Other Remarks',
       'Handset stolen on site',
+      // Both employees sign the form.
+      'Handed Over By (signature)',
+      'Received By (signature)',
       'Approved by:',
       'COMMERCIAL MANAGER',
       'TIJO GEORGE',
@@ -478,6 +481,9 @@ describe('handover, transfer and return forms', () => {
       })
       .expect(200);
     const pdf = res.body as Buffer;
+    // Written before the assertions, so a failing layout can still be looked at.
+    if (process.env.FORMS_OUT)
+      writeFileSync(join(process.env.FORMS_OUT, 'sim-swap-exchange.pdf'), pdf);
     const text = pdfText(pdf);
     for (const expected of [
       'SIM CARD SWAP REQUEST FORM',
@@ -490,11 +496,13 @@ describe('handover, transfer and return forms', () => {
       'RECEIVED IN EXCHANGE (SIM)',
       '0500000032',
       'Business 200',
+      'Handed Over By (signature)',
+      'Received By (signature)',
       'Approved by:',
       'TIJO GEORGE',
     ])
       expect(text).toContain(expected);
-    if (process.env.FORMS_OUT)
-      writeFileSync(join(process.env.FORMS_OUT, 'sim-swap-exchange.pdf'), pdf);
+    // Everything still fits on the one sheet people sign.
+    expect(text).toContain('Page 1 of 1');
   });
 });
