@@ -420,9 +420,9 @@ describe('handover, transfer and return forms', () => {
       'Upgrade to eSIM / New Device',
       'Other Remarks',
       'Handset stolen on site',
-      // Both employees sign the form.
-      'Handed Over By (signature)',
-      'Received By (signature)',
+      // Both employees sign the form, under their own names.
+      'OMAR HADDAD (signature)',
+      'SARA KHAN (signature)',
       'Approved by:',
       'COMMERCIAL MANAGER',
       'TIJO GEORGE',
@@ -496,8 +496,8 @@ describe('handover, transfer and return forms', () => {
       'RECEIVED IN EXCHANGE (SIM)',
       '0500000032',
       'Business 200',
-      'Handed Over By (signature)',
-      'Received By (signature)',
+      'OMAR HADDAD (signature)',
+      'SARA KHAN (signature)',
       'Approved by:',
       'TIJO GEORGE',
     ])

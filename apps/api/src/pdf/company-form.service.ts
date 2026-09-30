@@ -352,7 +352,8 @@ export class CompanyForm {
         .fontSize(10.5)
         .fillColor(FORM_COLORS.text)
         .text(text, x, top, { lineBreak: false });
-      const lineX = x + this.doc.widthOfString(text);
+      // A long name never leaves too little of the line to sign on.
+      const lineX = Math.min(x + this.doc.widthOfString(text), x + colWidth - 60);
       this.doc
         .save()
         .lineWidth(0.6)

@@ -90,12 +90,20 @@ export class SimSwapPdfService {
         f.checkBoxes(this.reasonRows(swap.reason, swap.reasonDetail, swap.remarks));
         f.rule();
 
-        // Both employees sign for the line they are giving up and the one they are taking on.
-        f.signatureRow('Handed Over By (signature)', 'Received By (signature)');
+        // Both employees sign under their own name for the line they give up and the one they take.
+        f.signatureRow(
+          `${this.signer(swap.fromEmployee, 'Handed Over By')} (signature)`,
+          `${this.signer(swap.toEmployee, 'Received By')} (signature)`,
+        );
 
         f.approvedBy(REQUEST_FORM_SIGNATORIES);
       },
     );
+  }
+
+  /** Who signs for a side: the employee's name, or the role when the line came from stock. */
+  private signer(employee: Holder | null, role: string): string {
+    return employee ? `${employee.firstName} ${employee.lastName}`.toUpperCase() : role;
   }
 
   /** The three lines that describe one SIM. */
