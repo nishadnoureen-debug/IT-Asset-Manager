@@ -24,6 +24,7 @@ import {
 import { PurchasesController, VendorsController } from './procurement/procurement.controllers';
 import { QrController } from './qr/qr.controller';
 import { QrService } from './qr/qr.service';
+import { RentalsController } from './rentals/rentals.controller';
 import { ReportsController } from './reports/reports.controller';
 import { ReportsService } from './reports/reports.service';
 import { SettingsController } from './settings/settings.controller';
@@ -80,6 +81,9 @@ export class SoftwareModule {}
 @Module({ controllers: [SimsController], providers: [SimSwapPdfService] })
 export class SimsModule {}
 
+@Module({ controllers: [RentalsController] })
+export class RentalsModule {}
+
 @Module({
   imports: [AssignmentsModule],
   controllers: [RequestsController],
@@ -107,6 +111,7 @@ export const FEATURE_MODULES = [
   MaintenanceModule,
   SoftwareModule,
   SimsModule,
+  RentalsModule,
   RequestsModule,
   AuditsModule,
   ReportsModule,

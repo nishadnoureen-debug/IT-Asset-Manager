@@ -86,6 +86,13 @@ const TONE_MAP: Partial<Record<LabelGroup, Record<string, Tone>>> = {
     WRONG_LOCATION: 'amber',
     DAMAGED: 'red',
   },
+  rentalItemStatus: {
+    AVAILABLE: 'teal',
+    RENTED: 'green',
+    UNDER_REPAIR: 'amber',
+    RETIRED: 'gray',
+  },
+  rentalStatus: { ACTIVE: 'green', COMPLETED: 'gray', CANCELLED: 'gray' },
   employeeStatus: { ACTIVE: 'green', ON_LEAVE: 'amber', TERMINATED: 'gray' },
   userStatus: { ACTIVE: 'green', DISABLED: 'gray', LOCKED: 'red' },
 };

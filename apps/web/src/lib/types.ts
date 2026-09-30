@@ -454,6 +454,54 @@ export interface SimCard {
   swaps?: SimSwap[];
 }
 
+export interface Camp {
+  id: Id;
+  name: string;
+  code: string | null;
+  location: string | null;
+  remarks: string | null;
+  isActive: boolean;
+  _count?: { items: number };
+}
+
+export interface RentalItem {
+  id: Id;
+  campId: Id;
+  type: 'WIFI_CARD' | 'WASHING_MACHINE' | 'OTHER';
+  name: string;
+  code: string | null;
+  provider: string | null;
+  standardCharge: string | number;
+  currency: string;
+  status: 'AVAILABLE' | 'RENTED' | 'UNDER_REPAIR' | 'RETIRED';
+  remarks: string | null;
+  camp?: { id: Id; name: string; code: string | null };
+  rentals?: Rental[];
+}
+
+export interface Rental {
+  id: Id;
+  number: number;
+  itemId: Id;
+  employeeId: Id;
+  /** When the card went out, or the washing time started. */
+  startAt: string;
+  endAt: string | null;
+  charge: string | number;
+  currency: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  remarks: string | null;
+  item?: {
+    id: Id;
+    name: string;
+    type: RentalItem['type'];
+    code: string | null;
+    camp: { id: Id; name: string; code: string | null };
+  };
+  employee?: EmployeeRef | null;
+  createdBy?: UserRef | null;
+}
+
 export interface AuditSummary {
   total: number;
   PENDING: number;

@@ -92,6 +92,7 @@ erDiagram
 | Software     | `software`, `software_licenses`, `software_assignments`           |
 | Requests     | `asset_requests`                                                  |
 | SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`               |
+| Camp rentals | `camps`, `rental_items`, `rentals`                                |
 | Documents    | `documents` (file metadata; files go to S3-compatible storage)    |
 | Audits       | `audit_sessions`, `audit_items`                                   |
 | Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
@@ -100,6 +101,11 @@ erDiagram
 
 `asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
 then handed over, with a printable form attached to the request.
+`rentals` is one row per item rented to one employee: a WiFi card issued until it comes back (no `end_at`) or a
+single washing time (`start_at` and `end_at`). A `CHECK` keeps a finished rental ending after it started, and the
+API refuses a period that runs into another rental of the same item, so two employees never hold one card or one
+machine at the same time. `rental_items.status` follows the open rentals: `RENTED` while something is out,
+`AVAILABLE` again once it is back.
 `sim_swaps` records each time a line changes hands: who held it, who received it, why, the replacement SIM if
 one was issued, and the device it moved into. Creating a swap or a transfer moves `sim_cards.employee_id` (and
 `sim_number` or `asset_id`) in the same transaction, so the line and its history never disagree; the printable
@@ -146,7 +152,7 @@ assignment transaction, because it depends on a count across rows.
 
 ## Roles and permissions
 
-The catalogue of 74 permission keys and the role-to-permission mapping live in
+The catalogue of 76 permission keys and the role-to-permission mapping live in
 [`packages/shared/src/constants/permissions.ts`](../packages/shared/src/constants/permissions.ts), shared by the
 API, the web app and the seed. Where spec §4 limits a role's data scope, the scope is part of the key:
 `asset.view` (all), `asset.view_department` or `asset.view_own`.

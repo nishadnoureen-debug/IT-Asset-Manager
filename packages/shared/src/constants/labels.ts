@@ -112,6 +112,22 @@ export const LABELS = {
     REPAIR: 'Repair',
     OTHER: 'Other',
   },
+  rentalItemType: {
+    WIFI_CARD: 'WiFi card',
+    WASHING_MACHINE: 'Washing machine',
+    OTHER: 'Other',
+  },
+  rentalItemStatus: {
+    AVAILABLE: 'Available',
+    RENTED: 'Rented out',
+    UNDER_REPAIR: 'Under repair',
+    RETIRED: 'Retired',
+  },
+  rentalStatus: {
+    ACTIVE: 'Out',
+    COMPLETED: 'Finished',
+    CANCELLED: 'Cancelled',
+  },
   simSwapReason: {
     LOW_USAGE: 'Low usage',
     LOST: 'Lost SIM / phone',

@@ -11,6 +11,7 @@ import {
   QrCode,
   Settings,
   Signal,
+  Building2,
   ShieldCheck,
   ShoppingCart,
   Users,
@@ -62,6 +63,13 @@ export const NAV: NavItem[] = [
     label: 'SIM cards',
     icon: Signal,
     anyOf: ['sim.view', 'sim.manage'],
+    section: 'main',
+  },
+  {
+    href: '/rentals',
+    label: 'Camp rentals',
+    icon: Building2,
+    anyOf: ['rental.view', 'rental.manage'],
     section: 'main',
   },
   {
