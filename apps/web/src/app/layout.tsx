@@ -3,7 +3,7 @@ import './globals.css';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: { default: 'TIWARI TRACKER', template: '%s · TIWARI TRACKER' },
+  title: { default: 'ZABY TRACKER', template: '%s · ZABY TRACKER' },
   description: 'Track company IT devices through their full lifecycle.',
 };
 

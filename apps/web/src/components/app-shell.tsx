@@ -63,7 +63,7 @@ function Brand({ companyName }: { companyName?: string }) {
       <Image src="/logo-mark.png" alt="" width={256} height={110} className="h-7 w-auto" priority />
       <span className="min-w-0 leading-tight">
         <span className="block text-sm font-bold text-slate-900 dark:text-slate-50">
-          TIWARI TRACKER
+          ZABY TRACKER
         </span>
         {companyName && (
           <span className="block truncate text-xs text-slate-500 dark:text-slate-400">

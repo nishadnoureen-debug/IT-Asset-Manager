@@ -38,7 +38,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           />
         </div>
         <div className="relative max-w-md">
-          <h2 className="text-4xl font-bold tracking-tight">TIWARI TRACKER</h2>
+          <h2 className="text-5xl font-bold tracking-tight">ZABY TRACKER</h2>
           <p className="mt-3 text-lg text-slate-300">
             Everything the company owns, and who has it right now.
           </p>
@@ -82,14 +82,14 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               className="hidden h-14 w-auto dark:block"
             />
             <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-              TIWARI TRACKER
+              ZABY TRACKER
             </span>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-7 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <Suspense>{children}</Suspense>
           </div>
           <p className="mt-6 text-center text-xs text-slate-400 dark:text-slate-500">
-            TIWARI TRACKER · ARC Global Technical Services
+            ZABY TRACKER · ARC Global Technical Services
           </p>
         </div>
       </main>
