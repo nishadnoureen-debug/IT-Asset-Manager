@@ -121,7 +121,13 @@ describe('handover, transfer and return forms', () => {
       .then((r) => r.body.data as { id: string; assetTag: string; phoneNumber: string });
     expect(asset.phoneNumber).toBe('0500000001');
     const sim = await prisma.accessory.create({
-      data: { name: 'SIM', category: 'OTHER', quantityTotal: 5, quantityAvailable: 5 },
+      data: {
+        code: 'ACC-900003',
+        name: 'SIM',
+        category: 'OTHER',
+        quantityTotal: 5,
+        quantityAvailable: 5,
+      },
     });
 
     await http()

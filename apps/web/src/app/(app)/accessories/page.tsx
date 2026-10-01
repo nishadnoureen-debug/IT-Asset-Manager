@@ -1,6 +1,6 @@
 'use client';
 
-import { PackagePlus, Plus, Undo2 } from 'lucide-react';
+import { Download, PackagePlus, Plus, Printer, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { FilterBar } from '@/components/filter-bar';
@@ -13,7 +13,7 @@ import { Dialog } from '@/components/ui/dialog';
 import { Checkbox, Field, FormError, FormGrid, Input, Textarea } from '@/components/ui/form';
 import { EmptyState, Spinner } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
-import { api, ApiError } from '@/lib/api-client';
+import { api, ApiError, downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatMoney, fullName, label } from '@/lib/format';
 import { useApi, useApiMutation, useListParams } from '@/lib/hooks';
@@ -154,6 +154,61 @@ function AccessoryDialog({
   );
 }
 
+/** The accessory's printed label: the QR, the code, and the two ways to take it away. */
+function AccessoryQr({ accessory }: { accessory: Accessory }) {
+  const toast = useToast();
+  const query = useApi<{ dataUrl: string; payload: string }>(`/accessories/${accessory.id}/qr`);
+  const take = (what: 'label' | 'png') =>
+    (what === 'label'
+      ? downloadFile('/accessories/qr/labels', {
+          query: { ids: [accessory.id] },
+          fileName: `${accessory.code}-label.pdf`,
+        })
+      : downloadFile(`/accessories/${accessory.id}/qr/download`, { query: { format: 'png' } })
+    ).catch((e) => toast.error(e));
+
+  return (
+    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
+      {query.data ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={query.data.data.dataUrl}
+          alt={`QR code for ${accessory.code}`}
+          className="h-24 w-24 rounded border border-slate-200 bg-white p-1 dark:border-slate-700"
+        />
+      ) : (
+        <div className="h-24 w-24 rounded border border-dashed border-slate-200 dark:border-slate-700" />
+      )}
+      <div className="min-w-0 flex-1 space-y-2">
+        <p className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">
+          {accessory.code}
+        </p>
+        <p className="text-xs text-slate-500">
+          Scanning the label opens this accessory and what is in stock.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Printer className="h-4 w-4" />}
+            onClick={() => take('label')}
+          >
+            Printable label
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Download className="h-4 w-4" />}
+            onClick={() => take('png')}
+          >
+            PNG
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose: () => void }) {
   const { can } = useAuth();
   const toast = useToast();
@@ -233,6 +288,7 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
             </div>
           </div>
         )}
+        <AccessoryQr accessory={a} />
         <div>
           <p className="mb-2 text-sm font-medium">Currently handed out ({active.length})</p>
           {detail.isLoading ? (
@@ -318,7 +374,7 @@ export default function AccessoriesPage() {
         <div>
           <p className="font-medium text-slate-900 dark:text-slate-100">{a.name}</p>
           <p className="text-xs text-slate-500">
-            {[a.brand, a.model, a.sku].filter(Boolean).join(' · ')}
+            {[a.code, a.brand, a.model, a.sku].filter(Boolean).join(' · ')}
           </p>
         </div>
       ),
@@ -376,7 +432,7 @@ export default function AccessoriesPage() {
         <FilterBar
           search={params.search}
           onSearch={(search) => set({ search })}
-          placeholder="Name, SKU, brand…"
+          placeholder="Code, name, SKU, brand…"
           showReset={!!(params.search || params.category || params.lowStock)}
           onReset={() => set({ search: '', category: '', lowStock: '' })}
         >

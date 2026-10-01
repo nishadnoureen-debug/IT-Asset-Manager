@@ -11,6 +11,8 @@ export interface AppSettings {
   defaultCurrency: string;
   /** Prefix for generated asset tags, e.g. AST → AST-000123. */
   assetTagPrefix: string;
+  /** Prefix for generated accessory codes, e.g. ACC → ACC-000123. */
+  accessoryCodePrefix: string;
   /** Days before warranty end to raise alerts. */
   warrantyAlertDays: number;
   /** Days before licence expiry to raise alerts. */
@@ -38,6 +40,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   companyName: 'ARC Global',
   defaultCurrency: 'AED',
   assetTagPrefix: 'AST',
+  accessoryCodePrefix: 'ACC',
   warrantyAlertDays: 30,
   licenseAlertDays: 30,
   maintenanceDueDays: 3,

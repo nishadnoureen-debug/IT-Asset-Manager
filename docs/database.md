@@ -82,22 +82,22 @@ erDiagram
 
 ## Tables
 
-| Area         | Tables                                                            |
-| ------------ | ----------------------------------------------------------------- |
-| Organisation | `departments`, `locations` (hierarchical), `employees`            |
-| Procurement  | `vendors`, `purchases`                                            |
-| Assets       | `asset_types`, `assets`, `asset_assignments`, `asset_history`     |
-| Accessories  | `accessories` (quantity-tracked), `accessory_assignments`         |
-| Maintenance  | `maintenance`                                                     |
-| Software     | `software`, `software_licenses`, `software_assignments`           |
-| Requests     | `asset_requests`                                                  |
-| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`               |
-| Camp rentals | `camps`, `rental_items`, `rentals`                                |
-| Documents    | `documents` (file metadata; files go to S3-compatible storage)    |
-| Audits       | `audit_sessions`, `audit_items`                                   |
-| Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions` |
-| System       | `notifications`, `activity_logs`, `settings`                      |
-| Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)    |
+| Area         | Tables                                                               |
+| ------------ | -------------------------------------------------------------------- |
+| Organisation | `departments`, `locations` (hierarchical), `employees`               |
+| Procurement  | `vendors`, `purchases`                                               |
+| Assets       | `asset_types`, `assets`, `asset_assignments`, `asset_history`        |
+| Accessories  | `accessories` (quantity-tracked, coded, QR), `accessory_assignments` |
+| Maintenance  | `maintenance`                                                        |
+| Software     | `software`, `software_licenses`, `software_assignments`              |
+| Requests     | `asset_requests`                                                     |
+| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`                  |
+| Camp rentals | `camps`, `rental_items`, `rentals`                                   |
+| Documents    | `documents` (file metadata; files go to S3-compatible storage)       |
+| Audits       | `audit_sessions`, `audit_items`                                      |
+| Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`    |
+| System       | `notifications`, `activity_logs`, `settings`                         |
+| Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)       |
 
 `asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
 then handed over, with a printable form attached to the request.

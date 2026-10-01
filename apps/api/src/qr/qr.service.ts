@@ -160,20 +160,14 @@ export class QrService {
     };
   }
 
-  /** A4 sheet of labels: 3 columns × 8 rows, QR + asset tag + name. */
-  async labels(assetIds: string[], user: AuthUser) {
-    if (!assetIds.length || assetIds.length > 240)
-      throw Errors.badRequest('Select between 1 and 240 assets', 'assetIds');
-    const assets = await this.prisma.asset.findMany({
-      where: { AND: [{ id: { in: assetIds }, deletedAt: null }, this.assets.scopeOrThrow(user)] },
-      select: { id: true, assetTag: true, name: true, serialNumber: true, qrToken: true },
-      orderBy: { assetTag: 'asc' },
-    });
-    if (!assets.length) throw Errors.notFound('Assets');
+  /** A4 sheet of labels: 3 columns × 8 rows, QR + code + name. */
+  async renderLabels(
+    items: { code: string; name: string; note?: string | null; qrToken: string }[],
+  ): Promise<Buffer> {
     const { companyName } = await this.settings.get();
     const images = await Promise.all(
-      assets.map((a) =>
-        QRCode.toBuffer(this.payloadFor(a.qrToken), { type: 'png', margin: 0, width: 300 }),
+      items.map((item) =>
+        QRCode.toBuffer(this.payloadFor(item.qrToken), { type: 'png', margin: 0, width: 300 }),
       ),
     );
     return this.pdf.render(
@@ -184,7 +178,7 @@ export class QrService {
         const marginY = 30;
         const cellW = (doc.page.width - marginX * 2) / cols;
         const cellH = (doc.page.height - marginY * 2) / rows;
-        assets.forEach((asset, i) => {
+        items.forEach((item, i) => {
           if (i > 0 && i % (cols * rows) === 0) doc.addPage();
           const index = i % (cols * rows);
           const x = marginX + (index % cols) * cellW;
@@ -202,17 +196,14 @@ export class QrService {
             .font('Helvetica-Bold')
             .fontSize(10)
             .fillColor('#0f172a')
-            .text(pdfSafe(asset.assetTag), textX, y + 14, { width: textW });
+            .text(pdfSafe(item.code), textX, y + 14, { width: textW });
           doc
             .font('Helvetica')
             .fontSize(7.5)
             .fillColor('#334155')
-            .text(pdfSafe(asset.name), { width: textW, height: 30, ellipsis: true });
-          if (asset.serialNumber)
-            doc
-              .fontSize(6.5)
-              .fillColor('#64748b')
-              .text(`S/N ${pdfSafe(asset.serialNumber)}`, { width: textW });
+            .text(pdfSafe(item.name), { width: textW, height: 30, ellipsis: true });
+          if (item.note)
+            doc.fontSize(6.5).fillColor('#64748b').text(pdfSafe(item.note), { width: textW });
           doc
             .fontSize(6.5)
             .fillColor('#94a3b8')
@@ -221,5 +212,61 @@ export class QrService {
       },
       { margin: 0 },
     );
+  }
+
+  /** A4 sheet of asset labels. */
+  async labels(assetIds: string[], user: AuthUser) {
+    if (!assetIds.length || assetIds.length > 240)
+      throw Errors.badRequest('Select between 1 and 240 assets', 'assetIds');
+    const assets = await this.prisma.asset.findMany({
+      where: { AND: [{ id: { in: assetIds }, deletedAt: null }, this.assets.scopeOrThrow(user)] },
+      select: { id: true, assetTag: true, name: true, serialNumber: true, qrToken: true },
+      orderBy: { assetTag: 'asc' },
+    });
+    if (!assets.length) throw Errors.notFound('Assets');
+    return this.renderLabels(
+      assets.map((a) => ({
+        code: a.assetTag,
+        name: a.name,
+        note: a.serialNumber ? `S/N ${a.serialNumber}` : null,
+        qrToken: a.qrToken,
+      })),
+    );
+  }
+
+  /** The QR on its own, for anything that carries a label. */
+  async image(qrToken: string, format: 'png' | 'svg', code: string) {
+    const payload = this.payloadFor(qrToken);
+    const body =
+      format === 'svg'
+        ? Buffer.from(
+            await QRCode.toString(payload, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' }),
+          )
+        : await QRCode.toBuffer(payload, {
+            type: 'png',
+            margin: 1,
+            width: 600,
+            errorCorrectionLevel: 'M',
+          });
+    return {
+      body,
+      fileName: `${code}.${format}`,
+      contentType: format === 'svg' ? 'image/svg+xml' : 'image/png',
+    };
+  }
+
+  /** The QR image and payload for anything that carries a label. */
+  async codeImage(code: string, qrToken: string) {
+    const payload = this.payloadFor(qrToken);
+    return {
+      code,
+      qrToken,
+      payload,
+      dataUrl: await QRCode.toDataURL(payload, {
+        margin: 1,
+        width: 360,
+        errorCorrectionLevel: 'M',
+      }),
+    };
   }
 }

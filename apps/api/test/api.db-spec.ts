@@ -371,6 +371,57 @@ describe('asset lifecycle', () => {
     chargerId = charger.body.data.id;
     // Priced records without a currency get the default (UAE dirhams).
     expect(charger.body.data.currency).toBe('AED');
+    // Accessories carry a code and a QR label, like assets do.
+    expect(charger.body.data.code).toMatch(/^ACC-\d{6}$/);
+  });
+
+  it('gives an accessory a code and a QR label that scanning finds', async () => {
+    const charger = await prisma.accessory.findUniqueOrThrow({ where: { id: chargerId } });
+
+    const qr = await http()
+      .get(api(`/accessories/${chargerId}/qr`))
+      .set(s.tech.auth)
+      .expect(200);
+    expect(qr.body.data.code).toBe(charger.code);
+    expect(qr.body.data.payload).toContain(`/qr/${charger.qrToken}`);
+    expect(qr.body.data.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
+
+    // The printable sheet comes back as a PDF.
+    const labels = await http()
+      .get(api(`/accessories/qr/labels?ids=${chargerId}`))
+      .set(s.tech.auth)
+      .buffer(true)
+      .parse((r, cb) => {
+        const chunks: Buffer[] = [];
+        r.on('data', (c: Buffer) => chunks.push(c));
+        r.on('end', () => cb(null, Buffer.concat(chunks)));
+      })
+      .expect(200);
+    expect(labels.headers['content-type']).toContain('application/pdf');
+    expect((labels.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+
+    // A scanned label, and the code typed by hand, both find the accessory.
+    for (const code of [`https://example.test/qr/${charger.qrToken}`, charger.code.toLowerCase()]) {
+      const found = await http()
+        .post(api('/accessories/scan'))
+        .set(s.tech.auth)
+        .send({ code })
+        .expect(200);
+      expect(found.body.data.id).toBe(chargerId);
+    }
+    const missing = await http()
+      .post(api('/accessories/scan'))
+      .set(s.tech.auth)
+      .send({ code: 'ACC-999999' })
+      .expect(404);
+    expect(missing.body.error.code).toBe('NOT_FOUND');
+
+    // A new token retires the labels printed before it.
+    const regenerated = await http()
+      .post(api(`/accessories/${chargerId}/qr/regenerate`))
+      .set(s.admin.auth)
+      .expect(200);
+    expect(regenerated.body.data.qrToken).not.toBe(charger.qrToken);
   });
 
   it('generates tags, records history and activity, and validates input', async () => {

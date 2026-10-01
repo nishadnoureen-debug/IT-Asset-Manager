@@ -26,6 +26,7 @@ interface SettingsForm {
   companyName: string;
   defaultCurrency: string;
   assetTagPrefix: string;
+  accessoryCodePrefix: string;
   warrantyAlertDays: string;
   licenseAlertDays: string;
   maintenanceDueDays: string;
@@ -56,6 +57,7 @@ function GeneralSettings() {
       companyName: d.companyName,
       defaultCurrency: d.defaultCurrency,
       assetTagPrefix: d.assetTagPrefix,
+      accessoryCodePrefix: d.accessoryCodePrefix,
       warrantyAlertDays: String(d.warrantyAlertDays),
       licenseAlertDays: String(d.licenseAlertDays),
       maintenanceDueDays: String(d.maintenanceDueDays),
@@ -70,6 +72,7 @@ function GeneralSettings() {
         companyName: v.companyName,
         defaultCurrency: v.defaultCurrency.toUpperCase(),
         assetTagPrefix: v.assetTagPrefix.toUpperCase(),
+        accessoryCodePrefix: v.accessoryCodePrefix.toUpperCase(),
         warrantyAlertDays: Number(v.warrantyAlertDays),
         licenseAlertDays: Number(v.licenseAlertDays),
         maintenanceDueDays: Number(v.maintenanceDueDays),
@@ -128,6 +131,25 @@ function GeneralSettings() {
                       maxLength={10}
                       className="uppercase"
                       {...register('assetTagPrefix', {
+                        pattern: {
+                          value: /^[A-Za-z0-9]{1,10}$/,
+                          message: 'Letters and digits only',
+                        },
+                      })}
+                    />
+                  )}
+                </Field>
+                <Field
+                  label="Accessory code prefix"
+                  error={errors.accessoryCodePrefix?.message}
+                  hint="New accessory codes look like PREFIX-000123"
+                >
+                  {(p) => (
+                    <Input
+                      {...p}
+                      maxLength={10}
+                      className="uppercase"
+                      {...register('accessoryCodePrefix', {
                         pattern: {
                           value: /^[A-Za-z0-9]{1,10}$/,
                           message: 'Letters and digits only',

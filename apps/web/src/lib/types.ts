@@ -271,6 +271,8 @@ export interface Purchase {
 
 export interface Accessory {
   id: Id;
+  /** Stock code printed on the label. */
+  code: string;
   name: string;
   category: string;
   sku: string | null;

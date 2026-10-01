@@ -10,13 +10,19 @@ import {
   Patch,
   Post,
   Query,
+  Res,
+  StreamableFile,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { ApiTags, PartialType } from '@nestjs/swagger';
 import { AccessoryCategory, AssetCondition, Prisma } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsOptional,
@@ -28,6 +34,7 @@ import {
   Min,
   MinLength,
 } from 'class-validator';
+import type { Response } from 'express';
 import { ActivityLogService, diff } from '../activity-logs/activity-log.service';
 import { trim, upper } from '../assets/assets.dto';
 import { dataScope, NO_MATCH_ID, type AuthUser } from '../auth/auth-user';
@@ -35,11 +42,15 @@ import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
+import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
 import { PrismaService } from '../prisma/prisma.service';
+import { QrService, parseScannedCode } from '../qr/qr.service';
 import { SettingsService } from '../settings/settings.service';
 
 class CreateAccessoryDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(160) name!: string;
+  /** Left out, a code is generated from the prefix in Settings. */
+  @IsOptional() @Transform(upper) @IsString() @MaxLength(32) code?: string;
   @IsEnum(AccessoryCategory) category!: AccessoryCategory;
   @IsOptional() @Transform(upper) @IsString() @MaxLength(64) sku?: string;
   @IsOptional() @IsString() @MaxLength(80) brand?: string;
@@ -75,6 +86,22 @@ class ReturnAccessoryDto {
   @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
 
+class QrFormatQueryDto {
+  @IsOptional() @IsIn(['png', 'svg']) format: 'png' | 'svg' = 'png';
+}
+
+class ScanAccessoryDto {
+  @IsString() @MinLength(1) @MaxLength(512) code!: string;
+}
+
+class LabelsQueryDto {
+  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').filter(Boolean) : value))
+  @IsArray()
+  @ArrayMaxSize(240)
+  @IsUUID('all', { each: true })
+  ids!: string[];
+}
+
 @ApiTags('Accessories')
 @Controller()
 export class AccessoriesController {
@@ -82,6 +109,7 @@ export class AccessoriesController {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityLogService,
     private readonly settings: SettingsService,
+    private readonly qr: QrService,
   ) {}
 
   @Get('accessories')
@@ -91,7 +119,7 @@ export class AccessoriesController {
       deletedAt: null,
       category: q.category,
       locationId: q.locationId,
-      OR: searchFilter(q.search, ['name', 'sku', 'brand', 'model']),
+      OR: searchFilter(q.search, ['code', 'name', 'sku', 'brand', 'model']),
     };
     if (q.lowStock) {
       // Column-to-column comparison is not expressible in the Prisma filter API.
@@ -149,11 +177,12 @@ export class AccessoriesController {
   @Post('accessories')
   @RequirePermissions('accessory.manage')
   async create(@Body() dto: CreateAccessoryDto, @CurrentUser() user: AuthUser) {
-    const { defaultCurrency } = await this.settings.get();
+    const { defaultCurrency, accessoryCodePrefix } = await this.settings.get();
     return this.prisma.$transaction(async (tx) => {
       const accessory = await tx.accessory.create({
         data: {
           ...dto,
+          code: dto.code ?? (await this.nextCode(tx, accessoryCodePrefix)),
           currency: dto.unitCost !== undefined ? (dto.currency ?? defaultCurrency) : dto.currency,
           quantityAvailable: dto.quantityTotal ?? 0,
         },
@@ -350,5 +379,124 @@ export class AccessoriesController {
         include: { accessory: { select: { id: true, name: true } } },
       });
     });
+  }
+
+  // ── Labels ────────────────────────────────────────────────────────────────
+
+  /** The QR image for one accessory, to show on screen. */
+  @Get('accessories/:id/qr')
+  @RequirePermissions('accessory.view', 'accessory.manage')
+  async qrCode(@Param('id', ParseUUIDPipe) id: string) {
+    const accessory = await this.find(id);
+    return this.qr.codeImage(accessory.code, accessory.qrToken);
+  }
+
+  /** The QR on its own, as a PNG or an SVG. */
+  @Get('accessories/:id/qr/download')
+  @SkipEnvelope()
+  @RequirePermissions('accessory.view', 'accessory.manage')
+  async qrDownload(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query() q: QrFormatQueryDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const accessory = await this.find(id);
+    const file = await this.qr.image(accessory.qrToken, q.format, accessory.code);
+    res.set({
+      'Content-Type': file.contentType,
+      'Content-Disposition': `attachment; filename="${file.fileName}"`,
+    });
+    return new StreamableFile(file.body);
+  }
+
+  /** A sheet of printable labels: QR, code and name, three to a row. */
+  @Get('accessories/qr/labels')
+  @SkipEnvelope()
+  @RequirePermissions('accessory.view', 'accessory.manage')
+  async labels(@Query() q: LabelsQueryDto, @Res({ passthrough: true }) res: Response) {
+    if (!q.ids.length) throw Errors.badRequest('Select at least one accessory', 'ids');
+    const accessories = await this.prisma.accessory.findMany({
+      where: { id: { in: q.ids }, deletedAt: null },
+      select: { code: true, name: true, sku: true, qrToken: true },
+      orderBy: { code: 'asc' },
+    });
+    if (!accessories.length) throw Errors.notFound('Accessories');
+    const pdf = await this.qr.renderLabels(
+      accessories.map((a) => ({
+        code: a.code,
+        name: a.name,
+        note: a.sku ? `SKU ${a.sku}` : null,
+        qrToken: a.qrToken,
+      })),
+    );
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'attachment; filename="accessory-labels.pdf"',
+    });
+    return new StreamableFile(pdf);
+  }
+
+  /** New QR token: the labels printed before stop working. */
+  @Post('accessories/:id/qr/regenerate')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('accessory.manage')
+  async regenerateQr(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const accessory = await this.find(id);
+    const updated = await this.prisma.accessory.update({
+      where: { id },
+      data: { qrToken: randomUUID() },
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'accessory.qr_regenerate',
+      entityType: 'accessory',
+      entityId: id,
+      oldValues: { code: accessory.code },
+    });
+    return this.qr.codeImage(updated.code, updated.qrToken);
+  }
+
+  /** Resolves a scanned label, an accessory code or a SKU to the accessory itself. */
+  @Post('accessories/scan')
+  @HttpCode(HttpStatus.OK)
+  @RequirePermissions('accessory.view', 'accessory.manage')
+  async scan(@Body() dto: ScanAccessoryDto) {
+    const { token, text } = parseScannedCode(dto.code);
+    const accessory = await this.prisma.accessory.findFirst({
+      where: {
+        deletedAt: null,
+        ...(token
+          ? { qrToken: token }
+          : {
+              OR: [
+                { code: { equals: text, mode: 'insensitive' } },
+                { sku: { equals: text, mode: 'insensitive' } },
+              ],
+            }),
+      },
+      include: { location: { select: { id: true, name: true } } },
+    });
+    if (!accessory) throw Errors.notFound('No accessory matches this code');
+    return accessory;
+  }
+
+  // ── helpers ───────────────────────────────────────────────────────────────
+
+  private async find(id: string) {
+    const accessory = await this.prisma.accessory.findFirst({ where: { id, deletedAt: null } });
+    if (!accessory) throw Errors.notFound('Accessory');
+    return accessory;
+  }
+
+  /** The next free code from the sequence, e.g. ACC-000123. */
+  private async nextCode(db: Prisma.TransactionClient, prefix: string): Promise<string> {
+    for (let attempt = 0; attempt < 20; attempt++) {
+      const [{ nextval }] = await db.$queryRaw<
+        { nextval: bigint }[]
+      >`SELECT nextval('accessory_code_seq')`;
+      const code = `${prefix}-${String(nextval).padStart(6, '0')}`;
+      if (!(await db.accessory.findUnique({ where: { code }, select: { id: true } }))) return code;
+    }
+    throw Errors.conflict('ACCESSORY_CODE_EXHAUSTED', 'Could not generate a unique accessory code');
   }
 }

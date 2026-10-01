@@ -26,7 +26,7 @@ import { AssetActionDialog } from '@/features/assets/asset-dialogs';
 import { MaintenanceDialog } from '@/features/maintenance/maintenance-form';
 import { api, ApiError } from '@/lib/api-client';
 import { daysUntil, formatDate, fullName, label } from '@/lib/format';
-import type { ScanResult } from '@/lib/types';
+import type { Accessory, ScanResult } from '@/lib/types';
 
 function ResultCard({
   result,
@@ -229,29 +229,42 @@ export default function ScanPage() {
   const [loading, setLoading] = useState(false);
   const busy = useRef(false);
 
-  const lookup = useCallback(async (value: string) => {
-    if (busy.current) return;
-    busy.current = true;
-    setLoading(true);
-    setError(null);
-    setCode(value);
-    try {
-      const { data } = await api.post<ScanResult>('/qr/scan', { code: value });
-      setResult(data);
-    } catch (e) {
-      setResult(null);
-      setError(
-        e instanceof ApiError && e.code === 'NOT_FOUND'
-          ? 'No asset matches this code, or it is outside your access.'
-          : e instanceof Error
-            ? e.message
-            : 'Lookup failed',
-      );
-    } finally {
-      busy.current = false;
-      setLoading(false);
-    }
-  }, []);
+  const lookup = useCallback(
+    async (value: string) => {
+      if (busy.current) return;
+      busy.current = true;
+      setLoading(true);
+      setError(null);
+      setCode(value);
+      try {
+        const { data } = await api.post<ScanResult>('/qr/scan', { code: value });
+        setResult(data);
+      } catch (e) {
+        setResult(null);
+        // Accessories carry labels of their own; a code that is not an asset may be one.
+        if (e instanceof ApiError && e.code === 'NOT_FOUND') {
+          try {
+            const { data } = await api.post<Accessory>('/accessories/scan', { code: value });
+            router.push(`/accessories?search=${encodeURIComponent(data.code)}`);
+            return;
+          } catch {
+            // Not an accessory either; fall through to the message below.
+          }
+        }
+        setError(
+          e instanceof ApiError && e.code === 'NOT_FOUND'
+            ? 'No asset or accessory matches this code, or it is outside your access.'
+            : e instanceof Error
+              ? e.message
+              : 'Lookup failed',
+        );
+      } finally {
+        busy.current = false;
+        setLoading(false);
+      }
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (initial) {

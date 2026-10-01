@@ -608,6 +608,10 @@ model AssetHistory {
 
 model Accessory {
   id                String            @id @default(uuid()) @db.Uuid
+  /// Stock code printed on the label (ACC-000123), generated like an asset tag.
+  code              String            @unique @db.VarChar(32)
+  /// What a printed QR label points at.
+  qrToken           String            @unique @default(uuid()) @map("qr_token") @db.Uuid
   name              String            @db.VarChar(160)
   category          AccessoryCategory
   sku               String?           @unique @db.VarChar(64)

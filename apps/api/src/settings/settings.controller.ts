@@ -41,6 +41,12 @@ class UpdateSettingsDto {
   })
   assetTagPrefix?: string;
 
+  @IsOptional()
+  @Matches(/^[A-Z0-9]{1,10}$/, {
+    message: 'accessoryCodePrefix must be 1-10 uppercase letters or digits',
+  })
+  accessoryCodePrefix?: string;
+
   @IsOptional() @IsInt() @Min(1) @Max(365) warrantyAlertDays?: number;
   @IsOptional() @IsInt() @Min(1) @Max(365) licenseAlertDays?: number;
   @IsOptional() @IsInt() @Min(0) @Max(60) maintenanceDueDays?: number;

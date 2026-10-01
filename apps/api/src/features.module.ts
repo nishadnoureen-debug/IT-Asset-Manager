@@ -57,7 +57,8 @@ export class EmployeesModule {}
 @Module({
   controllers: [AssetsController, WarrantiesController, QrController, DocumentsController],
   providers: [AssetsService, QrService],
-  exports: [AssetsService],
+  // Accessories carry QR labels of their own.
+  exports: [AssetsService, QrService],
 })
 export class AssetsModule {}
 
