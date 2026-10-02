@@ -112,6 +112,12 @@ export const LABELS = {
     REPAIR: 'Repair',
     OTHER: 'Other',
   },
+  accessoryUnitStatus: {
+    IN_STOCK: 'In store',
+    ASSIGNED: 'Handed out',
+    DAMAGED: 'Damaged',
+    RETIRED: 'Retired',
+  },
   rentalItemType: {
     WIFI_CARD: 'WiFi card',
     WASHING_MACHINE: 'Washing machine',

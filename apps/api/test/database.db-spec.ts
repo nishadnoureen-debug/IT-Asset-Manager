@@ -22,6 +22,7 @@ const prisma = new PrismaClient();
 const EXPECTED_TABLES = [
   'accessories',
   'accessory_assignments',
+  'accessory_units',
   'activity_logs',
   'asset_assignments',
   'asset_history',

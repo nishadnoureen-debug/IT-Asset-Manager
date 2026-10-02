@@ -47,7 +47,12 @@ export class HandoverPdfService {
         assignedBy: { select: { displayName: true } },
         returnedBy: { select: { displayName: true } },
         previousAssignment: { include: { employee: true, location: true } },
-        accessoryAssignments: { include: { accessory: true } },
+        accessoryAssignments: {
+          include: {
+            accessory: true,
+            units: { select: { code: true }, orderBy: { number: 'asc' } },
+          },
+        },
       },
     });
     const settings = await this.settings.get();
@@ -80,9 +85,10 @@ export class HandoverPdfService {
 
         f.heading('Device Details');
         const accessories = a.accessoryAssignments.map((acc) => {
-          const qty = acc.quantity > 1 ? ` ×${acc.quantity}` : '';
+          const codes = acc.units.map((u) => u.code).join(', ');
+          const which = codes ? ` (${codes})` : acc.quantity > 1 ? ` ×${acc.quantity}` : '';
           const status = form === 'RETURN' ? ` (${label('assignmentStatus', acc.status)})` : '';
-          return `${acc.accessory.name}${qty}${status}`;
+          return `${acc.accessory.name}${which}${status}`;
         });
         f.bullets([
           ['Device Type', a.asset.assetType.name],

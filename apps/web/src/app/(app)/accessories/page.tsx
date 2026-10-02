@@ -1,6 +1,6 @@
 'use client';
 
-import { Download, PackagePlus, Plus, Printer, Undo2 } from 'lucide-react';
+import { PackagePlus, Plus, Printer, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { FilterBar } from '@/components/filter-bar';
@@ -17,7 +17,7 @@ import { api, ApiError, downloadFile } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatMoney, fullName, label } from '@/lib/format';
 import { useApi, useApiMutation, useListParams } from '@/lib/hooks';
-import type { Accessory } from '@/lib/types';
+import type { Accessory, AccessoryUnit } from '@/lib/types';
 
 const DEFAULTS = {
   search: '',
@@ -154,57 +154,83 @@ function AccessoryDialog({
   );
 }
 
-/** The accessory's printed label: the QR, the code, and the two ways to take it away. */
-function AccessoryQr({ accessory }: { accessory: Accessory }) {
+/** Every piece of an accessory: its code, where it is, and the labels to print. */
+function AccessoryPieces({
+  accessory,
+  selected,
+  onToggle,
+}: {
+  accessory: Accessory;
+  /** Pieces ticked for the next hand-out; undefined hides the tick boxes. */
+  selected?: Set<string>;
+  onToggle?: (id: string) => void;
+}) {
   const toast = useToast();
-  const query = useApi<{ dataUrl: string; payload: string }>(`/accessories/${accessory.id}/qr`);
-  const take = (what: 'label' | 'png') =>
-    (what === 'label'
-      ? downloadFile('/accessories/qr/labels', {
-          query: { ids: [accessory.id] },
-          fileName: `${accessory.code}-label.pdf`,
-        })
-      : downloadFile(`/accessories/${accessory.id}/qr/download`, { query: { format: 'png' } })
-    ).catch((e) => toast.error(e));
+  const query = useApi<AccessoryUnit[]>(`/accessories/${accessory.id}/units`);
+  const units = query.data?.data ?? [];
+
+  const sheet = (ids?: string[]) =>
+    downloadFile('/accessories/qr/labels', {
+      query: ids ? { unitIds: ids } : { ids: [accessory.id] },
+      fileName: `${accessory.code}-labels.pdf`,
+    }).catch((e) => toast.error(e));
 
   return (
-    <div className="flex flex-wrap items-center gap-4 rounded-lg border border-slate-200 p-3 dark:border-slate-700">
-      {query.data ? (
-        /* eslint-disable-next-line @next/next/no-img-element */
-        <img
-          src={query.data.data.dataUrl}
-          alt={`QR code for ${accessory.code}`}
-          className="h-24 w-24 rounded border border-slate-200 bg-white p-1 dark:border-slate-700"
-        />
-      ) : (
-        <div className="h-24 w-24 rounded border border-dashed border-slate-200 dark:border-slate-700" />
-      )}
-      <div className="min-w-0 flex-1 space-y-2">
-        <p className="font-mono text-lg font-bold text-slate-900 dark:text-slate-100">
-          {accessory.code}
-        </p>
-        <p className="text-xs text-slate-500">
-          Scanning the label opens this accessory and what is in stock.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Printer className="h-4 w-4" />}
-            onClick={() => take('label')}
-          >
-            Printable label
-          </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            icon={<Download className="h-4 w-4" />}
-            onClick={() => take('png')}
-          >
-            PNG
-          </Button>
-        </div>
+    <div className="rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-3 py-2 dark:border-slate-800">
+        <p className="text-sm font-medium">Pieces ({units.length})</p>
+        <Button
+          variant="secondary"
+          size="sm"
+          icon={<Printer className="h-4 w-4" />}
+          onClick={() => sheet()}
+        >
+          Print all labels
+        </Button>
       </div>
+      {query.isLoading ? (
+        <div className="p-3">
+          <Spinner />
+        </div>
+      ) : units.length ? (
+        <ul className="max-h-72 divide-y divide-slate-100 overflow-auto dark:divide-slate-800">
+          {units.map((u) => (
+            <li key={u.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+              {selected && u.status === 'IN_STOCK' && (
+                <input
+                  type="checkbox"
+                  aria-label={`Hand out ${u.code}`}
+                  checked={selected.has(u.id)}
+                  onChange={() => onToggle?.(u.id)}
+                  className="h-4 w-4 rounded border-slate-300"
+                />
+              )}
+              <span className="font-mono">{u.code}</span>
+              <Badge
+                tone={u.status === 'IN_STOCK' ? 'teal' : u.status === 'ASSIGNED' ? 'green' : 'gray'}
+              >
+                {label('accessoryUnitStatus', u.status)}
+              </Badge>
+              <span className="min-w-0 flex-1 truncate text-xs text-slate-500">
+                {u.assignment?.employee ? fullName(u.assignment.employee) : ''}
+                {u.assignment?.assetAssignment
+                  ? ` · with ${u.assignment.assetAssignment.asset.assetTag}`
+                  : ''}
+                {u.serialNumber ? ` · S/N ${u.serialNumber}` : ''}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`Label for ${u.code}`}
+                icon={<Printer className="h-3.5 w-3.5" />}
+                onClick={() => sheet([u.id])}
+              />
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="p-3 text-sm text-slate-500">No pieces yet — add stock to label them.</p>
+      )}
     </div>
   );
 }
@@ -217,6 +243,7 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
   });
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
+  const [pieces, setPieces] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const assign = useApiMutation<Record<string, unknown>>(
     'post',
@@ -229,18 +256,33 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
   const a = detail.data?.data ?? accessory;
   const active = (detail.data?.data.assignments ?? []).filter((x) => x.status === 'ACTIVE');
 
+  // Ticking pieces decides how many go out; otherwise it is a plain count.
+  const count = pieces.size || quantity;
+
   const handOut = async () => {
     if (!employeeId) return toast.error(new Error('Choose an employee'));
     try {
-      await assign.mutateAsync({ employeeId, quantity });
-      toast.success(`${quantity} × ${a.name} handed out`);
+      await assign.mutateAsync({
+        employeeId,
+        quantity: count,
+        unitIds: pieces.size ? [...pieces] : undefined,
+      });
+      toast.success(`${count} × ${a.name} handed out`);
       setEmployeeId(null);
       setQuantity(1);
+      setPieces(new Set());
       void detail.refetch();
     } catch (e) {
       toast.error(e);
     }
   };
+
+  const togglePiece = (id: string) =>
+    setPieces((chosen) => {
+      const next = new Set(chosen);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
 
   const returnOne = async (id: string) => {
     try {
@@ -274,7 +316,8 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
                 type="number"
                 min={1}
                 max={a.quantityAvailable}
-                value={quantity}
+                value={count}
+                disabled={pieces.size > 0}
                 onChange={(e) => setQuantity(Math.max(1, Number(e.target.value)))}
                 aria-label="Quantity"
               />
@@ -288,7 +331,11 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
             </div>
           </div>
         )}
-        <AccessoryQr accessory={a} />
+        <AccessoryPieces
+          accessory={a}
+          selected={can('accessory.assign') ? pieces : undefined}
+          onToggle={togglePiece}
+        />
         <div>
           <p className="mb-2 text-sm font-medium">Currently handed out ({active.length})</p>
           {detail.isLoading ? (

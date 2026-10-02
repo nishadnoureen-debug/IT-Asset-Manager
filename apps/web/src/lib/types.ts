@@ -269,9 +269,25 @@ export interface Purchase {
   createdBy?: UserRef | null;
 }
 
+export interface AccessoryUnit {
+  id: Id;
+  /** Printed on this piece's label, e.g. ACC-000001-07. */
+  code: string;
+  number: number;
+  status: 'IN_STOCK' | 'ASSIGNED' | 'DAMAGED' | 'RETIRED';
+  serialNumber: string | null;
+  assignmentId: Id | null;
+  assignment?: {
+    id: Id;
+    assignedAt: string;
+    employee: EmployeeRef | null;
+    assetAssignment?: { asset: { id: Id; assetTag: string } } | null;
+  } | null;
+}
+
 export interface Accessory {
   id: Id;
-  /** Stock code printed on the label. */
+  /** Stock code the pieces are numbered from. */
   code: string;
   name: string;
   category: string;

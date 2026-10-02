@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AccessoriesController } from './accessories/accessories.controller';
+import { AccessoryUnitsService } from './accessories/accessory-units.service';
 import { ActivityLogsController } from './activity-logs/activity-logs.controller';
 import { AssetsController } from './assets/assets.controller';
 import { AssetsService } from './assets/assets.service';
@@ -65,7 +66,7 @@ export class AssetsModule {}
 @Module({
   imports: [AssetsModule],
   controllers: [AssignmentsController, AccessoriesController],
-  providers: [AssignmentsService, HandoverPdfService],
+  providers: [AssignmentsService, HandoverPdfService, AccessoryUnitsService],
   exports: [AssignmentsService],
 })
 export class AssignmentsModule {}

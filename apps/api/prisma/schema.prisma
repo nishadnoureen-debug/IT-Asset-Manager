@@ -632,10 +632,48 @@ model Accessory {
   location    Location?             @relation(fields: [locationId], references: [id], onDelete: SetNull)
   purchase    Purchase?             @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
   assignments AccessoryAssignment[]
+  units       AccessoryUnit[]
 
   @@index([category])
   @@index([locationId])
   @@map("accessories")
+}
+
+/// Where one piece of an accessory is: in the store, with someone, broken or written off.
+enum AccessoryUnitStatus {
+  IN_STOCK
+  ASSIGNED
+  DAMAGED
+  RETIRED
+
+  @@map("accessory_unit_status")
+}
+
+/// One physical piece of an accessory, with the code and QR printed on its label.
+model AccessoryUnit {
+  id           String              @id @default(uuid()) @db.Uuid
+  accessoryId  String              @map("accessory_id") @db.Uuid
+  /// The accessory's code and the piece number, e.g. ACC-000001-07.
+  code         String              @unique @db.VarChar(40)
+  /// What the printed QR label points at.
+  qrToken      String              @unique @default(uuid()) @map("qr_token") @db.Uuid
+  /// Position inside the accessory, counting from 1.
+  number       Int
+  serialNumber String?             @map("serial_number") @db.VarChar(120)
+  status       AccessoryUnitStatus @default(IN_STOCK)
+  /// The hand-out that has this piece now.
+  assignmentId String?             @map("assignment_id") @db.Uuid
+  notes        String?
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  accessory  Accessory            @relation(fields: [accessoryId], references: [id], onDelete: Cascade)
+  assignment AccessoryAssignment? @relation(fields: [assignmentId], references: [id], onDelete: SetNull)
+
+  @@unique([accessoryId, number])
+  @@index([status])
+  @@index([assignmentId])
+  @@map("accessory_units")
 }
 
 model AccessoryAssignment {
@@ -661,6 +699,7 @@ model AccessoryAssignment {
   assetAssignment AssetAssignment? @relation(fields: [assetAssignmentId], references: [id], onDelete: SetNull)
   assignedBy      User?            @relation("AccessoryAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
   returnedBy      User?            @relation("AccessoryReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+  units           AccessoryUnit[]
 
   @@index([accessoryId, status])
   @@index([employeeId, status])

@@ -82,22 +82,22 @@ erDiagram
 
 ## Tables
 
-| Area         | Tables                                                               |
-| ------------ | -------------------------------------------------------------------- |
-| Organisation | `departments`, `locations` (hierarchical), `employees`               |
-| Procurement  | `vendors`, `purchases`                                               |
-| Assets       | `asset_types`, `assets`, `asset_assignments`, `asset_history`        |
-| Accessories  | `accessories` (quantity-tracked, coded, QR), `accessory_assignments` |
-| Maintenance  | `maintenance`                                                        |
-| Software     | `software`, `software_licenses`, `software_assignments`              |
-| Requests     | `asset_requests`                                                     |
-| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`                  |
-| Camp rentals | `camps`, `rental_items`, `rentals`                                   |
-| Documents    | `documents` (file metadata; files go to S3-compatible storage)       |
-| Audits       | `audit_sessions`, `audit_items`                                      |
-| Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`    |
-| System       | `notifications`, `activity_logs`, `settings`                         |
-| Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)       |
+| Area         | Tables                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| Organisation | `departments`, `locations` (hierarchical), `employees`                                                  |
+| Procurement  | `vendors`, `purchases`                                                                                  |
+| Assets       | `asset_types`, `assets`, `asset_assignments`, `asset_history`                                           |
+| Accessories  | `accessories` (quantity-tracked, coded), `accessory_units` (one per piece, QR), `accessory_assignments` |
+| Maintenance  | `maintenance`                                                                                           |
+| Software     | `software`, `software_licenses`, `software_assignments`                                                 |
+| Requests     | `asset_requests`                                                                                        |
+| SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`                                                     |
+| Camp rentals | `camps`, `rental_items`, `rentals`                                                                      |
+| Documents    | `documents` (file metadata; files go to S3-compatible storage)                                          |
+| Audits       | `audit_sessions`, `audit_items`                                                                         |
+| Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`                                       |
+| System       | `notifications`, `activity_logs`, `settings`                                                            |
+| Auth         | `refresh_tokens`, `password_reset_tokens` (hashed tokens only)                                          |
 
 `asset_requests` replaces the helpdesk tables from spec §3: equipment is asked for, approved or rejected, and
 then handed over, with a printable form attached to the request.
@@ -106,6 +106,10 @@ single washing time (`start_at` and `end_at`). A `CHECK` keeps a finished rental
 API refuses a period that runs into another rental of the same item, so two employees never hold one card or one
 machine at the same time. `rental_items.status` follows the open rentals: `RENTED` while something is out,
 `AVAILABLE` again once it is back.
+`accessory_units` is one row per physical piece of an accessory: its printed code (`ACC-000012-03`), its QR
+token, and the hand-out holding it. Stock numbers and pieces move together — adding stock creates pieces, handing
+some out marks those pieces `ASSIGNED`, a damaged return writes one off — so `quantity_available` always equals
+the pieces in the store. A `CHECK` keeps `assignment_id` and the `ASSIGNED` status in step.
 `sim_swaps` records each time a line changes hands: who held it, who received it, why, the replacement SIM if
 one was issued, and the device it moved into. Creating a swap or a transfer moves `sim_cards.employee_id` (and
 `sim_number` or `asset_id`) in the same transaction, so the line and its history never disagree; the printable

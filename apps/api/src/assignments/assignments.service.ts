@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { AssetCondition, Prisma } from '@prisma/client';
 import { ASSIGNABLE_STATUSES } from '@itam/shared';
 import { ActivityLogService, type Db } from '../activity-logs/activity-log.service';
+import { AccessoryUnitsService } from '../accessories/accessory-units.service';
 import { employeeSummarySelect } from '../assets/asset-access';
 import { AssetHistoryService } from '../assets/asset-history.service';
 import { AssetsService } from '../assets/assets.service';
@@ -53,6 +54,7 @@ export class AssignmentsService {
     private readonly documents: DocumentsService,
     private readonly notifications: NotificationsService,
     private readonly handoverPdf: HandoverPdfService,
+    private readonly units: AccessoryUnitsService,
   ) {}
 
   private scopeWhere(user: AuthUser): Prisma.AssetAssignmentWhereInput {
@@ -162,7 +164,7 @@ export class AssignmentsService {
       });
       for (const line of mergeLines(dto.accessories ?? [])) {
         await this.takeAccessory(tx, line.accessoryId, line.quantity);
-        await tx.accessoryAssignment.create({
+        const handed = await tx.accessoryAssignment.create({
           data: {
             accessoryId: line.accessoryId,
             employeeId: target.employee!.id,
@@ -172,6 +174,7 @@ export class AssignmentsService {
             conditionAtAssignment: dto.condition,
           },
         });
+        await this.units.take(tx, line.accessoryId, line.quantity, handed.id, line.unitIds);
       }
       const newLocationId = target.location?.id ?? target.employee?.locationId ?? asset.locationId;
       await this.assets.setStatus(tx, assetId, asset.status, 'ASSIGNED', {
@@ -639,11 +642,18 @@ export class AssignmentsService {
         ? { quantityAvailable: { increment: acc.quantity } }
         : { quantityTotal: { decrement: acc.quantity } },
     });
+    await this.units.release(db as Prisma.TransactionClient, acc.id, !usable);
   }
 }
 
-function mergeLines(lines: { accessoryId: string; quantity: number }[]) {
-  const merged = new Map<string, number>();
-  for (const l of lines) merged.set(l.accessoryId, (merged.get(l.accessoryId) ?? 0) + l.quantity);
-  return [...merged].map(([accessoryId, quantity]) => ({ accessoryId, quantity }));
+function mergeLines(lines: { accessoryId: string; quantity: number; unitIds?: string[] }[]) {
+  const merged = new Map<string, { quantity: number; unitIds: string[] }>();
+  for (const l of lines) {
+    const line = merged.get(l.accessoryId) ?? { quantity: 0, unitIds: [] };
+    merged.set(l.accessoryId, {
+      quantity: line.quantity + l.quantity,
+      unitIds: [...line.unitIds, ...(l.unitIds ?? [])],
+    });
+  }
+  return [...merged].map(([accessoryId, line]) => ({ accessoryId, ...line }));
 }

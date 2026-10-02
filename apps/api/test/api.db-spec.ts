@@ -375,18 +375,33 @@ describe('asset lifecycle', () => {
     expect(charger.body.data.code).toMatch(/^ACC-\d{6}$/);
   });
 
-  it('gives an accessory a code and a QR label that scanning finds', async () => {
+  it('gives every piece of an accessory its own code and QR label', async () => {
     const charger = await prisma.accessory.findUniqueOrThrow({ where: { id: chargerId } });
 
-    const qr = await http()
-      .get(api(`/accessories/${chargerId}/qr`))
+    // Five chargers in stock means five labelled pieces, numbered from the accessory's code.
+    const units = await http()
+      .get(api(`/accessories/${chargerId}/units`))
       .set(s.tech.auth)
       .expect(200);
-    expect(qr.body.data.code).toBe(charger.code);
-    expect(qr.body.data.payload).toContain(`/qr/${charger.qrToken}`);
+    expect(units.body.data).toHaveLength(5);
+    expect(units.body.data.map((u: { code: string }) => u.code)).toEqual([
+      `${charger.code}-01`,
+      `${charger.code}-02`,
+      `${charger.code}-03`,
+      `${charger.code}-04`,
+      `${charger.code}-05`,
+    ]);
+    const piece = units.body.data[2] as { id: string; code: string; status: string };
+    expect(piece.status).toBe('IN_STOCK');
+
+    const qr = await http()
+      .get(api(`/accessory-units/${piece.id}/qr`))
+      .set(s.tech.auth)
+      .expect(200);
+    expect(qr.body.data.code).toBe(piece.code);
     expect(qr.body.data.dataUrl.startsWith('data:image/png;base64,')).toBe(true);
 
-    // The printable sheet comes back as a PDF.
+    // One sheet carries a label for every piece of the accessory.
     const labels = await http()
       .get(api(`/accessories/qr/labels?ids=${chargerId}`))
       .set(s.tech.auth)
@@ -400,28 +415,71 @@ describe('asset lifecycle', () => {
     expect(labels.headers['content-type']).toContain('application/pdf');
     expect((labels.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
 
-    // A scanned label, and the code typed by hand, both find the accessory.
-    for (const code of [`https://example.test/qr/${charger.qrToken}`, charger.code.toLowerCase()]) {
-      const found = await http()
-        .post(api('/accessories/scan'))
-        .set(s.tech.auth)
-        .send({ code })
-        .expect(200);
-      expect(found.body.data.id).toBe(chargerId);
-    }
-    const missing = await http()
+    // Handing out a named piece puts that one with the employee.
+    const handOut = await http()
+      .post(api(`/accessories/${chargerId}/assign`))
+      .set(s.admin.auth)
+      .send({ employeeId: ids.bob, quantity: 1, unitIds: [piece.id] })
+      .expect(201);
+    const held = await prisma.accessoryUnit.findUniqueOrThrow({ where: { id: piece.id } });
+    expect(held.status).toBe('ASSIGNED');
+    expect(held.assignmentId).toBe(handOut.body.data.id);
+
+    // Scanning its label says which piece it is and who has it.
+    const scanned = await http()
       .post(api('/accessories/scan'))
       .set(s.tech.auth)
-      .send({ code: 'ACC-999999' })
-      .expect(404);
-    expect(missing.body.error.code).toBe('NOT_FOUND');
-
-    // A new token retires the labels printed before it.
-    const regenerated = await http()
-      .post(api(`/accessories/${chargerId}/qr/regenerate`))
-      .set(s.admin.auth)
+      .send({ code: `https://example.test/qr/${held.qrToken}` })
       .expect(200);
-    expect(regenerated.body.data.qrToken).not.toBe(charger.qrToken);
+    expect(scanned.body.data.unit.code).toBe(piece.code);
+    expect(scanned.body.data.accessory.id).toBe(chargerId);
+    expect(scanned.body.data.unit.assignment.employee.id).toBe(ids.bob);
+
+    // Typing the piece's code finds it too; an unknown one does not.
+    const typed = await http()
+      .post(api('/accessories/scan'))
+      .set(s.tech.auth)
+      .send({ code: piece.code.toLowerCase() })
+      .expect(200);
+    expect(typed.body.data.unit.id).toBe(piece.id);
+    await http()
+      .post(api('/accessories/scan'))
+      .set(s.tech.auth)
+      .send({ code: 'ACC-999999-99' })
+      .expect(404);
+
+    // Giving it back puts that piece back in the store.
+    await http()
+      .post(api(`/accessory-assignments/${handOut.body.data.id}/return`))
+      .set(s.admin.auth)
+      .send({ condition: 'GOOD' })
+      .expect(200);
+    const back = await prisma.accessoryUnit.findUniqueOrThrow({ where: { id: piece.id } });
+    expect(back.status).toBe('IN_STOCK');
+    expect(back.assignmentId).toBeNull();
+
+    // More stock means more pieces, carrying on from the last number.
+    await http()
+      .patch(api(`/accessories/${chargerId}`))
+      .set(s.admin.auth)
+      .send({ quantityTotal: 7 })
+      .expect(200);
+    const grown = await prisma.accessoryUnit.findMany({
+      where: { accessoryId: chargerId, status: { not: 'RETIRED' } },
+    });
+    expect(grown).toHaveLength(7);
+    expect(grown.map((u) => u.code)).toContain(`${charger.code}-07`);
+
+    // Taking the stock back down retires the spare pieces, newest first.
+    await http()
+      .patch(api(`/accessories/${chargerId}`))
+      .set(s.admin.auth)
+      .send({ quantityTotal: 5 })
+      .expect(200);
+    const left = await prisma.accessoryUnit.findMany({
+      where: { accessoryId: chargerId, status: { not: 'RETIRED' } },
+    });
+    expect(left).toHaveLength(5);
   });
 
   it('generates tags, records history and activity, and validates input', async () => {

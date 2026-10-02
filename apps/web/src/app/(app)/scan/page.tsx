@@ -26,7 +26,7 @@ import { AssetActionDialog } from '@/features/assets/asset-dialogs';
 import { MaintenanceDialog } from '@/features/maintenance/maintenance-form';
 import { api, ApiError } from '@/lib/api-client';
 import { daysUntil, formatDate, fullName, label } from '@/lib/format';
-import type { Accessory, ScanResult } from '@/lib/types';
+import type { Accessory, AccessoryUnit, ScanResult } from '@/lib/types';
 
 function ResultCard({
   result,
@@ -244,8 +244,14 @@ export default function ScanPage() {
         // Accessories carry labels of their own; a code that is not an asset may be one.
         if (e instanceof ApiError && e.code === 'NOT_FOUND') {
           try {
-            const { data } = await api.post<Accessory>('/accessories/scan', { code: value });
-            router.push(`/accessories?search=${encodeURIComponent(data.code)}`);
+            const { data } = await api.post<{ unit: AccessoryUnit | null; accessory: Accessory }>(
+              '/accessories/scan',
+              { code: value },
+            );
+            // The piece's own code finds it in the list, with its accessory around it.
+            router.push(
+              `/accessories?search=${encodeURIComponent(data.unit?.code ?? data.accessory.code)}`,
+            );
             return;
           } catch {
             // Not an accessory either; fall through to the message below.

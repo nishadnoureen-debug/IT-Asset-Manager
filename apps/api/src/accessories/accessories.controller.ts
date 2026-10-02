@@ -45,6 +45,7 @@ import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-que
 import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrService, parseScannedCode } from '../qr/qr.service';
+import { AccessoryUnitsService, unitSelect } from './accessory-units.service';
 import { SettingsService } from '../settings/settings.service';
 
 class CreateAccessoryDto {
@@ -77,6 +78,8 @@ class AccessoryQueryDto extends PaginationQueryDto {
 class AssignAccessoryDto {
   @IsUUID() employeeId!: string;
   @Type(() => Number) @IsInt() @Min(1) @Max(100) quantity: number = 1;
+  /** The pieces to hand over; left out, the lowest-numbered ones in the store are used. */
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @IsUUID('all', { each: true }) unitIds?: string[];
   @IsOptional() @IsEnum(AssetCondition) condition?: AssetCondition;
   @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
@@ -94,12 +97,29 @@ class ScanAccessoryDto {
   @IsString() @MinLength(1) @MaxLength(512) code!: string;
 }
 
+const csv = ({ value }: { value: unknown }) =>
+  typeof value === 'string' ? value.split(',').filter(Boolean) : value;
+
 class LabelsQueryDto {
-  @Transform(({ value }) => (typeof value === 'string' ? value.split(',').filter(Boolean) : value))
+  /** Every piece of these accessories. */
+  @IsOptional()
+  @Transform(csv)
   @IsArray()
   @ArrayMaxSize(240)
   @IsUUID('all', { each: true })
-  ids!: string[];
+  ids?: string[];
+  /** Just these pieces. */
+  @IsOptional()
+  @Transform(csv)
+  @IsArray()
+  @ArrayMaxSize(240)
+  @IsUUID('all', { each: true })
+  unitIds?: string[];
+}
+
+class UpdateAccessoryUnitDto {
+  @IsOptional() @Transform(trim) @IsString() @MaxLength(120) serialNumber?: string;
+  @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
 
 @ApiTags('Accessories')
@@ -110,6 +130,7 @@ export class AccessoriesController {
     private readonly activity: ActivityLogService,
     private readonly settings: SettingsService,
     private readonly qr: QrService,
+    private readonly units: AccessoryUnitsService,
   ) {}
 
   @Get('accessories')
@@ -119,7 +140,13 @@ export class AccessoriesController {
       deletedAt: null,
       category: q.category,
       locationId: q.locationId,
-      OR: searchFilter(q.search, ['code', 'name', 'sku', 'brand', 'model']),
+      OR: q.search
+        ? [
+            ...(searchFilter(q.search, ['code', 'name', 'sku', 'brand', 'model']) ?? []),
+            // A piece's code finds the accessory it belongs to.
+            { units: { some: { code: { contains: q.search, mode: 'insensitive' } } } },
+          ]
+        : undefined,
     };
     if (q.lowStock) {
       // Column-to-column comparison is not expressible in the Prisma filter API.
@@ -187,6 +214,7 @@ export class AccessoriesController {
           quantityAvailable: dto.quantityTotal ?? 0,
         },
       });
+      await this.units.add(tx, accessory.id, dto.quantityTotal ?? 0);
       await this.activity.record(
         {
           actorId: user.id,
@@ -223,8 +251,11 @@ export class AccessoriesController {
       existing as unknown as Record<string, unknown>,
       dto as Record<string, unknown>,
     );
+    const delta = (dto.quantityTotal ?? existing.quantityTotal) - existing.quantityTotal;
     return this.prisma.$transaction(async (tx) => {
       const accessory = await tx.accessory.update({ where: { id }, data });
+      if (delta > 0) await this.units.add(tx, id, delta);
+      if (delta < 0) await this.units.retire(tx, id, -delta);
       if (changes)
         await this.activity.record(
           {
@@ -299,6 +330,7 @@ export class AccessoriesController {
         },
         include: { accessory: { select: { id: true, name: true } } },
       });
+      await this.units.take(tx, id, dto.quantity, assignment.id, dto.unitIds);
       await this.activity.record(
         {
           actorId: user.id,
@@ -364,6 +396,7 @@ export class AccessoriesController {
           ? { quantityAvailable: { increment: assignment.quantity } }
           : { quantityTotal: { decrement: assignment.quantity } },
       });
+      await this.units.release(tx, id, !usable);
       await this.activity.record(
         {
           actorId: user.id,
@@ -383,25 +416,33 @@ export class AccessoriesController {
 
   // ── Labels ────────────────────────────────────────────────────────────────
 
-  /** The QR image for one accessory, to show on screen. */
-  @Get('accessories/:id/qr')
+  /** Every piece of an accessory, with its code and who is holding it. */
+  @Get('accessories/:id/units')
   @RequirePermissions('accessory.view', 'accessory.manage')
-  async qrCode(@Param('id', ParseUUIDPipe) id: string) {
-    const accessory = await this.find(id);
-    return this.qr.codeImage(accessory.code, accessory.qrToken);
+  async listUnits(@Param('id', ParseUUIDPipe) id: string) {
+    await this.find(id);
+    return this.units.list(id);
   }
 
-  /** The QR on its own, as a PNG or an SVG. */
-  @Get('accessories/:id/qr/download')
+  /** The QR image of one piece, to show on screen. */
+  @Get('accessory-units/:id/qr')
+  @RequirePermissions('accessory.view', 'accessory.manage')
+  async unitQr(@Param('id', ParseUUIDPipe) id: string) {
+    const unit = await this.findUnit(id);
+    return this.qr.codeImage(unit.code, unit.qrToken);
+  }
+
+  /** One piece's QR on its own, as a PNG or an SVG. */
+  @Get('accessory-units/:id/qr/download')
   @SkipEnvelope()
   @RequirePermissions('accessory.view', 'accessory.manage')
-  async qrDownload(
+  async unitQrDownload(
     @Param('id', ParseUUIDPipe) id: string,
     @Query() q: QrFormatQueryDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const accessory = await this.find(id);
-    const file = await this.qr.image(accessory.qrToken, q.format, accessory.code);
+    const unit = await this.findUnit(id);
+    const file = await this.qr.image(unit.qrToken, q.format, unit.code);
     res.set({
       'Content-Type': file.contentType,
       'Content-Disposition': `attachment; filename="${file.fileName}"`,
@@ -409,24 +450,39 @@ export class AccessoriesController {
     return new StreamableFile(file.body);
   }
 
-  /** A sheet of printable labels: QR, code and name, three to a row. */
+  /**
+   * A sheet of printable labels, one per piece: QR, piece code and the accessory's name. Give it
+   * accessory ids for every piece of those accessories, or piece ids for just those.
+   */
   @Get('accessories/qr/labels')
   @SkipEnvelope()
   @RequirePermissions('accessory.view', 'accessory.manage')
   async labels(@Query() q: LabelsQueryDto, @Res({ passthrough: true }) res: Response) {
-    if (!q.ids.length) throw Errors.badRequest('Select at least one accessory', 'ids');
-    const accessories = await this.prisma.accessory.findMany({
-      where: { id: { in: q.ids }, deletedAt: null },
-      select: { code: true, name: true, sku: true, qrToken: true },
-      orderBy: { code: 'asc' },
+    const ids = [...(q.ids ?? []), ...(q.unitIds ?? [])];
+    if (!ids.length) throw Errors.badRequest('Select at least one accessory', 'ids');
+    const units = await this.prisma.accessoryUnit.findMany({
+      where: {
+        status: { not: 'RETIRED' },
+        OR: [
+          ...(q.ids?.length ? [{ accessoryId: { in: q.ids } }] : []),
+          ...(q.unitIds?.length ? [{ id: { in: q.unitIds } }] : []),
+        ],
+      },
+      orderBy: [{ accessory: { code: 'asc' } }, { number: 'asc' }],
+      select: {
+        code: true,
+        qrToken: true,
+        serialNumber: true,
+        accessory: { select: { name: true, sku: true } },
+      },
     });
-    if (!accessories.length) throw Errors.notFound('Accessories');
+    if (!units.length) throw Errors.notFound('Accessory pieces');
     const pdf = await this.qr.renderLabels(
-      accessories.map((a) => ({
-        code: a.code,
-        name: a.name,
-        note: a.sku ? `SKU ${a.sku}` : null,
-        qrToken: a.qrToken,
+      units.map((u) => ({
+        code: u.code,
+        name: u.accessory.name,
+        note: u.serialNumber ? `S/N ${u.serialNumber}` : u.accessory.sku,
+        qrToken: u.qrToken,
       })),
     );
     res.set({
@@ -436,13 +492,13 @@ export class AccessoriesController {
     return new StreamableFile(pdf);
   }
 
-  /** New QR token: the labels printed before stop working. */
-  @Post('accessories/:id/qr/regenerate')
+  /** New QR token for one piece: the label printed before it stops working. */
+  @Post('accessory-units/:id/qr/regenerate')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('accessory.manage')
-  async regenerateQr(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
-    const accessory = await this.find(id);
-    const updated = await this.prisma.accessory.update({
+  async regenerateUnitQr(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const unit = await this.findUnit(id);
+    const updated = await this.prisma.accessoryUnit.update({
       where: { id },
       data: { qrToken: randomUUID() },
     });
@@ -450,37 +506,82 @@ export class AccessoriesController {
       actorId: user.id,
       action: 'accessory.qr_regenerate',
       entityType: 'accessory',
-      entityId: id,
-      oldValues: { code: accessory.code },
+      entityId: unit.accessoryId,
+      oldValues: { code: unit.code },
     });
     return this.qr.codeImage(updated.code, updated.qrToken);
   }
 
-  /** Resolves a scanned label, an accessory code or a SKU to the accessory itself. */
+  /** Records the serial number written on a piece. */
+  @Patch('accessory-units/:id')
+  @RequirePermissions('accessory.manage')
+  async updateUnit(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateAccessoryUnitDto,
+    @CurrentUser() user: AuthUser,
+  ) {
+    const unit = await this.findUnit(id);
+    const updated = await this.prisma.accessoryUnit.update({
+      where: { id },
+      data: { serialNumber: dto.serialNumber ?? null, notes: dto.notes ?? null },
+    });
+    await this.activity.recordSafely({
+      actorId: user.id,
+      action: 'accessory.unit_update',
+      entityType: 'accessory',
+      entityId: unit.accessoryId,
+      newValues: { code: unit.code, ...dto },
+    });
+    return updated;
+  }
+
+  /**
+   * Resolves a scanned label to the piece it is on, with the accessory it belongs to and whoever is
+   * holding it. An accessory's own code or SKU finds the accessory itself.
+   */
   @Post('accessories/scan')
   @HttpCode(HttpStatus.OK)
   @RequirePermissions('accessory.view', 'accessory.manage')
   async scan(@Body() dto: ScanAccessoryDto) {
     const { token, text } = parseScannedCode(dto.code);
+    const unit = await this.prisma.accessoryUnit.findFirst({
+      where: token ? { qrToken: token } : { code: { equals: text, mode: 'insensitive' } },
+      select: {
+        ...unitSelect,
+        accessory: { select: { id: true, code: true, name: true, category: true } },
+        assignment: {
+          select: {
+            id: true,
+            assignedAt: true,
+            employee: {
+              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+            },
+          },
+        },
+      },
+    });
+    if (unit) return { unit, accessory: unit.accessory };
     const accessory = await this.prisma.accessory.findFirst({
       where: {
         deletedAt: null,
-        ...(token
-          ? { qrToken: token }
-          : {
-              OR: [
-                { code: { equals: text, mode: 'insensitive' } },
-                { sku: { equals: text, mode: 'insensitive' } },
-              ],
-            }),
+        OR: [
+          { code: { equals: text, mode: 'insensitive' } },
+          { sku: { equals: text, mode: 'insensitive' } },
+        ],
       },
       include: { location: { select: { id: true, name: true } } },
     });
     if (!accessory) throw Errors.notFound('No accessory matches this code');
-    return accessory;
+    return { unit: null, accessory };
   }
 
   // ── helpers ───────────────────────────────────────────────────────────────
+
+  private async findUnit(id: string) {
+    const unit = await this.prisma.accessoryUnit.findUnique({ where: { id } });
+    if (!unit) throw Errors.notFound('Accessory piece');
+    return unit;
+  }
 
   private async find(id: string) {
     const accessory = await this.prisma.accessory.findFirst({ where: { id, deletedAt: null } });

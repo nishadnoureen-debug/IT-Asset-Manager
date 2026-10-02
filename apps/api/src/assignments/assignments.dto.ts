@@ -26,6 +26,8 @@ export const SIGNATURE_MAX = 700_000;
 export class AccessoryLineDto {
   @IsUUID() accessoryId!: string;
   @IsInt() @Min(1) @Max(100) quantity: number = 1;
+  /** The pieces to hand over; left out, the lowest-numbered ones in the store are used. */
+  @IsOptional() @IsArray() @ArrayMaxSize(100) @IsUUID('all', { each: true }) unitIds?: string[];
 }
 
 export class AssignAssetDto {
