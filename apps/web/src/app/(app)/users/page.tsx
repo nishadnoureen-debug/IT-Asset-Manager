@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
 import { Dialog } from '@/components/ui/dialog';
-import { Checkbox, Field, FormError, Input } from '@/components/ui/form';
+import { Checkbox, Field, FormError, Input, PasswordInput } from '@/components/ui/form';
 import { EmptyState } from '@/components/ui/states';
 import { Tabs } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
@@ -131,9 +131,8 @@ function UserDialog({
             }
           >
             {(p) => (
-              <Input
+              <PasswordInput
                 {...p}
-                type="password"
                 autoComplete="new-password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}

@@ -12,6 +12,7 @@ import {
   FormError,
   FormGrid,
   Input,
+  PasswordInput,
   Select,
   Textarea,
 } from '@/components/ui/form';
@@ -154,7 +155,7 @@ export function LicenseDialog({
             label="Licence key"
             hint={editing ? 'Leave empty to keep the current key' : 'Stored encrypted'}
           >
-            {(p) => <Input {...p} type="password" autoComplete="off" {...register('licenseKey')} />}
+            {(p) => <PasswordInput {...p} autoComplete="off" {...register('licenseKey')} />}
           </Field>
         </FormGrid>
         <Field label="Notes">{(p) => <Textarea {...p} rows={2} {...register('notes')} />}</Field>

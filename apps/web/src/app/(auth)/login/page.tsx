@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { Field, FormError, Input } from '@/components/ui/form';
+import { Field, FormError, Input, PasswordInput } from '@/components/ui/form';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import type { RegistrationOptions } from '@/lib/types';
@@ -101,9 +101,8 @@ export default function LoginPage() {
         </Field>
         <Field label="Password" error={errors.password?.message} required>
           {(p) => (
-            <Input
+            <PasswordInput
               {...p}
-              type="password"
               autoComplete="current-password"
               {...register('password', { required: 'Password is required' })}
             />

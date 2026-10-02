@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { PASSWORD_POLICY } from '@itam/shared';
 import { Button, ButtonLink } from '@/components/ui/button';
-import { Field, FormError, Input } from '@/components/ui/form';
+import { Field, FormError, Input, PasswordInput } from '@/components/ui/form';
 import { Spinner } from '@/components/ui/states';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
@@ -189,9 +189,8 @@ export default function RegisterPage() {
         hint={PASSWORD_POLICY.description}
       >
         {(p) => (
-          <Input
+          <PasswordInput
             {...p}
-            type="password"
             autoComplete="new-password"
             {...register('password', {
               required: 'Choose a password',
@@ -202,9 +201,8 @@ export default function RegisterPage() {
       </Field>
       <Field label="Confirm password" required error={errors.confirm?.message}>
         {(p) => (
-          <Input
+          <PasswordInput
             {...p}
-            type="password"
             autoComplete="new-password"
             {...register('confirm', {
               validate: (v) => v === watch('password') || 'Passwords do not match',

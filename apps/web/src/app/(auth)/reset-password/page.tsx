@@ -6,7 +6,7 @@ import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { PASSWORD_POLICY } from '@itam/shared';
 import { Button } from '@/components/ui/button';
-import { Field, FormError, Input } from '@/components/ui/form';
+import { Field, FormError, Input, PasswordInput } from '@/components/ui/form';
 import { api, ApiError } from '@/lib/api-client';
 
 interface FormValues {
@@ -77,9 +77,8 @@ export default function ResetPasswordPage() {
         required
       >
         {(p) => (
-          <Input
+          <PasswordInput
             {...p}
-            type="password"
             autoComplete="new-password"
             {...register('password', {
               required: 'Password is required',
@@ -90,9 +89,8 @@ export default function ResetPasswordPage() {
       </Field>
       <Field label="Confirm password" error={errors.confirm?.message} required>
         {(p) => (
-          <Input
+          <PasswordInput
             {...p}
-            type="password"
             autoComplete="new-password"
             {...register('confirm', {
               validate: (v) => v === watch('password') || 'Passwords do not match',

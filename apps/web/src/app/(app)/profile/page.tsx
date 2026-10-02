@@ -6,7 +6,7 @@ import { PASSWORD_POLICY } from '@itam/shared';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader, DetailList, PageHeader } from '@/components/ui/card';
-import { Field, FormError, Input } from '@/components/ui/form';
+import { Field, FormError, Input, PasswordInput } from '@/components/ui/form';
 import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
@@ -95,9 +95,8 @@ export default function ProfilePage() {
               <FormError message={errors.root?.message} />
               <Field label="Current password" required error={errors.currentPassword?.message}>
                 {(p) => (
-                  <Input
+                  <PasswordInput
                     {...p}
-                    type="password"
                     autoComplete="current-password"
                     {...register('currentPassword', { required: 'Required' })}
                   />
@@ -110,9 +109,8 @@ export default function ProfilePage() {
                 hint={PASSWORD_POLICY.description}
               >
                 {(p) => (
-                  <Input
+                  <PasswordInput
                     {...p}
-                    type="password"
                     autoComplete="new-password"
                     {...register('newPassword', {
                       required: 'Required',
@@ -126,9 +124,8 @@ export default function ProfilePage() {
               </Field>
               <Field label="Confirm new password" required error={errors.confirm?.message}>
                 {(p) => (
-                  <Input
+                  <PasswordInput
                     {...p}
-                    type="password"
                     autoComplete="new-password"
                     {...register('confirm', {
                       validate: (v) => v === watch('newPassword') || 'Passwords do not match',

@@ -1,5 +1,6 @@
 import clsx from 'clsx';
-import { forwardRef, useId } from 'react';
+import { Eye, EyeOff } from 'lucide-react';
+import { forwardRef, useId, useState } from 'react';
 
 const control =
   'block w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 disabled:bg-slate-50 disabled:text-slate-500 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder:text-slate-500 dark:disabled:bg-slate-800 aria-[invalid=true]:border-red-500';
@@ -9,6 +10,41 @@ export const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTML
     return <input ref={ref} className={clsx(control, 'h-10', className)} {...props} />;
   },
 );
+
+/**
+ * A password box with an eye to show what was typed. The field is a password again as soon as it is
+ * hidden, so nothing is left on screen; browsers still offer to save and fill it.
+ */
+export const PasswordInput = forwardRef<
+  HTMLInputElement,
+  Omit<React.InputHTMLAttributes<HTMLInputElement>, 'type'>
+>(function PasswordInput({ className, ...props }, ref) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="relative">
+      <input
+        ref={ref}
+        type={shown ? 'text' : 'password'}
+        className={clsx(control, 'h-10 pr-10', className)}
+        {...props}
+      />
+      <button
+        type="button"
+        onClick={() => setShown((was) => !was)}
+        aria-label={shown ? 'Hide password' : 'Show password'}
+        aria-pressed={shown}
+        tabIndex={-1}
+        className="absolute inset-y-0 right-0 flex w-10 items-center justify-center rounded-r-lg text-slate-400 hover:text-slate-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/30 dark:hover:text-slate-200"
+      >
+        {shown ? (
+          <EyeOff className="h-4 w-4" aria-hidden />
+        ) : (
+          <Eye className="h-4 w-4" aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+});
 
 export const Textarea = forwardRef<
   HTMLTextAreaElement,
