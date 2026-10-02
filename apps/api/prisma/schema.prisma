@@ -640,6 +640,7 @@ model Accessory {
   purchase    Purchase?             @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
   assignments AccessoryAssignment[]
   units       AccessoryUnit[]
+  documents   Document[]
 
   @@index([category])
   @@index([locationId])
@@ -912,6 +913,7 @@ model Document {
   checksumSha256    String?      @map("checksum_sha256") @db.Char(64)
   // Owning entity — nullable FKs keep referential integrity (vs. polymorphic entity_type/entity_id).
   assetId           String?      @map("asset_id") @db.Uuid
+  accessoryId       String?      @map("accessory_id") @db.Uuid
   assignmentId      String?      @map("assignment_id") @db.Uuid
   maintenanceId     String?      @map("maintenance_id") @db.Uuid
   purchaseId        String?      @map("purchase_id") @db.Uuid
@@ -924,6 +926,7 @@ model Document {
   deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
   asset           Asset?           @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  accessory       Accessory?       @relation(fields: [accessoryId], references: [id], onDelete: Restrict)
   assignment      AssetAssignment? @relation(fields: [assignmentId], references: [id], onDelete: Restrict)
   maintenance     Maintenance?     @relation(fields: [maintenanceId], references: [id], onDelete: Restrict)
   purchase        Purchase?        @relation(fields: [purchaseId], references: [id], onDelete: Restrict)
@@ -934,6 +937,7 @@ model Document {
   uploadedBy      User?            @relation("DocumentUploadedBy", fields: [uploadedById], references: [id], onDelete: SetNull)
 
   @@index([assetId])
+  @@index([accessoryId])
   @@index([assignmentId])
   @@index([maintenanceId])
   @@index([purchaseId])

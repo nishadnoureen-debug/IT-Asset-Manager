@@ -43,6 +43,7 @@ import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
+import { documentSelect } from '../documents/documents.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrService, parseScannedCode } from '../qr/qr.service';
 import { AccessoryUnitsService, unitSelect } from './accessory-units.service';
@@ -183,6 +184,13 @@ export class AccessoriesController {
       include: {
         location: { select: { id: true, name: true } },
         purchase: { select: { id: true, orderNumber: true } },
+        documents: { where: { deletedAt: null }, select: documentSelect },
+        _count: {
+          select: {
+            assignments: true,
+            units: { where: { status: { not: 'RETIRED' } } },
+          },
+        },
         assignments: {
           orderBy: { assignedAt: 'desc' },
           take: 100,

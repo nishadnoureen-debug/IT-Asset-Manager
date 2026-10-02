@@ -470,6 +470,32 @@ describe('asset lifecycle', () => {
     expect(grown).toHaveLength(7);
     expect(grown.map((u) => u.code)).toContain(`${charger.code}-07`);
 
+    // The accessory reads like an asset: its stock, its pieces and its papers in one place.
+    const detail = await http()
+      .get(api(`/accessories/${chargerId}`))
+      .set(s.tech.auth)
+      .expect(200);
+    expect(detail.body.data.quantityTotal).toBe(7);
+    expect(detail.body.data.quantityAvailable).toBe(7);
+    expect(detail.body.data._count.units).toBe(7);
+    expect(detail.body.data._count.assignments).toBeGreaterThan(0);
+    expect(Array.isArray(detail.body.data.documents)).toBe(true);
+
+    // An invoice can hang off the accessory, the way it does off an asset.
+    const upload = await http()
+      .post(api('/documents'))
+      .set(s.admin.auth)
+      .field('type', 'INVOICE')
+      .field('accessoryId', chargerId)
+      .attach('file', Buffer.from('%PDF-1.4 charger invoice'), 'chargers.pdf')
+      .expect(201);
+    expect(upload.body.data.accessoryId).toBe(chargerId);
+    const withDoc = await http()
+      .get(api(`/accessories/${chargerId}`))
+      .set(s.tech.auth)
+      .expect(200);
+    expect(withDoc.body.data.documents).toHaveLength(1);
+
     // Taking the stock back down retires the spare pieces, newest first.
     await http()
       .patch(api(`/accessories/${chargerId}`))

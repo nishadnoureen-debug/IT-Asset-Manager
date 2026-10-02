@@ -304,6 +304,10 @@ export interface Accessory {
   notes: string | null;
   locationId: Id | null;
   location: Ref | null;
+  purchaseId?: Id | null;
+  purchase?: { id: Id; orderNumber: string | null } | null;
+  documents?: DocumentItem[];
+  _count?: { assignments: number; units: number };
   assignments?: (AccessoryAssignment & {
     assetAssignment: { id: Id; asset: { id: Id; assetTag: string } } | null;
   })[];

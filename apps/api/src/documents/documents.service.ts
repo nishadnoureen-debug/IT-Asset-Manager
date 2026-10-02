@@ -13,6 +13,7 @@ export type DocumentOwner = Partial<
   Pick<
     Prisma.DocumentUncheckedCreateInput,
     | 'assetId'
+    | 'accessoryId'
     | 'assignmentId'
     | 'maintenanceId'
     | 'purchaseId'
@@ -25,6 +26,7 @@ export type DocumentOwner = Partial<
 
 export const OWNER_FIELDS = [
   'assetId',
+  'accessoryId',
   'assignmentId',
   'maintenanceId',
   'purchaseId',
@@ -43,6 +45,7 @@ export const documentSelect = {
   sizeBytes: true,
   createdAt: true,
   assetId: true,
+  accessoryId: true,
   assignmentId: true,
   maintenanceId: true,
   purchaseId: true,
@@ -213,6 +216,11 @@ export class DocumentsService {
       checks.push([
         'Asset',
         this.prisma.asset.findFirst({ where: { id: owner.assetId, deletedAt: null } }),
+      ]);
+    if (owner.accessoryId)
+      checks.push([
+        'Accessory',
+        this.prisma.accessory.findFirst({ where: { id: owner.accessoryId, deletedAt: null } }),
       ]);
     if (owner.assignmentId)
       checks.push([
