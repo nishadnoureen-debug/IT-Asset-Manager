@@ -93,7 +93,7 @@ erDiagram
 | Requests     | `asset_requests`                                                                                        |
 | SIM cards    | `sim_plans`, `sim_cards`, `sim_usages`, `sim_swaps`                                                     |
 | Camp rentals | `camps`, `rental_items`, `rentals`                                                                      |
-| Documents    | `documents` (file metadata; files go to S3-compatible storage)                                          |
+| Documents    | `documents` (file metadata on an asset, accessory, purchase, licence, request, audit or employee)       |
 | Audits       | `audit_sessions`, `audit_items`                                                                         |
 | Access       | `users`, `roles`, `permissions`, `user_roles`, `role_permissions`                                       |
 | System       | `notifications`, `activity_logs`, `settings`                                                            |
