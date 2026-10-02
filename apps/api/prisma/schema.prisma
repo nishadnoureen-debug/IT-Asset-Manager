@@ -269,6 +269,7 @@ enum NotificationType {
   REQUEST_UPDATE
   AUDIT_ASSIGNED
   ASSIGNMENT_ACKNOWLEDGEMENT
+  ASSIGNMENT_APPROVAL
   SYSTEM
 
   @@map("notification_type")
@@ -546,7 +547,11 @@ model AssetAssignment {
   returnedById          String?          @map("returned_by_id") @db.Uuid
   conditionAtAssignment AssetCondition   @map("condition_at_assignment")
   conditionAtReturn     AssetCondition?  @map("condition_at_return")
+  /// Signed on the spot at hand-over, when the employee signed the pad.
   acknowledgedAt        DateTime?        @map("acknowledged_at") @db.Timestamptz(6)
+  /// Countersigned in the app by the manager of the employee's department.
+  approvedAt            DateTime?        @map("approved_at") @db.Timestamptz(6)
+  approvedById          String?          @map("approved_by_id") @db.Uuid
   /// The assignment this one replaced when created by a transfer.
   previousAssignmentId  String?          @unique @map("previous_assignment_id") @db.Uuid
   transferReason        String?          @map("transfer_reason")
@@ -560,6 +565,7 @@ model AssetAssignment {
   location             Location?             @relation(fields: [locationId], references: [id], onDelete: Restrict)
   assignedBy           User?                 @relation("AssignmentAssignedBy", fields: [assignedById], references: [id], onDelete: SetNull)
   returnedBy           User?                 @relation("AssignmentReturnedBy", fields: [returnedById], references: [id], onDelete: SetNull)
+  approvedBy           User?                 @relation("AssignmentApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
   previousAssignment   AssetAssignment?      @relation("AssignmentTransferChain", fields: [previousAssignmentId], references: [id], onDelete: Restrict)
   nextAssignment       AssetAssignment?      @relation("AssignmentTransferChain")
   accessoryAssignments AccessoryAssignment[]
@@ -567,6 +573,7 @@ model AssetAssignment {
   documents            Document[]
 
   @@index([assetId, assignedAt(sort: Desc)])
+  @@index([approvedAt])
   @@index([employeeId, status])
   @@index([locationId])
   @@index([status])
@@ -1036,6 +1043,7 @@ model User {
   assetsUpdated             Asset[]               @relation("AssetUpdatedBy")
   assignmentsMade           AssetAssignment[]     @relation("AssignmentAssignedBy")
   returnsProcessed          AssetAssignment[]     @relation("AssignmentReturnedBy")
+  handoversApproved         AssetAssignment[]     @relation("AssignmentApprovedBy")
   assetHistory              AssetHistory[]        @relation("AssetHistoryPerformedBy")
   accessoryAssignmentsMade  AccessoryAssignment[] @relation("AccessoryAssignedBy")
   accessoryReturnsProcessed AccessoryAssignment[] @relation("AccessoryReturnedBy")

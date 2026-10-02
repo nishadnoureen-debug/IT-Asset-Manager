@@ -19,8 +19,9 @@ export const PERMISSIONS = {
   ASSET_ASSIGN: 'asset.assign',
   ASSET_RETURN: 'asset.return',
   ASSET_TRANSFER: 'asset.transfer',
-  ASSET_ACKNOWLEDGE: 'asset.acknowledge',
   ASSET_REPORT_LOST: 'asset.report_lost',
+  /** Countersign a hand-over to the department's people. */
+  ASSIGNMENT_APPROVE: 'assignment.approve',
   ASSET_RETIRE: 'asset.retire',
   ASSET_DISPOSE: 'asset.dispose',
   ASSET_TYPE_MANAGE: 'asset_type.manage',
@@ -169,10 +170,11 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly PermissionKey[]> = {
     P.NOTIFICATION_VIEW,
   ],
 
-  // Assets/employees within own department. Approval permissions are added when approvals are configured.
+  // Assets/employees within own department, and the hand-overs to their people.
   [ROLES.DEPARTMENT_MANAGER]: [
     P.DASHBOARD_VIEW,
     P.ASSET_VIEW_DEPARTMENT,
+    P.ASSIGNMENT_APPROVE,
     P.EMPLOYEE_VIEW_DEPARTMENT,
     P.DEPARTMENT_VIEW,
     P.LOCATION_VIEW,
@@ -184,11 +186,10 @@ export const ROLE_PERMISSIONS: Record<RoleName, readonly PermissionKey[]> = {
     P.NOTIFICATION_VIEW,
   ],
 
-  // Own profile/assets, acknowledgements, issue/loss reports and own tickets.
+  // Own profile/assets, issue/loss reports and own requests.
   [ROLES.EMPLOYEE]: [
     P.DASHBOARD_VIEW,
     P.ASSET_VIEW_OWN,
-    P.ASSET_ACKNOWLEDGE,
     P.ASSET_REPORT_LOST,
     P.EMPLOYEE_VIEW_OWN,
     P.REQUEST_VIEW_OWN,

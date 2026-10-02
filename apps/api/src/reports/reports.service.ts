@@ -140,7 +140,7 @@ export class ReportsService {
           { key: 'returnedAt', label: 'Returned', type: 'datetime' },
           { key: 'conditionOut', label: 'Cond. out', width: 0.8 },
           { key: 'conditionIn', label: 'Cond. in', width: 0.8 },
-          { key: 'acknowledged', label: 'Ack.', width: 0.5 },
+          { key: 'approved', label: 'Approved', width: 0.5 },
         ],
         build: async (f, user, take) => {
           const scope = dataScope(user, 'asset');
@@ -188,7 +188,7 @@ export class ReportsService {
               conditionIn: a.conditionAtReturn
                 ? label('assetCondition', a.conditionAtReturn)
                 : null,
-              acknowledged: !!a.acknowledgedAt,
+              approved: !!a.approvedAt,
             })),
           };
         },

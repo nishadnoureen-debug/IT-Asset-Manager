@@ -64,6 +64,25 @@ export class NotificationsService {
     return user ? this.notifyUsers(db, [user.id], input, { excludeUserId }) : 0;
   }
 
+  /** Users with one of the permissions whose own employee record sits in that department. */
+  async usersWithPermissionIn(
+    db: Db,
+    departmentId: string | null | undefined,
+    ...keys: PermissionKey[]
+  ): Promise<string[]> {
+    if (!departmentId) return [];
+    const users = await db.user.findMany({
+      where: {
+        deletedAt: null,
+        status: 'ACTIVE',
+        employee: { departmentId, deletedAt: null },
+        roles: { some: { role: { permissions: { some: { permission: { key: { in: keys } } } } } } },
+      },
+      select: { id: true },
+    });
+    return users.map((u) => u.id);
+  }
+
   async usersWithPermission(db: Db, ...keys: PermissionKey[]): Promise<string[]> {
     const users = await db.user.findMany({
       where: {

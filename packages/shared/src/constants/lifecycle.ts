@@ -78,7 +78,7 @@ export const ASSET_ACTIONS = [
   'maintenance',
   'audit',
   'report_lost',
-  'acknowledge',
+  'approve',
   'retire',
   'dispose',
 ] as const;

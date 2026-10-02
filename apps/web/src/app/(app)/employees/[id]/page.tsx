@@ -22,7 +22,7 @@ interface EmployeeAssets {
   active: {
     id: string;
     assignedAt: string;
-    acknowledgedAt: string | null;
+    approvedAt: string | null;
     expectedReturnAt: string | null;
     asset: {
       id: string;
@@ -134,7 +134,7 @@ export default function EmployeeDetailPage() {
                                   {row.asset.assetType.name} · since {formatDate(row.assignedAt)}
                                   {row.expectedReturnAt &&
                                     ` · due ${formatDate(row.expectedReturnAt)}`}
-                                  {!row.acknowledgedAt && ' · not yet acknowledged'}
+                                  {!row.approvedAt && ' · waiting for approval'}
                                 </span>
                               </span>
                               <StatusBadge group="assetStatus" value={row.asset.status} />

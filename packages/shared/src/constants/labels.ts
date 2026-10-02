@@ -193,6 +193,7 @@ export const LABELS = {
     TICKET_UPDATE: 'Ticket update',
     AUDIT_ASSIGNED: 'Audit assigned',
     ASSIGNMENT_ACKNOWLEDGEMENT: 'Acknowledgement required',
+    ASSIGNMENT_APPROVAL: 'Hand-over approval',
     SYSTEM: 'System',
   },
 } as const;

@@ -40,7 +40,7 @@ function ResultCard({
   onRescan: () => void;
 }) {
   const toast = useToast();
-  const [dialog, setDialog] = useState<'report_lost' | 'acknowledge' | null>(null);
+  const [dialog, setDialog] = useState<'report_lost' | 'approve' | null>(null);
   const [maintenance, setMaintenance] = useState(false);
   const [auditId, setAuditId] = useState(result.inProgressAudits[0]?.id ?? '');
   const [auditBusy, setAuditBusy] = useState(false);
@@ -166,12 +166,12 @@ function ResultCard({
               Maintenance
             </Button>
           )}
-          {actions.has('acknowledge') && (
+          {actions.has('approve') && (
             <Button
-              onClick={() => setDialog('acknowledge')}
+              onClick={() => setDialog('approve')}
               icon={<CheckCircle2 className="h-4 w-4" />}
             >
-              Acknowledge
+              Approve
             </Button>
           )}
           {actions.has('report_lost') && (

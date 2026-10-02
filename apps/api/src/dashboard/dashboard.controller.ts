@@ -169,7 +169,7 @@ export class DashboardController {
           const scoped: Prisma.AssetAssignmentWhereInput = {
             asset: { AND: [assetScope, { deletedAt: null }] },
           };
-          const [active, assignedThisMonth, returnedThisMonth, overdue, unacknowledged] =
+          const [active, assignedThisMonth, returnedThisMonth, overdue, pendingApproval] =
             await Promise.all([
               this.prisma.assetAssignment.count({ where: { ...scoped, status: 'ACTIVE' } }),
               this.prisma.assetAssignment.count({
@@ -181,16 +181,17 @@ export class DashboardController {
               this.prisma.assetAssignment.count({
                 where: { ...scoped, status: 'ACTIVE', expectedReturnAt: { lt: new Date() } },
               }),
+              // Hand-overs still waiting for a department manager to countersign.
               this.prisma.assetAssignment.count({
                 where: {
                   ...scoped,
                   status: 'ACTIVE',
-                  acknowledgedAt: null,
+                  approvedAt: null,
                   employeeId: { not: null },
                 },
               }),
             ]);
-          return { active, assignedThisMonth, returnedThisMonth, overdue, unacknowledged };
+          return { active, assignedThisMonth, returnedThisMonth, overdue, pendingApproval };
         })()
       : null;
 
@@ -269,7 +270,7 @@ export class DashboardController {
         select: {
           id: true,
           assignedAt: true,
-          acknowledgedAt: true,
+          approvedAt: true,
           expectedReturnAt: true,
           asset: {
             select: {

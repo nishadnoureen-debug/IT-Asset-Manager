@@ -61,7 +61,7 @@ interface Dashboard {
     assignedThisMonth: number;
     returnedThisMonth: number;
     overdue: number;
-    unacknowledged: number;
+    pendingApproval: number;
   } | null;
   maintenance: {
     scheduled: number;
@@ -80,7 +80,7 @@ interface Dashboard {
     assets: {
       id: string;
       assignedAt: string;
-      acknowledgedAt: string | null;
+      approvedAt: string | null;
       expectedReturnAt: string | null;
       asset: {
         id: string;
@@ -96,14 +96,14 @@ interface Dashboard {
 }
 
 function MyAssets({ mine }: { mine: NonNullable<Dashboard['mine']> }) {
-  const pending = mine.assets.filter((a) => !a.acknowledgedAt).length;
+  const pending = mine.assets.filter((a) => !a.approvedAt).length;
   return (
     <Card>
       <CardHeader
         title="My equipment"
         description={
           pending
-            ? `${pending} item${pending > 1 ? 's' : ''} waiting for your acknowledgement`
+            ? `${pending} item${pending > 1 ? 's' : ''} waiting for your manager's approval`
             : 'Assets and accessories assigned to you'
         }
       />
@@ -132,11 +132,11 @@ function MyAssets({ mine }: { mine: NonNullable<Dashboard['mine']> }) {
                       {a.expectedReturnAt && ` · due back ${formatDate(a.expectedReturnAt)}`}
                     </p>
                   </div>
-                  {a.acknowledgedAt ? (
+                  {a.approvedAt ? (
                     <StatusBadge group="assetStatus" value={a.asset.status} />
                   ) : (
                     <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-amber-600/20 dark:bg-amber-950 dark:text-amber-300">
-                      Acknowledge
+                      Awaiting approval
                     </span>
                   )}
                 </Link>
@@ -324,7 +324,7 @@ export default function DashboardPage() {
                     value={d.assignments.overdue}
                     tone={d.assignments.overdue ? 'danger' : 'default'}
                     icon={<AlertTriangle className="h-4 w-4" />}
-                    hint={`${d.assignments.unacknowledged} awaiting acknowledgement`}
+                    hint={`${d.assignments.pendingApproval} awaiting approval`}
                   />
                 )}
                 {d.licenseAlerts.totalSeats !== undefined && (

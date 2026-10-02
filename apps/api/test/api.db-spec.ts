@@ -719,7 +719,7 @@ describe('asset lifecycle', () => {
     ).toBe(3);
     expect(
       await prisma.notification.count({
-        where: { userId: u.employee, type: 'ASSIGNMENT_ACKNOWLEDGEMENT' },
+        where: { userId: u.manager, type: 'ASSIGNMENT_APPROVAL' },
       }),
     ).toBeGreaterThan(0);
 
@@ -748,25 +748,39 @@ describe('asset lifecycle', () => {
       .expect(404);
   });
 
-  it('lets the assignee acknowledge with a signature', async () => {
+  it('has the department manager approve the hand-over, not the employee', async () => {
     const assignment = await prisma.assetAssignment.findFirstOrThrow({
       where: { assetId: asset.id, status: 'ACTIVE' },
     });
-    // Someone else's assignment is invisible (404), never merely forbidden.
+    // The employee holding it has nothing to approve any more.
     await http()
-      .post(api(`/assignments/${assignment.id}/acknowledge`))
-      .set(s.otherEmployee.auth)
-      .send({})
-      .expect(404);
-    const res = await http()
-      .post(api(`/assignments/${assignment.id}/acknowledge`))
+      .post(api(`/assignments/${assignment.id}/approve`))
       .set(s.employee.auth)
-      .send({ signature: SIGNATURE })
+      .expect(403);
+
+    const res = await http()
+      .post(api(`/assignments/${assignment.id}/approve`))
+      .set(s.manager.auth)
       .expect(200);
-    expect(res.body.data.acknowledgedAt).toBeTruthy();
+    expect(res.body.data.approvedAt).toBeTruthy();
+    expect(res.body.data.approvedBy.id).toBe(u.manager);
+    // The form on file is made again, so the printed copy carries the approval.
     expect(res.body.data.documents.map((d: { type: string }) => d.type)).toEqual(
-      expect.arrayContaining(['SIGNATURE']),
+      expect.arrayContaining(['HANDOVER_FORM']),
     );
+
+    // Once approved there is nothing left to approve.
+    await http()
+      .post(api(`/assignments/${assignment.id}/approve`))
+      .set(s.manager.auth)
+      .expect(422);
+
+    // The person who handed it over hears that it was approved.
+    expect(
+      await prisma.notification.count({
+        where: { userId: u.tech, type: 'ASSIGNMENT_APPROVAL' },
+      }),
+    ).toBeGreaterThan(0);
   });
 
   it('transfers: closes the old assignment, opens a linked one and moves accessories', async () => {

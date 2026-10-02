@@ -184,11 +184,10 @@ function Overview({ a }: { a: AssetDetail }) {
                         : 'Not set',
                     },
                     {
-                      label: 'Acknowledged',
-                      value: current.acknowledgedAt ? (
+                      label: 'Approved',
+                      value: current.approvedAt ? (
                         <span className="inline-flex items-center gap-1 text-emerald-700 dark:text-emerald-400">
-                          <CheckCircle2 className="h-4 w-4" />{' '}
-                          {formatDateTime(current.acknowledgedAt)}
+                          <CheckCircle2 className="h-4 w-4" /> {formatDateTime(current.approvedAt)}
                         </span>
                       ) : current.employee ? (
                         <Badge tone="amber">Pending</Badge>
@@ -264,7 +263,7 @@ function AssignmentsTab({ id }: { id: string }) {
                     Out: {label('assetCondition', r.conditionAtAssignment)}
                     {r.conditionAtReturn &&
                       ` · Back: ${label('assetCondition', r.conditionAtReturn)}`}
-                    {r.acknowledgedAt && ' · Acknowledged'}
+                    {r.approvedAt && ' · Approved'}
                   </p>
                   {r.transferReason && (
                     <p className="text-slate-600 dark:text-slate-400">
@@ -545,7 +544,7 @@ export default function AssetDetailPage() {
   const router = useRouter();
   const initialTab = (useSearchParams().get('tab') as Tab) ?? 'overview';
   const [tab, setTab] = useState<Tab>(initialTab);
-  const [dialog, setDialog] = useState<'retire' | 'dispose' | 'report_lost' | 'acknowledge' | null>(
+  const [dialog, setDialog] = useState<'retire' | 'dispose' | 'report_lost' | 'approve' | null>(
     null,
   );
   const [maintenanceOpen, setMaintenanceOpen] = useState(false);
@@ -572,12 +571,12 @@ export default function AssetDetailPage() {
               description={`${a.name}${a.brand || a.model ? ` · ${[a.brand, a.model].filter(Boolean).join(' ')}` : ''}`}
               actions={
                 <>
-                  {actions.has('acknowledge') && (
+                  {actions.has('approve') && (
                     <Button
-                      onClick={() => setDialog('acknowledge')}
+                      onClick={() => setDialog('approve')}
                       icon={<CheckCircle2 className="h-4 w-4" />}
                     >
-                      Acknowledge receipt
+                      Approve hand-over
                     </Button>
                   )}
                   {actions.has('assign') && (

@@ -63,7 +63,7 @@ export default function AssignAssetPage() {
       toast.success(
         signature
           ? 'Assigned and signed — handover form generated'
-          : 'Assigned — the employee will be asked to acknowledge',
+          : 'Assigned — the department manager will be asked to approve',
       );
       router.replace(`/assets/${id}?tab=assignments`);
     } catch (e) {
@@ -246,7 +246,7 @@ export default function AssignAssetPage() {
                 <Card>
                   <CardHeader
                     title="Acknowledgement"
-                    description="Optional — if the employee signs now, the handover is acknowledged immediately."
+                    description="Optional — the employee signs the pad here and it goes on the printed form."
                   />
                   <CardBody className="space-y-4">
                     {target === 'employee' && (

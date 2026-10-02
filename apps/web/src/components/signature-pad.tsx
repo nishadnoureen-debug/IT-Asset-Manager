@@ -97,7 +97,7 @@ export function SignaturePad({
         }}
       />
       <p className="mt-1 text-xs text-slate-500">
-        {empty ? 'Sign above to acknowledge receipt.' : 'Signature captured.'}
+        {empty ? 'Sign above to confirm receipt.' : 'Signature captured.'}
       </p>
     </div>
   );

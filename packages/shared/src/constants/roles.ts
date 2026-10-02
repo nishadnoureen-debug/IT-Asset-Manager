@@ -29,7 +29,7 @@ export const ROLE_DETAILS: Record<RoleName, { displayName: string; description: 
   },
   EMPLOYEE: {
     displayName: 'Employee',
-    description: 'Own profile and assets, acknowledgements, loss reports and own asset requests.',
+    description: 'Own profile and assets, loss reports and own asset requests.',
   },
   AUDITOR: {
     displayName: 'Auditor',

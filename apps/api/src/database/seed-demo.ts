@@ -708,12 +708,12 @@ async function main() {
       admin,
     );
 
-    // Employee acknowledges one of their assets.
-    const employeeUser = (await access.get(userIds[ROLES.EMPLOYEE]))!;
+    // The department manager approves one of the hand-overs.
+    const managerUser = (await access.get(userIds[ROLES.DEPARTMENT_MANAGER]))!;
     const m1Assignment = await prisma.assetAssignment.findFirstOrThrow({
       where: { assetId: created.M1, status: 'ACTIVE' },
     });
-    await assignments.acknowledge(m1Assignment.id, {}, employeeUser);
+    await assignments.approve(m1Assignment.id, managerUser).catch(() => undefined);
 
     // ── Maintenance ─────────────────────────────────────────────────────────
     const tech = userIds[ROLES.IT_TECHNICIAN];

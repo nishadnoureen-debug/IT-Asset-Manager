@@ -122,9 +122,16 @@ export class QrService {
             id: true,
             assignedAt: true,
             acknowledgedAt: true,
+            approvedAt: true,
             employeeId: true,
             employee: {
-              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeNumber: true,
+                departmentId: true,
+              },
             },
             location: { select: { id: true, name: true } },
           },
@@ -153,7 +160,9 @@ export class QrService {
       inProgressAudits,
       allowedActions: allowedAssetActions(user, {
         status: asset.status,
-        activeAssignment: assignments[0] ?? null,
+        activeAssignment: assignments[0]
+          ? { ...assignments[0], departmentId: assignments[0].employee?.departmentId ?? null }
+          : null,
         hasOpenMaintenance: maintenance.length > 0,
         auditInProgress: inProgressAudits.length > 0,
       }),

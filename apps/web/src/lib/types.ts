@@ -87,6 +87,8 @@ export interface Assignment {
   expectedReturnAt: string | null;
   returnedAt: string | null;
   acknowledgedAt: string | null;
+  approvedAt: string | null;
+  approvedBy?: UserRef | null;
   conditionAtAssignment: AssetCondition;
   conditionAtReturn: AssetCondition | null;
   transferReason: string | null;
@@ -642,6 +644,8 @@ export interface ScanResult {
     id: Id;
     assignedAt: string;
     acknowledgedAt: string | null;
+    approvedAt: string | null;
+    approvedBy?: UserRef | null;
     employee: EmployeeRef | null;
     location: Ref | null;
   } | null;

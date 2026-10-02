@@ -182,7 +182,12 @@ export class AssetsService {
       openMaintenance: maintenance[0] ?? null,
       allowedActions: allowedAssetActions(user, {
         status: asset.status,
-        activeAssignment: currentAssignment,
+        activeAssignment: currentAssignment
+          ? {
+              ...currentAssignment,
+              departmentId: currentAssignment.employee?.departmentId ?? null,
+            }
+          : null,
         hasOpenMaintenance: maintenance.length > 0,
         auditInProgress,
       }),

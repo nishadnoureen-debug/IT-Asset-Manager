@@ -10,9 +10,9 @@ import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useApiMutation } from '@/lib/hooks';
 
-type Kind = 'retire' | 'dispose' | 'report_lost' | 'acknowledge';
+type Kind = 'retire' | 'dispose' | 'report_lost' | 'approve';
 
-/** Small lifecycle dialogs on the asset page (retire, dispose, report lost, acknowledge). */
+/** Small lifecycle dialogs on the asset page (retire, dispose, report lost, approve). */
 export function AssetActionDialog({
   kind,
   onClose,
@@ -35,8 +35,8 @@ export function AssetActionDialog({
   const retire = useApiMutation('post', `/assets/${asset.id}/retire`, invalidate);
   const dispose = useApiMutation('post', `/assets/${asset.id}/dispose`, invalidate);
   const lost = useApiMutation('post', `/assets/${asset.id}/report-lost`, invalidate);
-  const ack = useApiMutation('post', `/assignments/${assignmentId}/acknowledge`, invalidate);
-  const pending = retire.isPending || dispose.isPending || lost.isPending || ack.isPending;
+  const approve = useApiMutation('post', `/assignments/${assignmentId}/approve`, invalidate);
+  const pending = retire.isPending || dispose.isPending || lost.isPending || approve.isPending;
 
   const close = () => {
     setReason('');
@@ -57,9 +57,9 @@ export function AssetActionDialog({
       } else if (kind === 'report_lost') {
         await lost.mutateAsync({ notes: reason });
         toast.success(`${asset.assetTag} reported lost — IT has been notified`);
-      } else if (kind === 'acknowledge') {
-        await ack.mutateAsync({ signature: signature ?? undefined });
-        toast.success('Thank you — receipt acknowledged');
+      } else if (kind === 'approve') {
+        await approve.mutateAsync({});
+        toast.success('Hand-over approved — the form has been updated');
       }
       close();
     } catch (e) {
@@ -86,10 +86,10 @@ export function AssetActionDialog({
       button: 'Report lost',
       danger: true,
     },
-    acknowledge: {
-      title: `Acknowledge ${asset.assetTag}`,
-      description: `Confirm you received "${asset.name}" in the recorded condition.`,
-      button: 'I confirm receipt',
+    approve: {
+      title: `Approve the hand-over of ${asset.assetTag}`,
+      description: `Confirm that "${asset.name}" was handed to your department's employee. The printed form is updated with your approval.`,
+      button: 'Approve hand-over',
       danger: false,
     },
   } as const;
@@ -142,7 +142,6 @@ export function AssetActionDialog({
             )}
           </Field>
         )}
-        {kind === 'acknowledge' && <SignaturePad onChange={setSignature} />}
       </div>
     </Dialog>
   );

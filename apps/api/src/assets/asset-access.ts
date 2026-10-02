@@ -30,7 +30,11 @@ export function assetScopeWhere(user: AuthUser): Prisma.AssetWhereInput | null {
 
 export interface AssetActionState {
   status: AssetStatus;
-  activeAssignment: { employeeId: string | null; acknowledgedAt: Date | null } | null;
+  activeAssignment: {
+    employeeId: string | null;
+    departmentId?: string | null;
+    approvedAt: Date | null;
+  } | null;
   hasOpenMaintenance: boolean;
   auditInProgress: boolean;
 }
@@ -66,8 +70,15 @@ export function allowedAssetActions(user: AuthUser, s: AssetActionState): AssetA
   ) {
     actions.push('report_lost');
   }
-  if (can(user, 'asset.acknowledge') && ownsAssignment && !s.activeAssignment?.acknowledgedAt) {
-    actions.push('acknowledge');
+  // The manager of the employee's department countersigns the hand-over.
+  if (
+    can(user, 'assignment.approve') &&
+    s.activeAssignment &&
+    !s.activeAssignment.approvedAt &&
+    (dataScope(user, 'asset') === 'all' ||
+      (!!s.activeAssignment.departmentId && user.departmentId === s.activeAssignment.departmentId))
+  ) {
+    actions.push('approve');
   }
   if (
     can(user, 'asset.retire') &&

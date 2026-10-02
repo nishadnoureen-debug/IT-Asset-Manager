@@ -139,7 +139,10 @@ function UserDialog({
               />
             )}
           </Field>
-          <Field label="Linked employee" hint="Required for own-asset access and acknowledgements">
+          <Field
+            label="Linked employee"
+            hint="Required for own-asset access and department approvals"
+          >
             {(p) => (
               <EmployeePicker
                 id={p.id}
@@ -385,7 +388,7 @@ function ApproveDialog({ user, onClose }: { user: UserAccount; onClose: () => vo
         <FormError message={error} />
         <Field
           label="Linked employee"
-          hint="Needed to see their own assets and acknowledge hand-overs"
+          hint="Needed to see their own assets and approve their department’s hand-overs"
         >
           {(p) => (
             <EmployeePicker

@@ -6,7 +6,7 @@ import { AccessoryUnitsService } from '../accessories/accessory-units.service';
 import { employeeSummarySelect } from '../assets/asset-access';
 import { AssetHistoryService } from '../assets/asset-history.service';
 import { AssetsService } from '../assets/assets.service';
-import { dataScope, NO_MATCH_ID, type AuthUser } from '../auth/auth-user';
+import { can, dataScope, NO_MATCH_ID, type AuthUser } from '../auth/auth-user';
 import { Errors } from '../common/errors';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { DocumentsService, documentSelect } from '../documents/documents.service';
@@ -14,7 +14,6 @@ import { decodeSignature } from '../documents/file-validation';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import type {
-  AcknowledgeDto,
   AssignAssetDto,
   AssignmentQueryDto,
   ReturnAssetDto,
@@ -37,6 +36,7 @@ const assignmentInclude = {
   location: { select: { id: true, name: true } },
   assignedBy: { select: { id: true, displayName: true } },
   returnedBy: { select: { id: true, displayName: true } },
+  approvedBy: { select: { id: true, displayName: true } },
   accessoryAssignments: {
     include: { accessory: { select: { id: true, name: true, category: true } } },
   },
@@ -78,7 +78,8 @@ export class AssignmentsService {
           assetId: q.assetId,
           locationId: q.locationId,
           expectedReturnAt: q.overdue ? { lt: new Date() } : undefined,
-          acknowledgedAt: q.unacknowledged ? null : undefined,
+          // Hand-overs still waiting for the department manager.
+          ...(q.pendingApproval ? { status: 'ACTIVE' as const, approvedAt: null } : {}),
         },
         q.search
           ? {
@@ -210,19 +211,24 @@ export class AssignmentsService {
         },
         tx,
       );
-      if (!signature && target.employee) {
-        await this.notifications.notifyEmployee(
+      if (target.employee) {
+        const managers = await this.notifications.usersWithPermissionIn(
           tx,
-          target.employee.id,
+          target.employee.departmentId,
+          'assignment.approve',
+        );
+        await this.notifications.notifyUsers(
+          tx,
+          managers,
           {
-            type: 'ASSIGNMENT_ACKNOWLEDGEMENT',
-            title: `Please acknowledge ${asset.assetTag}`,
-            message: `${asset.name} has been assigned to you. Review and acknowledge receipt.`,
+            type: 'ASSIGNMENT_APPROVAL',
+            title: `Approve the hand-over of ${asset.assetTag}`,
+            message: `${asset.name} was handed to ${target.label}. It is waiting for your approval.`,
             entityType: 'asset_assignment',
             entityId: created.id,
             link: `/assets/${assetId}`,
           },
-          user.id,
+          { excludeUserId: user.id },
         );
       }
       return created;
@@ -451,19 +457,24 @@ export class AssignmentsService {
         },
         tx,
       );
-      if (!signature && target.employee) {
-        await this.notifications.notifyEmployee(
+      if (target.employee) {
+        const managers = await this.notifications.usersWithPermissionIn(
           tx,
-          target.employee.id,
+          target.employee.departmentId,
+          'assignment.approve',
+        );
+        await this.notifications.notifyUsers(
+          tx,
+          managers,
           {
-            type: 'ASSIGNMENT_ACKNOWLEDGEMENT',
-            title: `Please acknowledge ${asset.assetTag}`,
-            message: `${asset.name} has been transferred to you. Review and acknowledge receipt.`,
+            type: 'ASSIGNMENT_APPROVAL',
+            title: `Approve the transfer of ${asset.assetTag}`,
+            message: `${asset.name} was transferred to ${target.label}. It is waiting for your approval.`,
             entityType: 'asset_assignment',
             entityId: created.id,
             link: `/assets/${assetId}`,
           },
-          user.id,
+          { excludeUserId: user.id },
         );
       }
       return created;
@@ -473,36 +484,62 @@ export class AssignmentsService {
     return this.get(next.id, user);
   }
 
-  async acknowledge(id: string, dto: AcknowledgeDto, user: AuthUser) {
-    const assignment = await this.prisma.assetAssignment.findUnique({ where: { id } });
-    if (!assignment || !user.employeeId || assignment.employeeId !== user.employeeId) {
-      throw Errors.notFound('Assignment');
-    }
+  /**
+   * The manager of the employee's department countersigns the hand-over. The printed form is made
+   * again, so the copy on file shows who approved it and when.
+   */
+  async approve(id: string, user: AuthUser) {
+    const assignment = await this.prisma.assetAssignment.findUnique({
+      where: { id },
+      include: { employee: { select: { departmentId: true, firstName: true, lastName: true } } },
+    });
+    if (!assignment) throw Errors.notFound('Assignment');
+    if (!this.mayApprove(user, assignment.employee?.departmentId))
+      throw Errors.forbidden('You can only approve hand-overs to your own department');
     if (assignment.status !== 'ACTIVE')
-      throw Errors.invalidState('Only active assignments can be acknowledged');
-    if (assignment.acknowledgedAt)
-      throw Errors.invalidState('This assignment is already acknowledged');
-    const signature = this.parseSignature(dto.signature);
+      throw Errors.invalidState('Only an active hand-over can be approved');
+    if (assignment.approvedAt) throw Errors.invalidState('This hand-over is already approved');
 
+    const approvedAt = new Date();
     await this.prisma.$transaction(async (tx) => {
       const updated = await tx.assetAssignment.updateMany({
-        where: { id, acknowledgedAt: null },
-        data: { acknowledgedAt: new Date() },
+        where: { id, approvedAt: null },
+        data: { approvedAt, approvedById: user.id },
       });
-      if (updated.count !== 1) throw Errors.invalidState('This assignment is already acknowledged');
+      if (updated.count !== 1) throw Errors.invalidState('This hand-over is already approved');
       await this.activity.record(
         {
           actorId: user.id,
-          action: 'asset.acknowledge',
+          action: 'assignment.approve',
           entityType: 'asset_assignment',
           entityId: id,
-          newValues: { signed: !!signature },
+          newValues: { approvedAt },
         },
         tx,
       );
+      await this.notifications.notifyUsers(
+        tx,
+        [assignment.assignedById].filter((x): x is string => !!x),
+        {
+          type: 'ASSIGNMENT_APPROVAL',
+          title: 'Hand-over approved',
+          message: `${user.displayName} approved the hand-over to ${assignment.employee?.firstName} ${assignment.employee?.lastName}.`,
+          entityType: 'asset_assignment',
+          entityId: id,
+          link: `/assets/${assignment.assetId}`,
+        },
+        { excludeUserId: user.id },
+      );
     });
-    await this.attachForms(id, 'HANDOVER', signature, user.id, assignment.employeeId);
+    await this.attachForms(id, 'HANDOVER', undefined, user.id, assignment.employeeId);
     return this.get(id, user);
+  }
+
+  /** A manager approves for their own department; a wider asset scope approves anywhere. */
+  private mayApprove(user: AuthUser, departmentId: string | null | undefined): boolean {
+    if (!can(user, 'assignment.approve')) return false;
+    if (dataScope(user, 'asset') === 'all') return true;
+    return !!departmentId && user.departmentId === departmentId;
   }
 
   /** Store the signature and the generated PDF. Runs after commit; failures are logged, not fatal. */

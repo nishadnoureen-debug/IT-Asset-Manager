@@ -44,7 +44,7 @@ export class AssignAssetDto {
   accessories?: AccessoryLineDto[];
 
   @IsOptional() @IsString() @MaxLength(2000) notes?: string;
-  /** Signature captured at hand-over; when present the assignment is acknowledged immediately. */
+  /** Signature the employee draws on the pad at hand-over; it goes on the printed form. */
   @IsOptional() @IsString() @MaxLength(SIGNATURE_MAX) signature?: string;
 }
 
@@ -82,10 +82,6 @@ export class TransferAssetDto {
   @IsOptional() @IsString() @MaxLength(SIGNATURE_MAX) signature?: string;
 }
 
-export class AcknowledgeDto {
-  @IsOptional() @IsString() @MaxLength(SIGNATURE_MAX) signature?: string;
-}
-
 export class AssignmentQueryDto extends PaginationQueryDto {
   @IsOptional() @IsEnum(AssignmentStatus) status?: AssignmentStatus;
   @IsOptional() @IsUUID() employeeId?: string;
@@ -95,8 +91,9 @@ export class AssignmentQueryDto extends PaginationQueryDto {
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   overdue?: boolean;
+  /** Hand-overs still waiting for the department manager. */
   @IsOptional()
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
-  unacknowledged?: boolean;
+  pendingApproval?: boolean;
 }

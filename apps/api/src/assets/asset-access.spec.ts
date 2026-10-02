@@ -55,28 +55,50 @@ describe('allowedAssetActions', () => {
     const actions = allowedAssetActions(user('IT_ADMINISTRATOR'), {
       ...idle,
       status: 'ASSIGNED',
-      activeAssignment: { employeeId: 'e9', acknowledgedAt: null },
+      activeAssignment: { employeeId: 'e9', approvedAt: null },
     });
     expect(actions).toEqual(expect.arrayContaining(['return', 'transfer', 'report_lost']));
     expect(actions).not.toContain('assign');
     expect(actions).not.toContain('retire');
-    expect(actions).not.toContain('acknowledge');
   });
 
-  it('lets employees acknowledge and report only their own assignment', () => {
+  it('lets employees report their own assignment but not approve it', () => {
     const own = allowedAssetActions(user('EMPLOYEE'), {
       ...idle,
       status: 'ASSIGNED',
-      activeAssignment: { employeeId: 'e1', acknowledgedAt: null },
+      activeAssignment: { employeeId: 'e1', approvedAt: null },
     });
-    expect(own.sort()).toEqual(['acknowledge', 'report_lost', 'view']);
+    expect(own.sort()).toEqual(['report_lost', 'view']);
 
     const someoneElse = allowedAssetActions(user('EMPLOYEE'), {
       ...idle,
       status: 'ASSIGNED',
-      activeAssignment: { employeeId: 'e2', acknowledgedAt: null },
+      activeAssignment: { employeeId: 'e2', approvedAt: null },
     });
     expect(someoneElse).toEqual(['view']);
+  });
+
+  it('lets a manager approve a hand-over to their own department only', () => {
+    const assignment = { employeeId: 'e5', departmentId: 'd1', approvedAt: null };
+    const manager = { ...user('DEPARTMENT_MANAGER'), departmentId: 'd1' };
+    expect(
+      allowedAssetActions(manager, { ...idle, status: 'ASSIGNED', activeAssignment: assignment }),
+    ).toContain('approve');
+    // Another department's hand-over is not theirs to approve.
+    expect(
+      allowedAssetActions(
+        { ...manager, departmentId: 'd2' },
+        { ...idle, status: 'ASSIGNED', activeAssignment: assignment },
+      ),
+    ).not.toContain('approve');
+    // And once it is approved there is nothing left to do.
+    expect(
+      allowedAssetActions(manager, {
+        ...idle,
+        status: 'ASSIGNED',
+        activeAssignment: { ...assignment, approvedAt: new Date() },
+      }),
+    ).not.toContain('approve');
   });
 
   it('offers audit scanning only while an audit is running', () => {

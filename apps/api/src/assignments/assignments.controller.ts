@@ -13,7 +13,6 @@ import { ApiTags } from '@nestjs/swagger';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import {
-  AcknowledgeDto,
   AssignAssetDto,
   AssignmentQueryDto,
   ReturnAssetDto,
@@ -40,15 +39,12 @@ export class AssignmentsController {
     return this.assignments.get(id, user);
   }
 
-  @Post('assignments/:id/acknowledge')
+  /** The department manager countersigns a hand-over to one of their people. */
+  @Post('assignments/:id/approve')
   @HttpCode(HttpStatus.OK)
-  @RequirePermissions('asset.acknowledge')
-  acknowledge(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: AcknowledgeDto,
-    @CurrentUser() user: AuthUser,
-  ) {
-    return this.assignments.acknowledge(id, dto, user);
+  @RequirePermissions('assignment.approve')
+  approve(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.assignments.approve(id, user);
   }
 
   @Post('assets/:id/assign')
