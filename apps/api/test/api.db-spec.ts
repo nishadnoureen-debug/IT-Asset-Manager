@@ -482,6 +482,55 @@ describe('asset lifecycle', () => {
     expect(left).toHaveLength(5);
   });
 
+  it('removes an accessory only once its pieces are back', async () => {
+    const spare = await http()
+      .post(api('/accessories'))
+      .set(s.admin.auth)
+      .send({ name: 'Spare keyboard', category: 'KEYBOARD', quantityTotal: 2 })
+      .expect(201);
+    const spareId = spare.body.data.id as string;
+
+    const handOut = await http()
+      .post(api(`/accessories/${spareId}/assign`))
+      .set(s.admin.auth)
+      .send({ employeeId: ids.bob, quantity: 1 })
+      .expect(201);
+    // One is out, so the accessory stays.
+    const busy = await http()
+      .delete(api(`/accessories/${spareId}`))
+      .set(s.admin.auth)
+      .expect(422);
+    expect(busy.body.error.code).toBe('INVALID_STATE');
+
+    await http()
+      .post(api(`/accessory-assignments/${handOut.body.data.id}/return`))
+      .set(s.admin.auth)
+      .send({ condition: 'GOOD' })
+      .expect(200);
+    await http()
+      .delete(api(`/accessories/${spareId}`))
+      .set(s.admin.auth)
+      .expect(200);
+
+    // Archived, with its pieces out of use, and gone from the list.
+    const removed = await prisma.accessory.findUniqueOrThrow({ where: { id: spareId } });
+    expect(removed.deletedAt).not.toBeNull();
+    const pieces = await prisma.accessoryUnit.findMany({ where: { accessoryId: spareId } });
+    expect(pieces).toHaveLength(2);
+    expect(pieces.every((u) => u.status === 'RETIRED')).toBe(true);
+    const list = await http()
+      .get(api('/accessories?search=Spare keyboard'))
+      .set(s.tech.auth)
+      .expect(200);
+    expect(list.body.data).toHaveLength(0);
+
+    // Only people who manage stock may remove one.
+    await http()
+      .delete(api(`/accessories/${spareId}`))
+      .set(s.tech.auth)
+      .expect(403);
+  });
+
   it('generates tags, records history and activity, and validates input', async () => {
     expect(asset.assetTag).toMatch(/^AST-\d{6}$/);
     const history = await http()

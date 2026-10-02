@@ -280,6 +280,11 @@ export class AccessoriesController {
       throw Errors.invalidState('Some items are still handed out');
     await this.prisma.$transaction(async (tx) => {
       await tx.accessory.update({ where: { id }, data: { deletedAt: new Date() } });
+      // Nothing is out, so every piece goes out of use with the accessory.
+      await tx.accessoryUnit.updateMany({
+        where: { accessoryId: id, status: 'IN_STOCK' },
+        data: { status: 'RETIRED' },
+      });
       await this.activity.record(
         {
           actorId: user.id,

@@ -1,6 +1,6 @@
 'use client';
 
-import { PackagePlus, Plus, Printer, Undo2 } from 'lucide-react';
+import { PackagePlus, Plus, Printer, Trash2, Undo2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { FilterBar } from '@/components/filter-bar';
@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
 import { DataTable, type Column } from '@/components/ui/data-table';
-import { Dialog } from '@/components/ui/dialog';
+import { ConfirmDialog, Dialog } from '@/components/ui/dialog';
 import { Checkbox, Field, FormError, FormGrid, Input, Textarea } from '@/components/ui/form';
 import { EmptyState, Spinner } from '@/components/ui/states';
 import { useToast } from '@/components/ui/toast';
@@ -235,7 +235,15 @@ function AccessoryPieces({
   );
 }
 
-function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose: () => void }) {
+function AccessoryDetail({
+  accessory,
+  onClose,
+  onRemove,
+}: {
+  accessory: Accessory;
+  onClose: () => void;
+  onRemove: (accessory: Accessory) => void;
+}) {
   const { can } = useAuth();
   const toast = useToast();
   const detail = useApi<Accessory>(`/accessories/${accessory.id}`, undefined, {
@@ -384,9 +392,18 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
           )}
         </div>
         {can('accessory.manage') && (
-          <Button variant="secondary" onClick={() => setEditing(true)}>
-            Edit details & stock
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={() => setEditing(true)}>
+              Edit details & stock
+            </Button>
+            <Button
+              variant="secondary"
+              icon={<Trash2 className="h-4 w-4" />}
+              onClick={() => onRemove(a)}
+            >
+              Remove
+            </Button>
+          </div>
         )}
       </div>
       <AccessoryDialog
@@ -404,8 +421,10 @@ function AccessoryDetail({ accessory, onClose }: { accessory: Accessory; onClose
 export default function AccessoriesPage() {
   const { can } = useAuth();
   const { params, set } = useListParams(DEFAULTS);
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [open, setOpen] = useState<Accessory | null>(null);
+  const [removing, setRemoving] = useState<Accessory | null>(null);
   const query = useApi<Accessory[]>('/accessories', {
     ...params,
     lowStock: params.lowStock || undefined,
@@ -460,7 +479,43 @@ export default function AccessoriesPage() {
       cell: (a) => formatMoney(a.unitCost, a.currency),
       hideOnMobile: true,
     },
+    ...(can('accessory.manage')
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            cell: (a: Accessory) => (
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  aria-label={`Remove ${a.name}`}
+                  icon={<Trash2 className="h-4 w-4" />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRemoving(a);
+                  }}
+                />
+              </div>
+            ),
+          },
+        ]
+      : []),
   ];
+
+  const remove = async () => {
+    if (!removing) return;
+    try {
+      await api.delete(`/accessories/${removing.id}`);
+      toast.success(`${removing.name} removed`);
+      setOpen(null);
+      void query.refetch();
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setRemoving(null);
+    }
+  };
 
   return (
     <>
@@ -520,7 +575,18 @@ export default function AccessoriesPage() {
         />
       </Card>
       <AccessoryDialog open={creating} onClose={() => setCreating(false)} />
-      {open && <AccessoryDetail accessory={open} onClose={() => setOpen(null)} />}
+      {open && (
+        <AccessoryDetail accessory={open} onClose={() => setOpen(null)} onRemove={setRemoving} />
+      )}
+      <ConfirmDialog
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        onConfirm={remove}
+        title={`Remove ${removing?.name ?? ''}?`}
+        description="It is archived with its pieces, so past hand-overs stay in the records. Anything still handed out has to come back first."
+        confirmLabel="Remove"
+        danger
+      />
     </>
   );
 }
