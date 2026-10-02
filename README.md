@@ -127,4 +127,6 @@ API documentation (Swagger) is at http://localhost:4000/api/docs in development.
 - Authorization is enforced by the API on every request; the UI only hides what you cannot do.
 - Lifecycle operations are transactional and write both asset history and the activity log.
 - Assets are never hard-deleted: they are retired and disposed of, and history is append-only.
+- Removing a record archives it and is refused while anything still depends on it; what is erased outright
+  (an unused asset type, a custom role nobody holds, your own notifications) leaves nothing behind to keep.
 - Secrets live only in environment variables; `.env` files are git-ignored.

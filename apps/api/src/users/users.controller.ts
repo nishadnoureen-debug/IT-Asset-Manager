@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -510,6 +511,30 @@ export class RolesController {
       );
     });
     return this.get(id);
+  }
+
+  @Delete('roles/:id')
+  @RequirePermissions('role.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() actor: AuthUser) {
+    const role = await this.get(id);
+    if (role.isSystem) throw Errors.invalidState('The system roles cannot be removed');
+    const holders = await this.prisma.userRole.count({ where: { roleId: id } });
+    if (holders) throw Errors.invalidState(`${holders} users still have this role`);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany({ where: { roleId: id } });
+      await tx.role.delete({ where: { id } });
+      await this.activity.record(
+        {
+          actorId: actor.id,
+          action: 'role.delete',
+          entityType: 'role',
+          entityId: id,
+          oldValues: { name: role.name, displayName: role.displayName },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
   }
 
   @Get('permissions')

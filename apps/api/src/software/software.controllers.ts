@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -182,6 +183,31 @@ export class SoftwareController {
         );
       return software;
     });
+  }
+
+  /** Archived; refused while it still has licences. */
+  @Delete(':id')
+  @RequirePermissions('software.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const existing = await this.get(id);
+    const licenses = await this.prisma.softwareLicense.count({
+      where: { softwareId: id, deletedAt: null },
+    });
+    if (licenses) throw Errors.invalidState(`${licenses} licences still belong to this software`);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.software.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'software.delete',
+          entityType: 'software',
+          entityId: id,
+          oldValues: { name: existing.name, version: existing.version },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
   }
 }
 
@@ -572,6 +598,35 @@ export class LicensesController {
       availableSeats: license.seats === null ? null : Math.max(license.seats - used, 0),
       utilization: license.seats ? Math.round((used / license.seats) * 100) : null,
     };
+  }
+
+  /** Archived; refused while seats are still assigned. */
+  @Delete(':id')
+  @RequirePermissions('license.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const existing = await this.prisma.softwareLicense.findFirst({
+      where: { id, deletedAt: null },
+      select: { name: true },
+    });
+    if (!existing) throw Errors.notFound('Licence');
+    const seats = await this.prisma.softwareAssignment.count({
+      where: { licenseId: id, unassignedAt: null },
+    });
+    if (seats) throw Errors.invalidState(`${seats} seats are still assigned`);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.softwareLicense.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'license.delete',
+          entityType: 'license',
+          entityId: id,
+          oldValues: { name: existing.name },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
   }
 
   private async assertRefs(dto: Partial<CreateLicenseDto>) {

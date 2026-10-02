@@ -1,7 +1,7 @@
 'use client';
 
 import clsx from 'clsx';
-import { CheckCheck } from 'lucide-react';
+import { CheckCheck, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +27,29 @@ export default function NotificationsPage() {
     limit: 20,
   });
   const readAll = useApiMutation('post', '/notifications/read-all', ['/notifications']);
+  const [busy, setBusy] = useState(false);
+
+  const remove = async (id: string) => {
+    try {
+      await api.delete(`/notifications/${id}`);
+      void query.refetch();
+    } catch (e) {
+      toast.error(e);
+    }
+  };
+
+  const clearRead = async () => {
+    setBusy(true);
+    try {
+      const { data } = await api.delete<{ deleted: number }>('/notifications');
+      toast.success(data.deleted ? `${data.deleted} cleared` : 'Nothing to clear');
+      void query.refetch();
+    } catch (e) {
+      toast.error(e);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const open = async (n: NotificationItem) => {
     if (!n.readAt) {
@@ -42,19 +65,29 @@ export default function NotificationsPage() {
         title="Notifications"
         description="Warranty and licence expiry, overdue returns, maintenance and request updates."
         actions={
-          <Button
-            variant="secondary"
-            loading={readAll.isPending}
-            icon={<CheckCheck className="h-4 w-4" />}
-            onClick={() =>
-              readAll
-                .mutateAsync({})
-                .then(() => toast.success('All marked as read'))
-                .catch((e) => toast.error(e))
-            }
-          >
-            Mark all read
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              loading={readAll.isPending}
+              icon={<CheckCheck className="h-4 w-4" />}
+              onClick={() =>
+                readAll
+                  .mutateAsync({})
+                  .then(() => toast.success('All marked as read'))
+                  .catch((e) => toast.error(e))
+              }
+            >
+              Mark all read
+            </Button>
+            <Button
+              variant="secondary"
+              loading={busy}
+              icon={<Trash2 className="h-4 w-4" />}
+              onClick={clearRead}
+            >
+              Clear read
+            </Button>
+          </div>
         }
       />
       <Card>
@@ -77,11 +110,19 @@ export default function NotificationsPage() {
               <>
                 <ul className="divide-y divide-slate-100 dark:divide-slate-800">
                   {items.map((n) => (
-                    <li key={n.id}>
+                    <li key={n.id} className="relative">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label={`Remove ${n.title}`}
+                        className="absolute right-2 top-2"
+                        icon={<Trash2 className="h-4 w-4" />}
+                        onClick={() => remove(n.id)}
+                      />
                       <button
                         type="button"
                         onClick={() => open(n)}
-                        className="flex w-full items-start gap-3 px-5 py-3 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                        className="flex w-full items-start gap-3 py-3 pl-5 pr-12 text-left hover:bg-slate-50 dark:hover:bg-slate-800/50"
                       >
                         <span
                           className={clsx(

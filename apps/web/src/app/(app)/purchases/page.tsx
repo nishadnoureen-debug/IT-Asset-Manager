@@ -20,6 +20,7 @@ import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { formatDate, formatMoney, label } from '@/lib/format';
+import { useRowRemoval } from '@/components/row-removal';
 import { useApi, useApiMutation, useListParams } from '@/lib/hooks';
 import type { Purchase, Vendor } from '@/lib/types';
 
@@ -263,6 +264,21 @@ export default function PurchasesPage() {
     limit: 25,
   });
 
+  const removePurchase = useRowRemoval<Purchase>({
+    endpoint: (p) => `/purchases/${p.id}`,
+    name: (p) => p.orderNumber ?? 'this purchase',
+    description:
+      'The order is archived, so its documents and history stay. An order that assets were bought on cannot be removed.',
+    onDone: () => void purchases.refetch(),
+  });
+  const removeVendor = useRowRemoval<Vendor>({
+    endpoint: (v) => `/vendors/${v.id}`,
+    name: (v) => v.name,
+    description:
+      'The vendor is archived, so past purchases keep their supplier. One that is still used cannot be removed.',
+    onDone: () => void vendors.refetch(),
+  });
+
   const purchaseColumns: Column<Purchase>[] = [
     {
       key: 'ref',
@@ -302,6 +318,9 @@ export default function PurchasesPage() {
         p._count?.documents ? p._count.documents : <Badge tone="amber">No invoice</Badge>,
       hideOnMobile: true,
     },
+    ...(can('purchase.manage')
+      ? [{ key: 'actions', header: '', cell: removePurchase.button }]
+      : []),
   ];
 
   const vendorColumns: Column<Vendor>[] = [
@@ -335,6 +354,7 @@ export default function PurchasesPage() {
       header: 'Status',
       cell: (v) => (v.isActive ? <Badge tone="green">Active</Badge> : <Badge>Inactive</Badge>),
     },
+    ...(can('vendor.manage') ? [{ key: 'actions', header: '', cell: removeVendor.button }] : []),
   ];
 
   return (
@@ -412,6 +432,8 @@ export default function PurchasesPage() {
           />
         )}
       </Card>
+      {removePurchase.dialog}
+      {removeVendor.dialog}
       <PurchaseDialog open={dialog === 'purchase'} onClose={() => setDialog(null)} />
       <VendorDialog
         open={dialog === 'vendor' || !!editVendor}

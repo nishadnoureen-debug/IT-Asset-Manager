@@ -104,6 +104,21 @@ export class NotificationsService {
     return this.prisma.notification.findUniqueOrThrow({ where: { id } });
   }
 
+  /** Removes one of the reader's own notifications. */
+  async remove(id: string, user: AuthUser) {
+    const result = await this.prisma.notification.deleteMany({ where: { id, userId: user.id } });
+    if (!result.count) throw Errors.notFound('Notification');
+    return { id, deleted: true };
+  }
+
+  /** Clears the reader's notifications that have been read. */
+  async clearRead(user: AuthUser) {
+    const result = await this.prisma.notification.deleteMany({
+      where: { userId: user.id, readAt: { not: null } },
+    });
+    return { deleted: result.count };
+  }
+
   async markAllRead(user: AuthUser) {
     const result = await this.prisma.notification.updateMany({
       where: { userId: user.id, readAt: null },

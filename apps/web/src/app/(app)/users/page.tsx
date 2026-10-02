@@ -18,6 +18,7 @@ import { useToast } from '@/components/ui/toast';
 import { api, ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { formatRelative } from '@/lib/format';
+import { useRowRemoval } from '@/components/row-removal';
 import { useApi, useApiMutation, useListParams } from '@/lib/hooks';
 import type { Role, UserAccount } from '@/lib/types';
 
@@ -205,6 +206,14 @@ function RolesTab() {
   const [form, setForm] = useState({ name: '', displayName: '', description: '' });
   const create = useApiMutation<Record<string, unknown>, Role>('post', '/roles', ['/roles']);
 
+  const removeRole = useRowRemoval<Role>({
+    endpoint: (r) => `/roles/${r.id}`,
+    name: (r) => r.displayName,
+    description:
+      'The role and its permissions go for good. A system role, or one people still hold, cannot be removed.',
+    onDone: () => void query.refetch(),
+  });
+
   const columns: Column<Role>[] = [
     {
       key: 'name',
@@ -228,6 +237,16 @@ function RolesTab() {
     },
     { key: 'users', header: 'Users', cell: (r) => r._count.users },
     { key: 'perms', header: 'Permissions', cell: (r) => r._count.permissions ?? '—' },
+    ...(can('role.manage')
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            // The system roles are part of the app, so only custom ones offer it.
+            cell: (r: Role) => (r.isSystem ? null : removeRole.button(r)),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -246,6 +265,7 @@ function RolesTab() {
         loading={query.isFetching}
         error={query.error}
       />
+      {removeRole.dialog}
       <Dialog
         open={creating}
         onClose={() => setCreating(false)}

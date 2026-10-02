@@ -1,4 +1,14 @@
-import { Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  Param,
+  ParseUUIDPipe,
+  Patch,
+  Post,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, PartialType } from '@nestjs/swagger';
 import { Prisma, VendorType } from '@prisma/client';
 import { Transform, Type } from 'class-transformer';
@@ -165,6 +175,38 @@ export class VendorsController {
         );
       return vendor;
     });
+  }
+
+  /** Archived, so past purchases keep their supplier; refused while anything still points at it. */
+  @Delete(':id')
+  @RequirePermissions('vendor.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const existing = await this.get(id);
+    const [purchases, assets, software] = await Promise.all([
+      this.prisma.purchase.count({ where: { vendorId: id, deletedAt: null } }),
+      this.prisma.asset.count({
+        where: { deletedAt: null, OR: [{ vendorId: id }, { warrantyProviderId: id }] },
+      }),
+      this.prisma.software.count({ where: { publisherId: id, deletedAt: null } }),
+    ]);
+    if (purchases || assets || software)
+      throw Errors.invalidState(
+        `Still used by ${purchases} purchases, ${assets} assets and ${software} software records`,
+      );
+    await this.prisma.$transaction(async (tx) => {
+      await tx.vendor.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'vendor.delete',
+          entityType: 'vendor',
+          entityId: id,
+          oldValues: { name: existing.name },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
   }
 }
 
@@ -365,6 +407,36 @@ export class PurchasesController {
       }
     });
     return this.get(id);
+  }
+
+  /** Archived; refused while assets, accessories or licences were bought on it. */
+  @Delete(':id')
+  @RequirePermissions('purchase.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const existing = await this.get(id);
+    const [assets, accessories, licenses] = await Promise.all([
+      this.prisma.asset.count({ where: { purchaseId: id, deletedAt: null } }),
+      this.prisma.accessory.count({ where: { purchaseId: id, deletedAt: null } }),
+      this.prisma.softwareLicense.count({ where: { purchaseId: id, deletedAt: null } }),
+    ]);
+    if (assets || accessories || licenses)
+      throw Errors.invalidState(
+        `${assets} assets, ${accessories} accessories and ${licenses} licences were bought on this order`,
+      );
+    await this.prisma.$transaction(async (tx) => {
+      await tx.purchase.update({ where: { id }, data: { deletedAt: new Date() } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'purchase.delete',
+          entityType: 'purchase',
+          entityId: id,
+          oldValues: { orderNumber: existing.orderNumber },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
   }
 
   private async assertVendor(vendorId: string) {

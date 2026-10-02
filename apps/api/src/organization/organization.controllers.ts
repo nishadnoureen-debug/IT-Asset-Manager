@@ -397,4 +397,34 @@ export class AssetTypesController {
       return type;
     });
   }
+
+  /** Removed outright when nothing uses it; otherwise turn it off instead. */
+  @Delete(':id')
+  @RequirePermissions('asset_type.manage')
+  async remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    const existing = await this.prisma.assetType.findUnique({ where: { id } });
+    if (!existing) throw Errors.notFound('Asset type');
+    const [assets, requests] = await Promise.all([
+      this.prisma.asset.count({ where: { assetTypeId: id, deletedAt: null } }),
+      this.prisma.assetRequest.count({ where: { assetTypeId: id } }),
+    ]);
+    if (assets || requests)
+      throw Errors.invalidState(
+        `${assets} assets and ${requests} requests use this type; turn it off instead`,
+      );
+    await this.prisma.$transaction(async (tx) => {
+      await tx.assetType.delete({ where: { id } });
+      await this.activity.record(
+        {
+          actorId: user.id,
+          action: 'asset_type.delete',
+          entityType: 'asset_type',
+          entityId: id,
+          oldValues: { name: existing.name, category: existing.category },
+        },
+        tx,
+      );
+    });
+    return { id, deleted: true };
+  }
 }

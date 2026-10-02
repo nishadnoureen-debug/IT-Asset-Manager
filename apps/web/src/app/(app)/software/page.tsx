@@ -27,6 +27,7 @@ import { useToast } from '@/components/ui/toast';
 import { ApiError } from '@/lib/api-client';
 import { useAuth } from '@/lib/auth';
 import { daysUntil, formatDate, formatMoney, label } from '@/lib/format';
+import { useRowRemoval } from '@/components/row-removal';
 import { useApi, useApiMutation, useListParams } from '@/lib/hooks';
 import type { License, Software } from '@/lib/types';
 import { LicenseDialog } from '@/features/software/license-dialog';
@@ -147,6 +148,21 @@ export default function SoftwarePage() {
     { search: params.search, page: params.page, limit: 25 },
   );
 
+  const removeSoftware = useRowRemoval<Software>({
+    endpoint: (s) => `/software/${s.id}`,
+    name: (s) => s.name,
+    description:
+      'The software is archived. One that still has licences cannot be removed — remove those first.',
+    onDone: () => void software.refetch(),
+  });
+  const removeLicense = useRowRemoval<License>({
+    endpoint: (l) => `/licenses/${l.id}`,
+    name: (l) => l.name ?? l.software.name,
+    description:
+      'The licence is archived, so its history stays. One with seats still assigned cannot be removed.',
+    onDone: () => void licenses.refetch(),
+  });
+
   const softwareColumns: Column<Software>[] = [
     {
       key: 'name',
@@ -168,6 +184,9 @@ export default function SoftwarePage() {
       header: 'Seats used',
       cell: (s) => <Utilization used={s.usedSeats ?? 0} seats={s.totalSeats ?? null} />,
     },
+    ...(can('software.manage')
+      ? [{ key: 'actions', header: '', cell: removeSoftware.button }]
+      : []),
   ];
 
   const licenseColumns: Column<License>[] = [
@@ -221,6 +240,7 @@ export default function SoftwarePage() {
       cell: (l) => formatMoney(l.cost, l.currency),
       hideOnMobile: true,
     },
+    ...(can('license.manage') ? [{ key: 'actions', header: '', cell: removeLicense.button }] : []),
   ];
 
   return (
@@ -302,6 +322,8 @@ export default function SoftwarePage() {
           />
         )}
       </Card>
+      {removeSoftware.dialog}
+      {removeLicense.dialog}
       <SoftwareDialog open={dialog === 'software'} onClose={() => setDialog(null)} />
       <LicenseDialog open={dialog === 'license'} onClose={() => setDialog(null)} />
     </>

@@ -1,5 +1,6 @@
 import {
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -52,6 +53,19 @@ export class NotificationsController {
   @HttpCode(HttpStatus.OK)
   markAllRead(@CurrentUser() user: AuthUser) {
     return this.notifications.markAllRead(user);
+  }
+
+  /** Clears every notification already read. */
+  @Delete()
+  @HttpCode(HttpStatus.OK)
+  clearRead(@CurrentUser() user: AuthUser) {
+    return this.notifications.clearRead(user);
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.OK)
+  remove(@Param('id', ParseUUIDPipe) id: string, @CurrentUser() user: AuthUser) {
+    return this.notifications.remove(id, user);
   }
 
   /** Run the alert checks now (they also run daily). */

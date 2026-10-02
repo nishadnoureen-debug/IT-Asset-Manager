@@ -482,6 +482,128 @@ describe('asset lifecycle', () => {
     expect(left).toHaveLength(5);
   });
 
+  it('removes records once nothing depends on them, and refuses while something does', async () => {
+    // A vendor with a purchase on it stays; the empty one goes.
+    const vendor = await http()
+      .post(api('/vendors'))
+      .set(s.admin.auth)
+      .send({ name: 'Gulf Supplies', types: ['SUPPLIER'] })
+      .expect(201);
+    const vendorId = vendor.body.data.id as string;
+    const purchase = await http()
+      .post(api('/purchases'))
+      .set(s.admin.auth)
+      .send({ vendorId, orderNumber: 'PO-DEL-1', purchaseDate: '2026-01-05' })
+      .expect(201);
+    const busyVendor = await http()
+      .delete(api(`/vendors/${vendorId}`))
+      .set(s.admin.auth)
+      .expect(422);
+    expect(busyVendor.body.error.code).toBe('INVALID_STATE');
+
+    // The purchase itself has nothing on it, so it can go, and then the vendor can too.
+    await http()
+      .delete(api(`/purchases/${purchase.body.data.id}`))
+      .set(s.admin.auth)
+      .expect(200);
+    await http()
+      .delete(api(`/vendors/${vendorId}`))
+      .set(s.admin.auth)
+      .expect(200);
+    const vendors = await http().get(api('/vendors?search=Gulf Supplies')).set(s.admin.auth);
+    expect(vendors.body.data).toHaveLength(0);
+
+    // Software keeps its licences: the licence goes first.
+    const software = await http()
+      .post(api('/software'))
+      .set(s.admin.auth)
+      .send({ name: 'Drawing Tool', version: '2026' })
+      .expect(201);
+    const softwareId = software.body.data.id as string;
+    const licence = await http()
+      .post(api('/licenses'))
+      .set(s.admin.auth)
+      .send({ softwareId, name: 'Drawing Tool site', licenseType: 'SUBSCRIPTION', seats: 3 })
+      .expect(201);
+    const busySoftware = await http()
+      .delete(api(`/software/${softwareId}`))
+      .set(s.admin.auth)
+      .expect(422);
+    expect(busySoftware.body.error.code).toBe('INVALID_STATE');
+    await http()
+      .delete(api(`/licenses/${licence.body.data.id}`))
+      .set(s.admin.auth)
+      .expect(200);
+    await http()
+      .delete(api(`/software/${softwareId}`))
+      .set(s.admin.auth)
+      .expect(200);
+
+    // An asset type in use stays; an unused one goes.
+    const unused = await http()
+      .post(api('/asset-types'))
+      .set(s.admin.auth)
+      .send({ name: 'Label printer', category: 'PRINTER' })
+      .expect(201);
+    await http()
+      .delete(api(`/asset-types/${unused.body.data.id}`))
+      .set(s.admin.auth)
+      .expect(200);
+    const inUse = await http()
+      .delete(api(`/asset-types/${ids.laptopType}`))
+      .set(s.admin.auth)
+      .expect(422);
+    expect(inUse.body.error.code).toBe('INVALID_STATE');
+
+    // A system role is never removed; a custom one nobody holds is.
+    const roles = await http().get(api('/roles')).set(s.superAdmin.auth).expect(200);
+    const system = roles.body.data.find((r: { isSystem: boolean }) => r.isSystem);
+    const locked = await http()
+      .delete(api(`/roles/${system.id}`))
+      .set(s.superAdmin.auth)
+      .expect(422);
+    expect(locked.body.error.code).toBe('INVALID_STATE');
+    const custom = await http()
+      .post(api('/roles'))
+      .set(s.superAdmin.auth)
+      .send({ name: 'STORE_KEEPER', displayName: 'Store keeper' })
+      .expect(201);
+    await http()
+      .delete(api(`/roles/${custom.body.data.id}`))
+      .set(s.superAdmin.auth)
+      .expect(200);
+
+    // Everyone clears their own notifications, and only those they have read.
+    const mine = await prisma.notification.create({
+      data: {
+        userId: u.admin,
+        type: 'SYSTEM',
+        title: 'Read me',
+        message: 'Then clear me',
+        readAt: new Date(),
+      },
+    });
+    const unread = await prisma.notification.create({
+      data: { userId: u.admin, type: 'SYSTEM', title: 'Still unread', message: 'Keep me' },
+    });
+    const cleared = await http().delete(api('/notifications')).set(s.admin.auth).expect(200);
+    expect(cleared.body.data.deleted).toBeGreaterThanOrEqual(1);
+    expect(await prisma.notification.findUnique({ where: { id: mine.id } })).toBeNull();
+    expect(await prisma.notification.findUnique({ where: { id: unread.id } })).not.toBeNull();
+    await http()
+      .delete(api(`/notifications/${unread.id}`))
+      .set(s.admin.auth)
+      .expect(200);
+    // Someone else's notification is not theirs to remove.
+    const theirs = await prisma.notification.create({
+      data: { userId: u.employee, type: 'SYSTEM', title: 'Not yours', message: 'Hands off' },
+    });
+    await http()
+      .delete(api(`/notifications/${theirs.id}`))
+      .set(s.admin.auth)
+      .expect(404);
+  });
+
   it('removes an accessory only once its pieces are back', async () => {
     const spare = await http()
       .post(api('/accessories'))
