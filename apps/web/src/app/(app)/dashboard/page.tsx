@@ -95,11 +95,6 @@ interface Dashboard {
   } | null;
 }
 
-function greeting() {
-  const h = new Date().getHours();
-  return h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-}
-
 function MyAssets({ mine }: { mine: NonNullable<Dashboard['mine']> }) {
   const pending = mine.assets.filter((a) => !a.acknowledgedAt).length;
   return (
@@ -226,7 +221,7 @@ export default function DashboardPage() {
   return (
     <>
       <PageHeader
-        title={`${greeting()}${firstName ? `, ${firstName}` : ''}`}
+        title={`Hello${firstName ? `, ${firstName}` : ''}`}
         description="Overview of IT assets and what needs attention."
         actions={
           <>
