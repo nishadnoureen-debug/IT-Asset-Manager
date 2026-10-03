@@ -178,6 +178,71 @@ export class HandoverPdfService {
     );
   }
 
+  /**
+   * The same COMPANY ASSETS HANDOVER FORM for accessories handed straight to an employee, with no
+   * device: the device lines read N/A and what went out is listed under "Accessories Issued".
+   */
+  async renderAccessories(accessoryAssignmentId: string, signature?: Buffer): Promise<Buffer> {
+    const a = await this.prisma.accessoryAssignment.findUniqueOrThrow({
+      where: { id: accessoryAssignmentId },
+      include: {
+        accessory: { include: { location: true } },
+        employee: true,
+        assignedBy: { select: { displayName: true } },
+        units: { select: { code: true }, orderBy: { number: 'asc' } },
+      },
+    });
+    const settings = await this.settings.get();
+    const ref = `HND-${a.id.slice(0, 8).toUpperCase()}`;
+    const codes = a.units.map((u) => u.code).join(', ');
+    const issued = `${a.accessory.name}${codes ? ` (${codes})` : a.quantity > 1 ? ` ×${a.quantity}` : ''}`;
+
+    return this.forms.render(
+      {
+        title: TITLES.HANDOVER,
+        subtitle: `Ref. ${ref}   |   Date: ${formDate(a.assignedAt) || BLANK}`,
+        documentTitle: `${TITLES.HANDOVER} ${a.accessory.code}`,
+      },
+      (f) => {
+        f.heading('Employee Details');
+        this.personDetails(f, a.employee, a.accessory.location?.name);
+        f.rule();
+
+        f.heading('Device Details');
+        f.bullets([
+          ['Device Type', 'N/A — accessories only'],
+          ['Brand / Model', [a.accessory.brand, a.accessory.model].filter(Boolean).join(' ')],
+          ['Inventory Code', a.accessory.code],
+          ['Phone Number (if applicable)', 'N/A'],
+          ['Accessories Issued', issued],
+        ]);
+        f.rule();
+
+        f.heading('Condition at Time of Handover');
+        f.checkBoxes(conditionRows(a.conditionAtAssignment, a.notes));
+        f.rule();
+
+        f.heading('Terms & Conditions');
+        const terms = settings.formTerms
+          .split('\n')
+          .map((t) => t.trim().replaceAll('{company}', settings.companyName))
+          .filter(Boolean);
+        f.bullets(terms.map((t) => [null, t]));
+        f.rule();
+
+        f.heading('Declaration');
+        f.paragraph(
+          'I hereby acknowledge receipt of the above-mentioned company device(s) and accessories. I agree to abide by the terms and conditions stated above.',
+        );
+        f.signatureLine('Employee Signature', signature);
+        f.fieldLine('Date', formDate(a.assignedAt));
+        if (a.assignedBy?.displayName) f.fieldLine('Issued By', a.assignedBy.displayName);
+
+        f.approvedBy();
+      },
+    );
+  }
+
   private personDetails(f: CompanyForm, person: PersonLike, locationName?: string | null): void {
     if (!person) {
       f.bullets([['Location', locationName ?? '']]);

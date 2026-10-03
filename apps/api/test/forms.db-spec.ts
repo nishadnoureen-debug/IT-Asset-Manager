@@ -251,7 +251,7 @@ describe('handover, transfer and return forms', () => {
       expect(r).toContain(text);
     expect(r).not.toContain('Terms & Conditions');
   });
-  it('prints a handover form for accessories issued on their own', async () => {
+  it('prints the handover form for accessories issued on their own', async () => {
     const admin = await login(app, 'it@example.com');
     const omar = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP101' } });
     const mouse = await http()
@@ -280,16 +280,16 @@ describe('handover, transfer and return forms', () => {
 
     const text = pdfText(await download(admin.auth, form.id));
     for (const expected of [
-      'COMPANY ACCESSORIES HANDOVER FORM',
+      // The same sheet as a device hand-over, with the accessories on it.
+      'COMPANY ASSETS HANDOVER FORM',
       'Employee Details',
       'OMAR HADDAD',
       'EMP101',
-      // What was issued, under the accessories part of the form.
+      'Device Details',
+      'N/A',
       'Accessories Issued',
       'Wireless mouse',
-      'Quantity',
-      'Piece Codes',
-      mouse.body.data.code,
+      `${mouse.body.data.code}-01`,
       'Condition at Time of Handover',
       'For the site office',
       'Terms & Conditions',

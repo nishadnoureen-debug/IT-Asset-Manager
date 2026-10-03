@@ -44,11 +44,11 @@ import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
+import { HandoverPdfService } from '../assignments/handover-pdf.service';
 import { DocumentsService, documentSelect } from '../documents/documents.service';
 import { decodeSignature } from '../documents/file-validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrService, parseScannedCode } from '../qr/qr.service';
-import { AccessoryHandoverPdfService } from './accessory-handover-pdf.service';
 import { AccessoryUnitsService, unitSelect } from './accessory-units.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -137,7 +137,7 @@ export class AccessoriesController {
     private readonly settings: SettingsService,
     private readonly qr: QrService,
     private readonly units: AccessoryUnitsService,
-    private readonly handoverPdf: AccessoryHandoverPdfService,
+    private readonly handoverPdf: HandoverPdfService,
     private readonly documents: DocumentsService,
   ) {}
 
@@ -385,7 +385,7 @@ export class AccessoriesController {
         select: { employeeId: true, accessory: { select: { code: true, name: true } } },
       });
       const signature = signatureDataUrl ? decodeSignature(signatureDataUrl) : undefined;
-      const pdf = await this.handoverPdf.render(assignmentId, signature);
+      const pdf = await this.handoverPdf.renderAccessories(assignmentId, signature);
       const owner = { accessoryId, employeeId: assignment.employeeId };
       await this.prisma.$transaction(async (tx) => {
         if (signature)
@@ -407,8 +407,8 @@ export class AccessoriesController {
             buffer: pdf,
             mimeType: 'application/pdf',
             type: 'HANDOVER_FORM',
-            title: `Accessories handover form — ${assignment.accessory.code}${signature ? ' (signed)' : ''}`,
-            originalFileName: `accessory-handover-${assignment.accessory.code}.pdf`,
+            title: `Handover form — ${assignment.accessory.code}${signature ? ' (signed)' : ''}`,
+            originalFileName: `handover-${assignment.accessory.code}.pdf`,
             owner,
           },
           actorId,
