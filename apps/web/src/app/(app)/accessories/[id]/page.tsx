@@ -7,6 +7,7 @@ import { useState } from 'react';
 import { BackLink } from '@/components/back-link';
 import { Documents } from '@/components/documents';
 import { EmployeePicker } from '@/components/pickers';
+import { SignaturePad } from '@/components/signature-pad';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardBody, CardHeader, DetailList, PageHeader } from '@/components/ui/card';
@@ -48,6 +49,7 @@ export default function AccessoryPage() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [pieces, setPieces] = useState<Set<string>>(new Set());
+  const [signature, setSignature] = useState<string | null>(null);
   const [returningId, setReturningId] = useState<string | null>(null);
   const [damaged, setDamaged] = useState(false);
   const manage = can('accessory.manage');
@@ -62,11 +64,13 @@ export default function AccessoryPage() {
         employeeId,
         quantity: count,
         unitIds: pieces.size ? [...pieces] : undefined,
+        signature: signature ?? undefined,
       });
-      toast.success(`${count} handed out`);
+      toast.success(`${count} handed out — the handover form is on the Documents tab`);
       setEmployeeId(null);
       setQuantity(1);
       setPieces(new Set());
+      setSignature(null);
       void query.refetch();
     } catch (e) {
       toast.error(e);
@@ -261,6 +265,12 @@ export default function AccessoryPage() {
                             tab.
                           </p>
                         )}
+                        <div className="mt-4">
+                          <SignaturePad onChange={setSignature} label="Employee signature" />
+                          <p className="mt-1 text-xs text-slate-500">
+                            Optional — the handover form is filed either way, on the Documents tab.
+                          </p>
+                        </div>
                       </CardBody>
                     </Card>
                   )}

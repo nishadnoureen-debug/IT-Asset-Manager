@@ -251,6 +251,61 @@ describe('handover, transfer and return forms', () => {
       expect(r).toContain(text);
     expect(r).not.toContain('Terms & Conditions');
   });
+  it('prints a handover form for accessories issued on their own', async () => {
+    const admin = await login(app, 'it@example.com');
+    const omar = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP101' } });
+    const mouse = await http()
+      .post(api('/accessories'))
+      .set(admin.auth)
+      .send({ name: 'Wireless mouse', category: 'MOUSE', quantityTotal: 4, unitCost: 55 })
+      .expect(201);
+    const mouseId = mouse.body.data.id as string;
+
+    const handOut = await http()
+      .post(api(`/accessories/${mouseId}/assign`))
+      .set(admin.auth)
+      .send({ employeeId: omar.id, quantity: 2, condition: 'NEW', notes: 'For the site office' })
+      .expect(201);
+    expect(handOut.body.data.quantity).toBe(2);
+
+    // The form is filed against the accessory, so it is on its Documents tab.
+    const detail = await http()
+      .get(api(`/accessories/${mouseId}`))
+      .set(admin.auth)
+      .expect(200);
+    const form = detail.body.data.documents.find(
+      (d: { type: string }) => d.type === 'HANDOVER_FORM',
+    );
+    expect(form).toBeDefined();
+
+    const text = pdfText(await download(admin.auth, form.id));
+    for (const expected of [
+      'COMPANY ACCESSORIES HANDOVER FORM',
+      'Employee Details',
+      'OMAR HADDAD',
+      'EMP101',
+      // What was issued, under the accessories part of the form.
+      'Accessories Issued',
+      'Wireless mouse',
+      'Quantity',
+      'Piece Codes',
+      mouse.body.data.code,
+      'Condition at Time of Handover',
+      'For the site office',
+      'Terms & Conditions',
+      'Declaration',
+      'Employee Signature',
+      'Approved by:',
+      'ARC GLOBAL TECHNICAL SERVICES',
+    ])
+      expect(text).toContain(expected);
+    if (process.env.FORMS_OUT)
+      writeFileSync(
+        join(process.env.FORMS_OUT, 'accessory-handover.pdf'),
+        await download(admin.auth, form.id),
+      );
+  });
+
   it('prints the fixed asset request form, with its own two approval boxes', async () => {
     const admin = await login(app, 'it@example.com');
     const omar = await prisma.employee.findFirstOrThrow({ where: { employeeNumber: 'EMP101' } });

@@ -494,7 +494,11 @@ describe('asset lifecycle', () => {
       .get(api(`/accessories/${chargerId}`))
       .set(s.tech.auth)
       .expect(200);
-    expect(withDoc.body.data.documents).toHaveLength(1);
+    // The invoice sits beside the hand-over form the earlier hand-out filed.
+    expect(withDoc.body.data.documents.map((d: { type: string }) => d.type).sort()).toEqual([
+      'HANDOVER_FORM',
+      'INVOICE',
+    ]);
 
     // Taking the stock back down retires the spare pieces, newest first.
     await http()

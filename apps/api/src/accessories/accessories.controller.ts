@@ -5,6 +5,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -43,9 +44,11 @@ import { Errors } from '../common/errors';
 import { PaginationQueryDto } from '../common/pagination/pagination-query.dto';
 import { paginate, resolveOrderBy, searchFilter } from '../common/query/list-query';
 import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
-import { documentSelect } from '../documents/documents.service';
+import { DocumentsService, documentSelect } from '../documents/documents.service';
+import { decodeSignature } from '../documents/file-validation';
 import { PrismaService } from '../prisma/prisma.service';
 import { QrService, parseScannedCode } from '../qr/qr.service';
+import { AccessoryHandoverPdfService } from './accessory-handover-pdf.service';
 import { AccessoryUnitsService, unitSelect } from './accessory-units.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -81,6 +84,8 @@ class AssignAccessoryDto {
   @Type(() => Number) @IsInt() @Min(1) @Max(100) quantity: number = 1;
   /** The pieces to hand over; left out, the lowest-numbered ones in the store are used. */
   @IsOptional() @IsArray() @ArrayMaxSize(100) @IsUUID('all', { each: true }) unitIds?: string[];
+  /** Signature drawn on the pad at hand-over; it goes on the printed form. */
+  @IsOptional() @IsString() @MaxLength(700_000) signature?: string;
   @IsOptional() @IsEnum(AssetCondition) condition?: AssetCondition;
   @IsOptional() @IsString() @MaxLength(2000) notes?: string;
 }
@@ -132,7 +137,11 @@ export class AccessoriesController {
     private readonly settings: SettingsService,
     private readonly qr: QrService,
     private readonly units: AccessoryUnitsService,
+    private readonly handoverPdf: AccessoryHandoverPdfService,
+    private readonly documents: DocumentsService,
   ) {}
+
+  private readonly logger = new Logger(AccessoriesController.name);
 
   @Get('accessories')
   @RequirePermissions('accessory.view', 'accessory.manage')
@@ -319,7 +328,7 @@ export class AccessoriesController {
     });
     if (!employee || employee.status === 'TERMINATED')
       throw Errors.badRequest('Employee not found or terminated', 'employeeId');
-    return this.prisma.$transaction(async (tx) => {
+    const handed = await this.prisma.$transaction(async (tx) => {
       const taken = await tx.accessory.updateMany({
         where: { id, deletedAt: null, quantityAvailable: { gte: dto.quantity } },
         data: { quantityAvailable: { decrement: dto.quantity } },
@@ -356,6 +365,58 @@ export class AccessoriesController {
       );
       return assignment;
     });
+    await this.attachHandoverForm(handed.id, id, dto.signature, user.id);
+    return handed;
+  }
+
+  /**
+   * The printed hand-over form for accessories given straight to an employee, filed against the
+   * accessory and the employee. A failure here never undoes the hand-over itself.
+   */
+  private async attachHandoverForm(
+    assignmentId: string,
+    accessoryId: string,
+    signatureDataUrl: string | undefined,
+    actorId: string,
+  ): Promise<void> {
+    try {
+      const assignment = await this.prisma.accessoryAssignment.findUniqueOrThrow({
+        where: { id: assignmentId },
+        select: { employeeId: true, accessory: { select: { code: true, name: true } } },
+      });
+      const signature = signatureDataUrl ? decodeSignature(signatureDataUrl) : undefined;
+      const pdf = await this.handoverPdf.render(assignmentId, signature);
+      const owner = { accessoryId, employeeId: assignment.employeeId };
+      await this.prisma.$transaction(async (tx) => {
+        if (signature)
+          await this.documents.store(
+            tx,
+            {
+              buffer: signature,
+              mimeType: 'image/png',
+              type: 'SIGNATURE',
+              title: `Handover signature — ${assignment.accessory.code}`,
+              originalFileName: `signature-${assignment.accessory.code}.png`,
+              owner,
+            },
+            actorId,
+          );
+        await this.documents.store(
+          tx,
+          {
+            buffer: pdf,
+            mimeType: 'application/pdf',
+            type: 'HANDOVER_FORM',
+            title: `Accessories handover form — ${assignment.accessory.code}${signature ? ' (signed)' : ''}`,
+            originalFileName: `accessory-handover-${assignment.accessory.code}.pdf`,
+            owner,
+          },
+          actorId,
+        );
+      });
+    } catch (error) {
+      this.logger.error({ err: error, assignmentId }, 'Failed to generate the accessories form');
+    }
   }
 
   @Get('accessory-assignments')
