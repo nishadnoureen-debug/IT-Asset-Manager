@@ -57,7 +57,7 @@ describe('parseScannedCode', () => {
   });
 
   it('treats anything else as a tag or serial', () => {
-    expect(parseScannedCode('AST-000123')).toEqual({ text: 'AST-000123' });
+    expect(parseScannedCode('AST-123')).toEqual({ text: 'AST-123' });
   });
 });
 

@@ -568,7 +568,7 @@ async function main() {
     // ── Accessories ─────────────────────────────────────────────────────────
     const charger = await prisma.accessory.create({
       data: {
-        code: 'ACC-000001',
+        code: 'ACC-001',
         name: 'USB-C 65W Charger',
         category: 'CHARGER',
         sku: 'ACC-CHG-65',
@@ -582,7 +582,7 @@ async function main() {
     });
     const mouse = await prisma.accessory.create({
       data: {
-        code: 'ACC-000002',
+        code: 'ACC-002',
         name: 'Wireless Mouse',
         category: 'MOUSE',
         sku: 'ACC-MSE-01',
@@ -596,7 +596,7 @@ async function main() {
     });
     const bag = await prisma.accessory.create({
       data: {
-        code: 'ACC-000003',
+        code: 'ACC-003',
         name: 'Laptop Backpack',
         category: 'BAG',
         sku: 'ACC-BAG-15',
@@ -610,7 +610,7 @@ async function main() {
     });
     const dock = await prisma.accessory.create({
       data: {
-        code: 'ACC-000004',
+        code: 'ACC-004',
         name: 'Thunderbolt Dock',
         category: 'DOCKING_STATION',
         sku: 'ACC-DCK-TB4',
@@ -624,7 +624,7 @@ async function main() {
     });
     await prisma.accessory.create({
       data: {
-        code: 'ACC-000005',
+        code: 'ACC-005',
         name: 'Noise-cancelling Headset',
         category: 'HEADSET',
         sku: 'ACC-HDS-01',

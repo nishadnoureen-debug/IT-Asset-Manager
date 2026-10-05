@@ -9,9 +9,9 @@ export interface AppSettings {
   companyName: string;
   /** ISO-4217 code used when a record does not specify one. */
   defaultCurrency: string;
-  /** Prefix for generated asset tags, e.g. AST → AST-000123. */
+  /** Prefix for generated asset tags, e.g. AST → AST-123. */
   assetTagPrefix: string;
-  /** Prefix for generated accessory codes, e.g. ACC → ACC-000123. */
+  /** Prefix for generated accessory codes, e.g. ACC → ACC-123. */
   accessoryCodePrefix: string;
   /** Days before warranty end to raise alerts. */
   warrantyAlertDays: number;

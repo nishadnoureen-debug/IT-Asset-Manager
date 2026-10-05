@@ -614,7 +614,7 @@ export class AssetsService {
       const [{ nextval }] = await db.$queryRaw<
         { nextval: bigint }[]
       >`SELECT nextval('asset_tag_seq')`;
-      const tag = `${prefix}-${String(nextval).padStart(6, '0')}`;
+      const tag = `${prefix}-${String(nextval).padStart(3, '0')}`;
       if (!(await db.asset.findUnique({ where: { assetTag: tag }, select: { id: true } })))
         return tag;
     }

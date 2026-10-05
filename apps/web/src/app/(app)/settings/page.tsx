@@ -123,7 +123,7 @@ function GeneralSettings() {
                 <Field
                   label="Asset tag prefix"
                   error={errors.assetTagPrefix?.message}
-                  hint="New tags look like PREFIX-000123"
+                  hint="New tags look like PREFIX-123"
                 >
                   {(p) => (
                     <Input
@@ -142,7 +142,7 @@ function GeneralSettings() {
                 <Field
                   label="Accessory code prefix"
                   error={errors.accessoryCodePrefix?.message}
-                  hint="New accessory codes look like PREFIX-000123"
+                  hint="New accessory codes look like PREFIX-123"
                 >
                   {(p) => (
                     <Input

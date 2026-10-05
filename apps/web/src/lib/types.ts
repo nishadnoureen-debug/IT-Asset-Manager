@@ -273,7 +273,7 @@ export interface Purchase {
 
 export interface AccessoryUnit {
   id: Id;
-  /** Printed on this piece's label, e.g. ACC-000001-07. */
+  /** Printed on this piece's label, e.g. ACC-001-07. */
   code: string;
   number: number;
   status: 'IN_STOCK' | 'ASSIGNED' | 'DAMAGED' | 'RETIRED';

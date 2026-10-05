@@ -372,7 +372,7 @@ describe('asset lifecycle', () => {
     // Priced records without a currency get the default (UAE dirhams).
     expect(charger.body.data.currency).toBe('AED');
     // Accessories carry a code and a QR label, like assets do.
-    expect(charger.body.data.code).toMatch(/^ACC-\d{6}$/);
+    expect(charger.body.data.code).toMatch(/^ACC-\d{3}$/);
   });
 
   it('gives every piece of an accessory its own code and QR label', async () => {
@@ -684,7 +684,7 @@ describe('asset lifecycle', () => {
   });
 
   it('generates tags, records history and activity, and validates input', async () => {
-    expect(asset.assetTag).toMatch(/^AST-\d{6}$/);
+    expect(asset.assetTag).toMatch(/^AST-\d{3}$/);
     const history = await http()
       .get(api(`/assets/${asset.id}/history`))
       .set(s.tech.auth)

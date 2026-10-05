@@ -106,7 +106,7 @@ single washing time (`start_at` and `end_at`). A `CHECK` keeps a finished rental
 API refuses a period that runs into another rental of the same item, so two employees never hold one card or one
 machine at the same time. `rental_items.status` follows the open rentals: `RENTED` while something is out,
 `AVAILABLE` again once it is back.
-`accessory_units` is one row per physical piece of an accessory: its printed code (`ACC-000012-03`), its QR
+`accessory_units` is one row per physical piece of an accessory: its printed code (`ACC-012-03`), its QR
 token, and the hand-out holding it. Stock numbers and pieces move together — adding stock creates pieces, handing
 some out marks those pieces `ASSIGNED`, a damaged return writes one off — so `quantity_available` always equals
 the pieces in the store. A `CHECK` keeps `assignment_id` and the `ASSIGNED` status in step.

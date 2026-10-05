@@ -661,7 +661,7 @@ enum AccessoryUnitStatus {
 model AccessoryUnit {
   id           String              @id @default(uuid()) @db.Uuid
   accessoryId  String              @map("accessory_id") @db.Uuid
-  /// The accessory's code and the piece number, e.g. ACC-000001-07.
+  /// The accessory's code and the piece number, e.g. ACC-001-07.
   code         String              @unique @db.VarChar(40)
   /// What the printed QR label points at.
   qrToken      String              @unique @default(uuid()) @map("qr_token") @db.Uuid

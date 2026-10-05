@@ -357,7 +357,7 @@ describe('accessories and software', () => {
     await expect(
       prisma.accessory.create({
         data: {
-          code: 'ACC-900001',
+          code: 'ACC-901',
           name: 'USB-C charger',
           category: 'CHARGER',
           quantityTotal: 5,
@@ -406,7 +406,7 @@ describe('accessories and software', () => {
   it('rejects zero-quantity accessory hand-overs and inverted licence dates', async () => {
     const accessory = await prisma.accessory.create({
       data: {
-        code: 'ACC-900002',
+        code: 'ACC-902',
         name: 'Mouse',
         category: 'MOUSE',
         quantityTotal: 3,

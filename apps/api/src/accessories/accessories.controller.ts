@@ -663,13 +663,13 @@ export class AccessoriesController {
     return accessory;
   }
 
-  /** The next free code from the sequence, e.g. ACC-000123. */
+  /** The next free code from the sequence, e.g. ACC-123. */
   private async nextCode(db: Prisma.TransactionClient, prefix: string): Promise<string> {
     for (let attempt = 0; attempt < 20; attempt++) {
       const [{ nextval }] = await db.$queryRaw<
         { nextval: bigint }[]
       >`SELECT nextval('accessory_code_seq')`;
-      const code = `${prefix}-${String(nextval).padStart(6, '0')}`;
+      const code = `${prefix}-${String(nextval).padStart(3, '0')}`;
       if (!(await db.accessory.findUnique({ where: { code }, select: { id: true } }))) return code;
     }
     throw Errors.conflict('ACCESSORY_CODE_EXHAUSTED', 'Could not generate a unique accessory code');
