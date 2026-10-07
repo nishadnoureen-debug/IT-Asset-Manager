@@ -287,6 +287,31 @@ export interface AccessoryUnit {
   } | null;
 }
 
+/** What scanning an accessory label gives back: the piece, and whoever is holding it. */
+export interface AccessoryScan {
+  unit:
+    | (AccessoryUnit & {
+        assignment: {
+          id: Id;
+          assignedAt: string;
+          quantity: number;
+          employee:
+            | (EmployeeRef & {
+                jobTitle: string | null;
+                email: string | null;
+                phone: string | null;
+                status: string;
+                department: Ref | null;
+                location: Ref | null;
+              })
+            | null;
+          assetAssignment: { id: Id; asset: { id: Id; assetTag: string; name: string } } | null;
+        } | null;
+      })
+    | null;
+  accessory: Accessory & { category: string };
+}
+
 export interface Accessory {
   id: Id;
   /** Stock code the pieces are numbered from. */

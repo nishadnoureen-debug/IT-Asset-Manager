@@ -26,7 +26,106 @@ import { AssetActionDialog } from '@/features/assets/asset-dialogs';
 import { MaintenanceDialog } from '@/features/maintenance/maintenance-form';
 import { api, ApiError } from '@/lib/api-client';
 import { daysUntil, formatDate, fullName, label } from '@/lib/format';
-import type { Accessory, AccessoryUnit, ScanResult } from '@/lib/types';
+import type { AccessoryScan, ScanResult } from '@/lib/types';
+
+/** A scanned accessory label: who has that piece, and how to reach them. */
+function AccessoryResultCard({ scan, onClose }: { scan: AccessoryScan; onClose: () => void }) {
+  const held = scan.unit?.assignment ?? null;
+  const person = held?.employee ?? null;
+
+  return (
+    <Card className="overflow-hidden">
+      <div className="flex items-start justify-between gap-3 border-b border-slate-100 bg-slate-50 px-5 py-4 dark:border-slate-800 dark:bg-slate-900/60">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-lg font-bold text-slate-900 dark:text-slate-50">
+              {scan.unit?.code ?? scan.accessory.code}
+            </p>
+            <Badge tone={person ? 'green' : 'teal'}>
+              {person ? 'With an employee' : 'In the store'}
+            </Badge>
+          </div>
+          <p className="truncate text-sm text-slate-600 dark:text-slate-400">
+            {scan.accessory.name} · {label('accessoryCategory', scan.accessory.category)}
+          </p>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          aria-label="Close result"
+          icon={<X className="h-4 w-4" />}
+        />
+      </div>
+      <CardBody className="space-y-4">
+        {person ? (
+          <>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-slate-500">Held by</p>
+              <p className="text-xl font-semibold text-slate-900 dark:text-slate-50">
+                {fullName(person)}
+              </p>
+              <p className="text-sm text-slate-600 dark:text-slate-400">
+                {[person.employeeNumber, person.jobTitle].filter(Boolean).join(' · ')}
+              </p>
+            </div>
+            <dl className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Department</dt>
+                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
+                  {person.department?.name ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Location</dt>
+                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
+                  {person.location?.name ?? '—'}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Since</dt>
+                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
+                  {formatDate(held!.assignedAt)}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-xs uppercase tracking-wide text-slate-500">Given with</dt>
+                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
+                  {held!.assetAssignment ? held!.assetAssignment.asset.assetTag : 'On its own'}
+                </dd>
+              </div>
+              {person.email && (
+                <div className="col-span-2">
+                  <dt className="text-xs uppercase tracking-wide text-slate-500">Contact</dt>
+                  <dd className="mt-0.5 break-all text-slate-900 dark:text-slate-100">
+                    {[person.email, person.phone].filter(Boolean).join(' · ')}
+                  </dd>
+                </div>
+              )}
+            </dl>
+            <div className="flex flex-wrap gap-2">
+              <ButtonLink href={`/employees/${person.id}`} variant="secondary">
+                Open employee
+              </ButtonLink>
+              <ButtonLink href={`/accessories/${scan.accessory.id}`} variant="secondary">
+                Open accessory
+              </ButtonLink>
+            </div>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-slate-600 dark:text-slate-400">
+              Nobody is holding this piece — it is in the store.
+            </p>
+            <ButtonLink href={`/accessories/${scan.accessory.id}`} variant="secondary">
+              Open accessory
+            </ButtonLink>
+          </>
+        )}
+      </CardBody>
+    </Card>
+  );
+}
 
 function ResultCard({
   result,
@@ -225,6 +324,7 @@ export default function ScanPage() {
   const router = useRouter();
   const [code, setCode] = useState<string | null>(initial);
   const [result, setResult] = useState<ScanResult | null>(null);
+  const [accessory, setAccessory] = useState<AccessoryScan | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const busy = useRef(false);
@@ -236,6 +336,7 @@ export default function ScanPage() {
       setLoading(true);
       setError(null);
       setCode(value);
+      setAccessory(null);
       try {
         const { data } = await api.post<ScanResult>('/qr/scan', { code: value });
         setResult(data);
@@ -244,14 +345,9 @@ export default function ScanPage() {
         // Accessories carry labels of their own; a code that is not an asset may be one.
         if (e instanceof ApiError && e.code === 'NOT_FOUND') {
           try {
-            const { data } = await api.post<{ unit: AccessoryUnit | null; accessory: Accessory }>(
-              '/accessories/scan',
-              { code: value },
-            );
-            // The piece's own code finds it in the list, with its accessory around it.
-            router.push(
-              `/accessories?search=${encodeURIComponent(data.unit?.code ?? data.accessory.code)}`,
-            );
+            // A scanned accessory label answers with whoever is holding that piece.
+            const { data } = await api.post<AccessoryScan>('/accessories/scan', { code: value });
+            setAccessory(data);
             return;
           } catch {
             // Not an accessory either; fall through to the message below.
@@ -287,7 +383,7 @@ export default function ScanPage() {
         description="Point the camera at an asset label, or type the tag or serial number."
       />
       <div className="space-y-4">
-        {!result && <QrScanner onDetect={lookup} paused={loading} />}
+        {!result && !accessory && <QrScanner onDetect={lookup} paused={loading} />}
         {loading && <Spinner label="Looking up asset" />}
         {error && (
           <Card className="border-red-200 dark:border-red-900">
@@ -300,6 +396,19 @@ export default function ScanPage() {
               </div>
             </CardBody>
           </Card>
+        )}
+        {accessory && (
+          <>
+            <AccessoryResultCard scan={accessory} onClose={() => setAccessory(null)} />
+            <Button
+              variant="secondary"
+              className="w-full"
+              onClick={() => setAccessory(null)}
+              icon={<ScanLine className="h-4 w-4" />}
+            >
+              Scan another
+            </Button>
+          </>
         )}
         {result && code && (
           <>

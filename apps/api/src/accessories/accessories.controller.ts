@@ -627,8 +627,24 @@ export class AccessoriesController {
           select: {
             id: true,
             assignedAt: true,
+            quantity: true,
+            // Who is holding this piece, in enough detail to find them.
             employee: {
-              select: { id: true, firstName: true, lastName: true, employeeNumber: true },
+              select: {
+                id: true,
+                firstName: true,
+                lastName: true,
+                employeeNumber: true,
+                jobTitle: true,
+                email: true,
+                phone: true,
+                status: true,
+                department: { select: { id: true, name: true } },
+                location: { select: { id: true, name: true } },
+              },
+            },
+            assetAssignment: {
+              select: { id: true, asset: { select: { id: true, assetTag: true, name: true } } },
             },
           },
         },

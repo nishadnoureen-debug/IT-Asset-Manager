@@ -433,7 +433,13 @@ describe('asset lifecycle', () => {
       .expect(200);
     expect(scanned.body.data.unit.code).toBe(piece.code);
     expect(scanned.body.data.accessory.id).toBe(chargerId);
-    expect(scanned.body.data.unit.assignment.employee.id).toBe(ids.bob);
+    // Scanning answers with the person holding that piece, not with the stock.
+    const holder = scanned.body.data.unit.assignment.employee;
+    expect(holder.id).toBe(ids.bob);
+    expect(holder.employeeNumber).toBeTruthy();
+    expect(holder.department).toBeDefined();
+    expect(holder.email).toBeTruthy();
+    expect(scanned.body.data.unit.assignment.assignedAt).toBeTruthy();
 
     // Typing the piece's code finds it too; an unknown one does not.
     const typed = await http()
