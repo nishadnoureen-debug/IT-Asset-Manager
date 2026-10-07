@@ -8,13 +8,14 @@ import {
   Eye,
   ScanLine,
   Undo2,
+  User,
   UserPlus,
   Wrench,
   X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import { QrScanner } from '@/components/qr-scanner';
 import { Badge, StatusBadge } from '@/components/ui/badge';
 import { Button, ButtonLink } from '@/components/ui/button';
@@ -26,7 +27,48 @@ import { AssetActionDialog } from '@/features/assets/asset-dialogs';
 import { MaintenanceDialog } from '@/features/maintenance/maintenance-form';
 import { api, ApiError } from '@/lib/api-client';
 import { daysUntil, formatDate, fullName, label } from '@/lib/format';
-import type { AccessoryScan, ScanResult } from '@/lib/types';
+import type { AccessoryScan, ScanHolder, ScanResult } from '@/lib/types';
+
+/** One label-and-value pair in a scan card. */
+function ScanField({
+  label: name,
+  wide,
+  children,
+}: {
+  label: string;
+  wide?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={wide ? 'col-span-2' : undefined}>
+      <dt className="text-xs uppercase tracking-wide text-slate-500">{name}</dt>
+      <dd className="mt-0.5 text-slate-900 dark:text-slate-100">{children}</dd>
+    </div>
+  );
+}
+
+/** The person holding what was scanned: the name to ask for, and the number on their badge. */
+function HolderHeading({ person }: { person: ScanHolder }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-slate-500">Held by</p>
+      <p className="text-xl font-semibold text-slate-900 dark:text-slate-50">{fullName(person)}</p>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        {[person.employeeNumber, person.jobTitle].filter(Boolean).join(' · ')}
+      </p>
+    </div>
+  );
+}
+
+/** Email and phone on one line, when the record has them. */
+function ContactField({ person }: { person: ScanHolder }) {
+  if (!person.email && !person.phone) return null;
+  return (
+    <ScanField label="Contact" wide>
+      <span className="break-all">{[person.email, person.phone].filter(Boolean).join(' · ')}</span>
+    </ScanField>
+  );
+}
 
 /** A scanned accessory label: who has that piece, and how to reach them. */
 function AccessoryResultCard({ scan, onClose }: { scan: AccessoryScan; onClose: () => void }) {
@@ -60,48 +102,15 @@ function AccessoryResultCard({ scan, onClose }: { scan: AccessoryScan; onClose: 
       <CardBody className="space-y-4">
         {person ? (
           <>
-            <div>
-              <p className="text-xs uppercase tracking-wide text-slate-500">Held by</p>
-              <p className="text-xl font-semibold text-slate-900 dark:text-slate-50">
-                {fullName(person)}
-              </p>
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                {[person.employeeNumber, person.jobTitle].filter(Boolean).join(' · ')}
-              </p>
-            </div>
+            <HolderHeading person={person} />
             <dl className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Department</dt>
-                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
-                  {person.department?.name ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Location</dt>
-                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
-                  {person.location?.name ?? '—'}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Since</dt>
-                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
-                  {formatDate(held!.assignedAt)}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs uppercase tracking-wide text-slate-500">Given with</dt>
-                <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
-                  {held!.assetAssignment ? held!.assetAssignment.asset.assetTag : 'On its own'}
-                </dd>
-              </div>
-              {person.email && (
-                <div className="col-span-2">
-                  <dt className="text-xs uppercase tracking-wide text-slate-500">Contact</dt>
-                  <dd className="mt-0.5 break-all text-slate-900 dark:text-slate-100">
-                    {[person.email, person.phone].filter(Boolean).join(' · ')}
-                  </dd>
-                </div>
-              )}
+              <ScanField label="Department">{person.department?.name ?? '—'}</ScanField>
+              <ScanField label="Location">{person.location?.name ?? '—'}</ScanField>
+              <ScanField label="Since">{formatDate(held!.assignedAt)}</ScanField>
+              <ScanField label="Given with">
+                {held!.assetAssignment ? held!.assetAssignment.asset.assetTag : 'On its own'}
+              </ScanField>
+              <ContactField person={person} />
             </dl>
             <div className="flex flex-wrap gap-2">
               <ButtonLink href={`/employees/${person.id}`} variant="secondary">
@@ -144,6 +153,9 @@ function ResultCard({
   const [auditId, setAuditId] = useState(result.inProgressAudits[0]?.id ?? '');
   const [auditBusy, setAuditBusy] = useState(false);
   const a = result.asset;
+  const held = result.currentAssignment;
+  const person = held?.employee ?? null;
+  const alongside = held?.accessoryAssignments ?? [];
   const actions = new Set(result.allowedActions);
   const warrantyDays = daysUntil(a.warrantyEndDate);
 
@@ -183,47 +195,56 @@ function ResultCard({
         />
       </div>
       <CardBody className="space-y-4">
+        {person && <HolderHeading person={person} />}
         <dl className="grid grid-cols-2 gap-3 text-sm">
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Holder</dt>
-            <dd className="mt-0.5 text-slate-900 dark:text-slate-100">
-              {result.currentAssignment
-                ? result.currentAssignment.employee
-                  ? fullName(result.currentAssignment.employee)
-                  : result.currentAssignment.location?.name
-                : 'Not assigned'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Location</dt>
-            <dd className="mt-0.5 text-slate-900 dark:text-slate-100">{a.location?.name ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Serial</dt>
-            <dd className="mt-0.5 font-mono text-xs text-slate-900 dark:text-slate-100">
-              {a.serialNumber ?? '—'}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-xs uppercase tracking-wide text-slate-500">Warranty</dt>
-            <dd className="mt-0.5">
-              {a.warrantyEndDate ? (
-                <span
-                  className={
-                    warrantyDays! < 0
-                      ? 'text-slate-500'
-                      : warrantyDays! <= 30
-                        ? 'text-amber-700 dark:text-amber-400'
-                        : 'text-slate-900 dark:text-slate-100'
-                  }
-                >
-                  {formatDate(a.warrantyEndDate)}
-                </span>
-              ) : (
-                '—'
-              )}
-            </dd>
-          </div>
+          {person ? (
+            <>
+              <ScanField label="Department">{person.department?.name ?? '—'}</ScanField>
+              <ScanField label="Since">{formatDate(held!.assignedAt)}</ScanField>
+            </>
+          ) : (
+            <ScanField label="Holder">{held?.location?.name ?? 'Not assigned'}</ScanField>
+          )}
+          <ScanField label="Location">
+            {person?.location?.name ?? a.location?.name ?? '—'}
+          </ScanField>
+          <ScanField label="Serial">
+            <span className="font-mono text-xs">{a.serialNumber ?? '—'}</span>
+          </ScanField>
+          <ScanField label="Warranty">
+            {a.warrantyEndDate ? (
+              <span
+                className={
+                  warrantyDays! < 0
+                    ? 'text-slate-500'
+                    : warrantyDays! <= 30
+                      ? 'text-amber-700 dark:text-amber-400'
+                      : undefined
+                }
+              >
+                {formatDate(a.warrantyEndDate)}
+              </span>
+            ) : (
+              '—'
+            )}
+          </ScanField>
+          {alongside.length > 0 && (
+            <ScanField label="Issued with" wide>
+              {alongside
+                .map(
+                  (x) =>
+                    `${x.accessory.name}${
+                      x.units.length
+                        ? ` (${x.units.map((u) => u.code).join(', ')})`
+                        : x.quantity > 1
+                          ? ` ×${x.quantity}`
+                          : ''
+                    }`,
+                )
+                .join(' · ')}
+            </ScanField>
+          )}
+          {person && <ContactField person={person} />}
         </dl>
         {result.openMaintenance && (
           <Badge tone="amber">Open maintenance MNT-{result.openMaintenance.number}</Badge>
@@ -237,6 +258,15 @@ function ResultCard({
           >
             Details
           </ButtonLink>
+          {person && (
+            <ButtonLink
+              href={`/employees/${person.id}`}
+              variant="secondary"
+              icon={<User className="h-4 w-4" />}
+            >
+              Employee
+            </ButtonLink>
+          )}
           {actions.has('assign') && (
             <ButtonLink href={`/assets/${a.id}/assign`} icon={<UserPlus className="h-4 w-4" />}>
               Assign
@@ -312,7 +342,7 @@ function ResultCard({
         kind={dialog}
         onClose={() => setDialog(null)}
         asset={a}
-        assignmentId={result.currentAssignment?.id}
+        assignmentId={held?.id}
       />
       <MaintenanceDialog open={maintenance} onClose={() => setMaintenance(false)} asset={a} />
     </Card>

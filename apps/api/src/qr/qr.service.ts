@@ -124,16 +124,34 @@ export class QrService {
             acknowledgedAt: true,
             approvedAt: true,
             employeeId: true,
+            // Who is holding it, in enough detail to go and find them.
             employee: {
               select: {
                 id: true,
                 firstName: true,
                 lastName: true,
                 employeeNumber: true,
+                jobTitle: true,
+                email: true,
+                phone: true,
+                status: true,
                 departmentId: true,
+                department: { select: { id: true, name: true } },
+                location: { select: { id: true, name: true } },
               },
             },
             location: { select: { id: true, name: true } },
+            // What went out alongside it, so the label accounts for the whole hand-over.
+            accessoryAssignments: {
+              where: { status: 'ACTIVE' },
+              orderBy: { assignedAt: 'asc' },
+              select: {
+                id: true,
+                quantity: true,
+                accessory: { select: { id: true, name: true, code: true } },
+                units: { select: { code: true }, orderBy: { number: 'asc' } },
+              },
+            },
           },
         },
         maintenance: {

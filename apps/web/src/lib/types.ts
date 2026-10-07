@@ -287,6 +287,16 @@ export interface AccessoryUnit {
   } | null;
 }
 
+/** Whoever is holding a scanned asset or accessory piece, with enough to go and find them. */
+export type ScanHolder = EmployeeRef & {
+  jobTitle: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string;
+  department: Ref | null;
+  location: Ref | null;
+};
+
 /** What scanning an accessory label gives back: the piece, and whoever is holding it. */
 export interface AccessoryScan {
   unit:
@@ -295,16 +305,7 @@ export interface AccessoryScan {
           id: Id;
           assignedAt: string;
           quantity: number;
-          employee:
-            | (EmployeeRef & {
-                jobTitle: string | null;
-                email: string | null;
-                phone: string | null;
-                status: string;
-                department: Ref | null;
-                location: Ref | null;
-              })
-            | null;
+          employee: ScanHolder | null;
           assetAssignment: { id: Id; asset: { id: Id; assetTag: string; name: string } } | null;
         } | null;
       })
@@ -675,8 +676,15 @@ export interface ScanResult {
     acknowledgedAt: string | null;
     approvedAt: string | null;
     approvedBy?: UserRef | null;
-    employee: EmployeeRef | null;
+    employee: ScanHolder | null;
     location: Ref | null;
+    /** Accessories handed over with the asset, listed on the card. */
+    accessoryAssignments?: {
+      id: Id;
+      quantity: number;
+      accessory: { id: Id; name: string; code: string };
+      units: { code: string }[];
+    }[];
   } | null;
   openMaintenance: { id: Id; number: number; status: string } | null;
   inProgressAudits: { id: Id; number: number; name: string }[];

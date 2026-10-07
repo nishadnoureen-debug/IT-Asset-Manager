@@ -338,6 +338,21 @@ describe('authorization and data scope', () => {
       .send({ code: aliceAsset.assetTag })
       .expect(404);
     expect(scan.body.success).toBe(false);
+
+    // Scanning an asset that is out answers with the person holding it.
+    const held = await http()
+      .post(api('/qr/scan'))
+      .set(s.admin.auth)
+      .send({ code: aliceAsset.assetTag })
+      .expect(200);
+    const holder = held.body.data.currentAssignment.employee;
+    expect(holder.id).toBe(ids.alice);
+    expect(holder.employeeNumber).toBeTruthy();
+    expect(holder.department.id).toBe(ids.deptFin);
+    expect(holder.location.name).toBeTruthy();
+    expect(holder.email).toBeTruthy();
+    expect(held.body.data.currentAssignment.assignedAt).toBeTruthy();
+
     ids.aliceAsset = aliceAsset.id;
   });
 
@@ -1152,6 +1167,18 @@ describe('asset requests', () => {
     expect(handed.employeeId).toBe(ids.alice);
     expect(handed.conditionAtAssignment).toBe('NEW');
     expect(handed.accessoryAssignments[0].quantity).toBe(2);
+    // Scanning the asset's label also lists what went out with it.
+    const scanned = await http()
+      .post(api('/qr/scan'))
+      .set(s.tech.auth)
+      .send({ code: asset.assetTag })
+      .expect(200);
+    expect(scanned.body.data.currentAssignment.employee.id).toBe(ids.alice);
+    expect(
+      scanned.body.data.currentAssignment.accessoryAssignments.map(
+        (x: { accessory: { name: string } }) => x.accessory.name,
+      ),
+    ).toEqual(['Wireless mouse']);
     expect(handed.documents.map((d) => d.type)).toContain('HANDOVER_FORM');
     expect((await prisma.asset.findUniqueOrThrow({ where: { id: asset.id } })).status).toBe(
       'ASSIGNED',
