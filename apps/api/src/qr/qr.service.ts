@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
@@ -15,6 +17,22 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** The company mark printed beside the QR on labels (apps/api/assets/forms/logo.png). */
+const LOGO_PATH = join(__dirname, '..', '..', 'assets', 'forms', 'logo.png');
+/** The box it is fitted into, in points. Any logo keeps its own shape inside it. */
+const LOGO_BOX: [number, number] = [46, 22];
+let logo: Buffer | null | undefined;
+function companyLogo() {
+  if (logo === undefined) {
+    try {
+      logo = readFileSync(LOGO_PATH);
+    } catch {
+      logo = null; // Labels still print, just without the mark.
+    }
+  }
+  return logo;
+}
 
 /** Extract the lookup value from a scanned payload: a label URL, a bare QR token, an asset tag or a serial. */
 export function parseScannedCode(raw: string): { token?: string; text: string } {
@@ -187,11 +205,12 @@ export class QrService {
     };
   }
 
-  /** A4 sheet of labels: 3 columns × 8 rows, QR + code + name. */
+  /** A4 sheet of labels: 3 columns × 8 rows, QR + logo + code + name. */
   async renderLabels(
     items: { code: string; name: string; note?: string | null; qrToken: string }[],
   ): Promise<Buffer> {
     const { companyName } = await this.settings.get();
+    const mark = companyLogo();
     const images = await Promise.all(
       items.map((item) =>
         QRCode.toBuffer(this.payloadFor(item.qrToken), { type: 'png', margin: 0, width: 300 }),
@@ -219,16 +238,21 @@ export class QrService {
           doc.image(images[i], x + 8, y + 8, { width: qr - 8, height: qr - 8 });
           const textX = x + qr + 6;
           const textW = cellW - qr - 14;
+          // The mark goes in the gap above the code, which the text alone left empty.
+          // `fit` keeps the mark's own shape; left/top is PDFKit's default placement in the box.
+          if (mark) doc.image(mark, textX, y + 9, { fit: LOGO_BOX });
           doc
             .font('Helvetica-Bold')
             .fontSize(10)
             .fillColor('#0f172a')
-            .text(pdfSafe(item.code), textX, y + 14, { width: textW });
+            .text(pdfSafe(item.code), textX, mark ? y + 13 + LOGO_BOX[1] : y + 14, {
+              width: textW,
+            });
           doc
             .font('Helvetica')
             .fontSize(7.5)
             .fillColor('#334155')
-            .text(pdfSafe(item.name), { width: textW, height: 30, ellipsis: true });
+            .text(pdfSafe(item.name), { width: textW, height: mark ? 19 : 30, ellipsis: true });
           if (item.note)
             doc.fontSize(6.5).fillColor('#64748b').text(pdfSafe(item.note), { width: textW });
           doc
