@@ -245,7 +245,7 @@ export class QrService {
             .font('Helvetica-Bold')
             .fontSize(10)
             .fillColor('#0f172a')
-            .text(pdfSafe(item.code), textX, mark ? y + 13 + LOGO_BOX[1] : y + 14, {
+            .text(pdfSafe(item.code), textX, mark ? y + 19 + LOGO_BOX[1] : y + 14, {
               width: textW,
             });
           doc
@@ -258,7 +258,7 @@ export class QrService {
           doc
             .fontSize(6.5)
             .fillColor('#94a3b8')
-            .text(pdfSafe(companyName), textX, y + cellH - 20, { width: textW });
+            .text(pdfSafe(companyName), textX, y + cellH - 15, { width: textW });
         });
       },
       { margin: 0 },
