@@ -59,6 +59,11 @@ Forms: handover, transfer and return PDFs use the letterhead and watermark in `a
 folder, fitted into a 46 x 22 pt box beside the code, so any shape of logo prints undistorted. Footer, terms and "Approved by" names are edited in
 **Settings → Forms**. Dates on forms use the server time zone (`TZ`, set to `Asia/Dubai` in `render.yaml`).
 
+Installed app: the browser installs ZABY TRACKER from the site itself (see the README). It needs
+HTTPS, which Render provides. The service worker in `apps/web/public/sw.js` caches only Next's
+fingerprinted files and the offline page — never an API response, so no one's records are left in a
+shared browser. Bump `VERSION` in that file to retire caches from an older release.
+
 Backups: Neon keeps a short restore window on the free plan. Export your data regularly from **Reports**
 (Excel), or run `pg_dump` with the Neon connection string.
 

@@ -20,6 +20,24 @@ tokens · S3-compatible storage · Docker · GitHub Actions
 
 The screens are responsive; scanning, assigning and returning are designed phone-first.
 
+## Install it on a phone or desktop
+
+ZABY TRACKER installs from the browser — there is nothing to download from a store and no separate
+build to keep in step with the site.
+
+| Where                   | How                                                                                       |
+| ----------------------- | ----------------------------------------------------------------------------------------- |
+| Android / Chrome / Edge | Open the site and press **Install** on the banner, or the install icon in the address bar |
+| Windows / macOS         | Same banner, or browser menu → **Install ZABY TRACKER**                                   |
+| iPhone / iPad (Safari)  | **Share → Add to Home Screen** (Safari offers no install banner)                          |
+
+Installed, it opens in its own window with the ARC icon, and a long-press on that icon jumps
+straight to **Scan a label**, **Assets** or **Employees**. Records are always read live from the
+server; with no connection the app says so rather than showing a stale register. Installing needs
+HTTPS, which Render provides — on a LAN, `http://localhost` also counts.
+
+Rebranding: replace `apps/web/public/logo.png`, then `npm run icons` to rebuild the app icons.
+
 ## Repository layout
 
 ```
@@ -106,6 +124,7 @@ API documentation (Swagger) is at http://localhost:4000/api/docs in development.
 | `npm run typecheck`         | Type-check every workspace                                                       |
 | `npm run build`             | Production build of shared, api and web                                          |
 | `npm run format`            | Format the codebase with Prettier                                                |
+| `npm run icons`             | Rebuild the installed-app icons from `apps/web/public/logo.png`                  |
 | `npm run db:migrate`        | Create/apply a development migration                                             |
 | `npm run db:deploy`         | Apply migrations (staging/production)                                            |
 | `npm run db:seed`           | Sync permissions, system roles and asset types (runs automatically in Docker)    |

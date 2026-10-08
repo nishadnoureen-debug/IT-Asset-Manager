@@ -18,6 +18,7 @@
     "dev:web": "npm run dev -w @itam/web",
     "test": "npm run test -w @itam/api && npm run test:e2e -w @itam/api && npm run test -w @itam/web",
     "typecheck": "npm run typecheck -w @itam/shared && npm run typecheck -w @itam/api && npm run typecheck -w @itam/web",
+    "icons": "node scripts/make-icons.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:up": "docker compose -f docker/docker-compose.yml up -d db",
