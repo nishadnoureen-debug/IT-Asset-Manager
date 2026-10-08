@@ -3,6 +3,16 @@ import PDFDocument from 'pdfkit';
 
 export type Pdf = PDFKit.PDFDocument;
 
+/**
+ * Embeds an image once so every page — or every label on a sheet — draws the same copy. Passing the
+ * buffer to `image()` each time writes the whole image into the file again. PDFKit's `image()`
+ * accepts the returned object at runtime; its type definitions only list buffers and paths, hence
+ * the cast.
+ */
+export type ImageSource = Parameters<Pdf['image']>[0];
+export const embedImage = (doc: Pdf, src: Buffer): ImageSource =>
+  (doc as unknown as { openImage(src: Buffer): ImageSource }).openImage(src);
+
 export interface KeyValueRow {
   label: string;
   value: string | null | undefined;

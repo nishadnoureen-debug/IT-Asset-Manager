@@ -1373,6 +1373,10 @@ describe('reports and documents', () => {
       .parse(binary)
       .expect(200);
     expect((all.body as Buffer).length).toBeGreaterThan((one.body as Buffer).length);
+    // The company mark is embedded once per sheet, not once per label. Drawing the buffer each time
+    // put a copy of it in the file for every label, which made a full sheet megabytes and timed the
+    // request out on a small server.
+    expect((all.body as Buffer).length).toBeLessThan(2_000_000);
 
     // The filters narrow the sheet the same way they narrow the list.
     await http()

@@ -13,7 +13,7 @@ import { AssetsService, OPEN_MAINTENANCE } from '../assets/assets.service';
 import { can, type AuthUser } from '../auth/auth-user';
 import { Errors } from '../common/errors';
 import type { Env } from '../config/env.validation';
-import { PdfService, pdfSafe } from '../pdf/pdf.service';
+import { embedImage, PdfService, pdfSafe } from '../pdf/pdf.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
@@ -21,6 +21,13 @@ const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
 
 /** Most labels one sheet will print — 500 is about 21 pages, and keeps the request quick. */
 export const MAX_LABELS = 500;
+
+/**
+ * How many pixels wide each label's QR is rendered. A label prints the code at roughly one inch, so
+ * this is its print resolution: plenty for a phone camera, and a third of the work of a 300px one
+ * when a sheet carries hundreds.
+ */
+const LABEL_QR_PX = 220;
 
 /** The company mark printed beside the QR on labels (apps/api/assets/forms/logo.png). */
 const LOGO_PATH = join(__dirname, '..', '..', 'assets', 'forms', 'logo.png');
@@ -217,11 +224,18 @@ export class QrService {
     const mark = companyLogo();
     const images = await Promise.all(
       items.map((item) =>
-        QRCode.toBuffer(this.payloadFor(item.qrToken), { type: 'png', margin: 0, width: 300 }),
+        QRCode.toBuffer(this.payloadFor(item.qrToken), {
+          type: 'png',
+          margin: 0,
+          width: LABEL_QR_PX,
+        }),
       ),
     );
     return this.pdf.render(
       (doc) => {
+        // Once for the whole sheet: handing the buffer to image() per label writes the mark into
+        // the file again each time, which is megabytes and seconds by the eightieth label.
+        const markImage = mark ? embedImage(doc, mark) : null;
         const cols = 3;
         const rows = 8;
         const marginX = 24;
@@ -244,19 +258,23 @@ export class QrService {
           const textW = cellW - qr - 14;
           // The mark goes in the gap above the code, which the text alone left empty.
           // `fit` keeps the mark's own shape; left/top is PDFKit's default placement in the box.
-          if (mark) doc.image(mark, textX, y + 9, { fit: LOGO_BOX });
+          if (markImage) doc.image(markImage, textX, y + 9, { fit: LOGO_BOX });
           doc
             .font('Helvetica-Bold')
             .fontSize(10)
             .fillColor('#0f172a')
-            .text(pdfSafe(item.code), textX, mark ? y + 19 + LOGO_BOX[1] : y + 14, {
+            .text(pdfSafe(item.code), textX, markImage ? y + 19 + LOGO_BOX[1] : y + 14, {
               width: textW,
             });
           doc
             .font('Helvetica')
             .fontSize(7.5)
             .fillColor('#334155')
-            .text(pdfSafe(item.name), { width: textW, height: mark ? 19 : 30, ellipsis: true });
+            .text(pdfSafe(item.name), {
+              width: textW,
+              height: markImage ? 19 : 30,
+              ellipsis: true,
+            });
           if (item.note)
             doc.fontSize(6.5).fillColor('#64748b').text(pdfSafe(item.note), { width: textW });
           doc

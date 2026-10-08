@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { Injectable } from '@nestjs/common';
 import type { AppSettings, FormSignatory } from '@itam/shared';
-import { type Pdf, PdfService, pdfSafe } from './pdf.service';
+import { embedImage, type ImageSource, type Pdf, PdfService, pdfSafe } from './pdf.service';
 import { SettingsService } from '../settings/settings.service';
 
 /** Company letterhead and watermark printed on every form page (apps/api/assets/forms). */
@@ -21,14 +21,6 @@ function loadBranding() {
   }
   return branding;
 }
-
-/**
- * Embeds an image once so every page can reuse it. PDFKit's `image()` accepts the returned object at
- * runtime; its type definitions only list buffers and paths, hence the cast.
- */
-type ImageSource = Parameters<Pdf['image']>[0];
-const embedImage = (doc: Pdf, src: Buffer): ImageSource =>
-  (doc as unknown as { openImage(src: Buffer): ImageSource }).openImage(src);
 
 export const FORM_COLORS = {
   heading: '#0F4761',
