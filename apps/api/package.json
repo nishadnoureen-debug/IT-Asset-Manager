@@ -21,6 +21,7 @@
     "prisma:reset": "prisma migrate reset",
     "db:seed": "prisma db seed",
     "user:create-admin": "tsx src/database/create-admin.ts",
+    "db:clear": "tsx src/database/clear-data.ts",
     "db:seed:demo": "nest build && node dist/database/seed-demo.js"
   },
   "dependencies": {

@@ -129,8 +129,25 @@ API documentation (Swagger) is at http://localhost:4000/api/docs in development.
 | `npm run db:deploy`         | Apply migrations (staging/production)                                            |
 | `npm run db:seed`           | Sync permissions, system roles and asset types (runs automatically in Docker)    |
 | `npm run db:seed:demo`      | Load demo data (never in production)                                             |
+| `npm run db:clear`          | List the trial records a clear would delete (`-- --yes` to delete them)          |
 | `npm run user:create-admin` | Create a Super Admin or reset one's password (`--reset-password`)                |
 | `npm run db:studio`         | Browse data in Prisma Studio                                                     |
+
+## Going live after a trial run
+
+A trial leaves devices, hand-outs, forms and trails behind. `npm run db:clear` empties those and
+keeps the people and the setup — employees with their departments, locations and job titles, the
+sign-ins, roles, permissions, Settings and the asset-type list. Asset tags and accessory codes start
+from 001 again.
+
+```bash
+npm run db:clear              # lists what would go, deletes nothing
+npm run db:clear -- --yes     # deletes
+```
+
+It prints the database it is pointed at, so check that line before answering for it. **This cannot
+be undone** — take a backup first (`pg_dump`, or a Neon branch), and see
+[deployment](docs/deployment.md) for running it against the hosted database.
 
 ## Documentation
 

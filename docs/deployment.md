@@ -64,6 +64,19 @@ HTTPS, which Render provides. The service worker in `apps/web/public/sw.js` cach
 fingerprinted files and the offline page — never an API response, so no one's records are left in a
 shared browser. Bump `VERSION` in that file to retire caches from an older release.
 
+Clearing a trial run: `npm run db:clear` empties the operational tables and keeps employees, logins
+and setup (see the README). It uses whatever `DATABASE_URL` points at, so set it for that one
+command and never store the production URL in `.env`:
+
+```bash
+DATABASE_URL="postgresql://…neon.tech/itam?sslmode=require" npm run db:clear            # dry run
+DATABASE_URL="postgresql://…neon.tech/itam?sslmode=require" npm run db:clear -- --yes   # deletes
+```
+
+In PowerShell: `$env:DATABASE_URL="…"; npm run db:clear -- --yes`, then
+`Remove-Item Env:DATABASE_URL`. Take a Neon branch of the database first — it is the free plan's
+undo button. The same statement can be pasted into Neon's SQL editor instead; the dry run prints it.
+
 Backups: Neon keeps a short restore window on the free plan. Export your data regularly from **Reports**
 (Excel), or run `pg_dump` with the Neon connection string.
 

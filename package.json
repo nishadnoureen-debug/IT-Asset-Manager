@@ -27,6 +27,7 @@
     "db:local": "node scripts/local-postgres.mjs",
     "db:migrate": "npm run prisma:migrate -w @itam/api",
     "db:deploy": "npm run prisma:deploy -w @itam/api",
+    "db:clear": "npm run db:clear -w @itam/api",
     "db:seed": "npm run db:seed -w @itam/api",
     "db:reset": "npm run prisma:reset -w @itam/api",
     "db:studio": "npm run prisma:studio -w @itam/api",
