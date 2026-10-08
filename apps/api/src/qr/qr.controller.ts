@@ -24,10 +24,11 @@ import {
   MinLength,
 } from 'class-validator';
 import type { Response } from 'express';
+import { AssetQueryDto } from '../assets/assets.dto';
 import type { AuthUser } from '../auth/auth-user';
 import { CurrentUser, RequirePermissions } from '../auth/decorators';
 import { SkipEnvelope } from '../common/decorators/skip-envelope.decorator';
-import { QrService } from './qr.service';
+import { MAX_LABELS, QrService } from './qr.service';
 
 class ScanDto {
   @IsString() @MinLength(1) @MaxLength(512) code!: string;
@@ -37,12 +38,14 @@ class DownloadQueryDto {
   @IsOptional() @IsIn(['png', 'svg']) format: 'png' | 'svg' = 'png';
 }
 
-class LabelsQueryDto {
+/** Assets to print: the ones ticked, or — with no ids — everything the list's filters match. */
+class LabelsQueryDto extends AssetQueryDto {
+  @IsOptional()
   @Transform(({ value }) => (typeof value === 'string' ? value.split(',').filter(Boolean) : value))
   @IsArray()
-  @ArrayMaxSize(240)
+  @ArrayMaxSize(MAX_LABELS)
   @IsUUID('all', { each: true })
-  assetIds!: string[];
+  assetIds?: string[];
 }
 
 const VIEW = ['asset.view', 'asset.view_department', 'asset.view_own'] as const;
@@ -97,7 +100,7 @@ export class QrController {
     @CurrentUser() user: AuthUser,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const pdf = await this.qr.labels(q.assetIds, user);
+    const pdf = await this.qr.labels(q, user);
     res.set({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'attachment; filename="asset-labels.pdf"',

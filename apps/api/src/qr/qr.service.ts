@@ -7,6 +7,7 @@ import { Prisma } from '@prisma/client';
 import QRCode from 'qrcode';
 import { ActivityLogService } from '../activity-logs/activity-log.service';
 import { allowedAssetActions, assetSummarySelect } from '../assets/asset-access';
+import type { AssetQueryDto } from '../assets/assets.dto';
 import { AssetHistoryService } from '../assets/asset-history.service';
 import { AssetsService, OPEN_MAINTENANCE } from '../assets/assets.service';
 import { can, type AuthUser } from '../auth/auth-user';
@@ -17,6 +18,9 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SettingsService } from '../settings/settings.service';
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+
+/** Most labels one sheet will print — 500 is about 21 pages, and keeps the request quick. */
+export const MAX_LABELS = 500;
 
 /** The company mark printed beside the QR on labels (apps/api/assets/forms/logo.png). */
 const LOGO_PATH = join(__dirname, '..', '..', 'assets', 'forms', 'logo.png');
@@ -265,16 +269,23 @@ export class QrService {
     );
   }
 
-  /** A4 sheet of asset labels. */
-  async labels(assetIds: string[], user: AuthUser) {
-    if (!assetIds.length || assetIds.length > 240)
-      throw Errors.badRequest('Select between 1 and 240 assets', 'assetIds');
+  /** A4 sheet of asset labels: the ones ticked, or everything the list's filters match. */
+  async labels(q: AssetQueryDto & { assetIds?: string[] }, user: AuthUser) {
+    const where: Prisma.AssetWhereInput = q.assetIds?.length
+      ? { AND: [{ id: { in: q.assetIds }, deletedAt: null }, this.assets.scopeOrThrow(user)] }
+      : await this.assets.listWhere(q, user);
     const assets = await this.prisma.asset.findMany({
-      where: { AND: [{ id: { in: assetIds }, deletedAt: null }, this.assets.scopeOrThrow(user)] },
+      where,
       select: { id: true, assetTag: true, name: true, serialNumber: true, qrToken: true },
       orderBy: { assetTag: 'asc' },
+      // One over the limit, so a sheet that is too big says so instead of printing half of it.
+      take: MAX_LABELS + 1,
     });
     if (!assets.length) throw Errors.notFound('Assets');
+    if (assets.length > MAX_LABELS)
+      throw Errors.badRequest(
+        `More than ${MAX_LABELS} assets match. Narrow the list with a filter, or tick the ones you need.`,
+      );
     return this.renderLabels(
       assets.map((a) => ({
         code: a.assetTag,

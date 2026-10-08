@@ -1354,6 +1354,39 @@ describe('reports and documents', () => {
     ]);
   });
 
+  it('prints a label sheet for the assets picked, or for the whole list', async () => {
+    const picked = await createAsset(s.admin);
+    const one = await http()
+      .get(api(`/qr/labels?assetIds=${picked.id}`))
+      .set(s.admin.auth)
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    expect(one.headers['content-type']).toContain('application/pdf');
+    expect((one.body as Buffer).subarray(0, 5).toString()).toBe('%PDF-');
+
+    // No ids at all: every asset the filters match, which is what "Print all labels" sends.
+    const all = await http()
+      .get(api('/qr/labels'))
+      .set(s.admin.auth)
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    expect((all.body as Buffer).length).toBeGreaterThan((one.body as Buffer).length);
+
+    // The filters narrow the sheet the same way they narrow the list.
+    await http()
+      .get(api(`/qr/labels?search=${encodeURIComponent(picked.assetTag)}`))
+      .set(s.admin.auth)
+      .buffer(true)
+      .parse(binary)
+      .expect(200);
+    await http().get(api('/qr/labels?search=no-such-asset-anywhere')).set(s.admin.auth).expect(404);
+
+    // Printing still needs the permission.
+    await http().get(api('/qr/labels')).set(s.employee.auth).expect(403);
+  });
+
   it('validates uploads by content, not by the declared type', async () => {
     const asset = await createAsset(s.admin);
     const ok = await http()

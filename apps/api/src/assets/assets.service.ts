@@ -103,7 +103,8 @@ export class AssetsService {
     return scope;
   }
 
-  async list(q: AssetQueryDto, user: AuthUser) {
+  /** The list's filters as a Prisma where — shared by the table and the label sheet. */
+  async listWhere(q: AssetQueryDto, user: AuthUser): Promise<Prisma.AssetWhereInput> {
     const today = startOfDay();
     const warrantyDays = q.warrantyDays ?? (await this.settings.get()).warrantyAlertDays;
     const warrantyWhere: Record<string, Prisma.AssetWhereInput> = {
@@ -140,6 +141,11 @@ export class AssetsService {
           : {},
       ],
     };
+    return where;
+  }
+
+  async list(q: AssetQueryDto, user: AuthUser) {
+    const where = await this.listWhere(q, user);
     const orderBy = resolveOrderBy<Prisma.AssetOrderByWithRelationInput>(
       q,
       {

@@ -70,6 +70,8 @@ export default function AssetsPage() {
     limit: 25,
   });
   const rows = query.data?.data;
+  // How many the filters match, not just this page: what "print all" would put on the sheet.
+  const total = query.data?.meta?.total ?? 0;
   const canLabel = can('qr.generate');
 
   const toggle = (id: string) =>
@@ -166,11 +168,21 @@ export default function AssetsPage() {
     },
   ];
 
+  /** Ticked rows when there are any, otherwise every asset the current filters match. */
   const printLabels = async () => {
     setBusy(true);
     try {
       await downloadFile('/qr/labels', {
-        query: { assetIds: [...selected] },
+        query: selected.size
+          ? { assetIds: [...selected] }
+          : {
+              search: params.search,
+              status: params.status,
+              category: params.category,
+              locationId: params.locationId,
+              departmentId: params.departmentId,
+              warranty: params.warranty,
+            },
         fileName: 'asset-labels.pdf',
       });
     } catch (e) {
@@ -210,14 +222,16 @@ export default function AssetsPage() {
         description="Every device the company owns, from purchase to disposal."
         actions={
           <>
-            {canLabel && selected.size > 0 && (
+            {canLabel && !!total && (
               <Button
                 variant="secondary"
                 onClick={printLabels}
                 loading={busy}
                 icon={<Printer className="h-4 w-4" />}
               >
-                Print {selected.size} label{selected.size > 1 ? 's' : ''}
+                {selected.size
+                  ? `Print ${selected.size} label${selected.size > 1 ? 's' : ''}`
+                  : `Print all ${total} labels`}
               </Button>
             )}
             {can('report.export') && (
