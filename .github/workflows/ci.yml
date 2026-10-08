@@ -23,8 +23,8 @@ jobs:
       DATABASE_URL: postgresql://itam:itam@localhost:5432/itam_test?schema=public
       TEST_DATABASE_URL: postgresql://itam:itam@localhost:5432/itam_test?schema=public
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -41,7 +41,7 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build API image
         run: docker build -f docker/api.Dockerfile -t itam-api .
       - name: Build web image
@@ -65,7 +65,7 @@ jobs:
   app-image:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build single-container image
         run: docker build -f docker/app.Dockerfile -t itam-app .
       - name: Run it against PostgreSQL the way Render does
