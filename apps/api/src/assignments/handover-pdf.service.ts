@@ -46,7 +46,6 @@ export class HandoverPdfService {
         location: true,
         assignedBy: { select: { displayName: true } },
         returnedBy: { select: { displayName: true } },
-        approvedBy: { select: { displayName: true } },
         previousAssignment: { include: { employee: true, location: true } },
         accessoryAssignments: {
           include: {
@@ -164,15 +163,6 @@ export class HandoverPdfService {
         } else if (a.assignedBy?.displayName) {
           f.fieldLine('Issued By', a.assignedBy.displayName);
         }
-        // The hand-over is countersigned in the app by the department manager.
-        if (form !== 'RETURN') {
-          f.fieldLine(
-            'Approved By (manager)',
-            a.approvedAt ? (a.approvedBy?.displayName ?? 'Approved') : 'Awaiting approval',
-          );
-          f.fieldLine('Approved On', a.approvedAt ? formDate(a.approvedAt) : '');
-        }
-
         f.approvedBy();
       },
     );
