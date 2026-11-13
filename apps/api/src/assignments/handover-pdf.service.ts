@@ -101,10 +101,15 @@ export class HandoverPdfService {
             ? [['Serial Number', a.asset.serialNumber] as [string, string]]
             : []),
           ['Phone Number (if applicable)', a.asset.phoneNumber || 'N/A'],
-          [
-            form === 'RETURN' ? 'Accessories Returned' : 'Accessories Issued',
-            accessories.join(', ') || 'None',
-          ],
+          // A transfer lists what travels with the device in a section of its own, below.
+          ...(form === 'TRANSFER'
+            ? []
+            : [
+                [
+                  form === 'RETURN' ? 'Accessories Returned' : 'Accessories Issued',
+                  accessories.join(', ') || 'None',
+                ] as [string, string],
+              ]),
         ]);
         f.rule();
 
@@ -120,6 +125,8 @@ export class HandoverPdfService {
           f.heading('Transfer Details');
           f.bullets([
             ['Transfer Date', formDate(a.assignedAt)],
+            // What travels with the device, named on the form the two of them sign.
+            ['Accessories Transferred', accessories.join(', ') || 'None'],
             ['Reason for Transfer', a.transferReason ?? ''],
           ]);
           f.rule();
@@ -153,14 +160,14 @@ export class HandoverPdfService {
               '',
           );
           f.signatureLine('Handed Over By (signature)');
-          f.fieldLine('Date', '');
         } else {
           f.signatureLine('Employee Signature', signature);
           f.fieldLine('Date', formDate(date));
         }
         if (form === 'RETURN') {
           f.fieldLine('Received By', a.returnedBy?.displayName ?? '');
-        } else if (a.assignedBy?.displayName) {
+        } else if (form === 'HANDOVER' && a.assignedBy?.displayName) {
+          // A transfer is signed by the two employees; nobody issues it from the store.
           f.fieldLine('Issued By', a.assignedBy.displayName);
         }
         f.approvedBy();

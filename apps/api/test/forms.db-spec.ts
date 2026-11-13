@@ -234,8 +234,12 @@ describe('handover, transfer and return forms', () => {
       'Received By (signature)',
       'Handed Over By (name)',
       'Handed Over By (signature)',
+      // What travels with the device gets a section of its own on a transfer.
+      'Accessories Transferred',
     ])
       expect(t).toContain(text);
+    // Nobody issues a transfer from the store: the two employees sign it between them.
+    expect(t).not.toContain('Issued By');
 
     const r = pdfText(ret);
     for (const text of [
